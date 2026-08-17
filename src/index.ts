@@ -1,4 +1,4 @@
-import { Elysia } from "elysia";
+import { Elysia, t } from "elysia";
 import pm2 from "pm2";
 import type { ProcessDescription, Proc, StartOptions } from "pm2";
 
@@ -44,7 +44,7 @@ function summarizeProcess(process: ProcessDescription): ProcessSummary {
 }
 
 class PM2Service {
-  
+
   private withPM2<T>(fn: (cb: (err: Error | null, result?: T) => void) => void): Promise<T> {
     return new Promise((resolve, reject) => {
       pm2.connect((err) => {
@@ -63,35 +63,35 @@ class PM2Service {
       pm2.list((err, list) => cb(err, list?.map(summarizeProcess))),
     );
 
-  describeProcess = (processName: string): Promise<ProcessSummary[]> =>
+  describeProcess = (processId: number): Promise<ProcessSummary[]> =>
     this.withPM2<ProcessSummary[]>((cb) =>
-      pm2.describe(processName, (err, list) => cb(err, list?.map(summarizeProcess))),
+      pm2.describe(processId, (err, list) => cb(err, list?.map(summarizeProcess))),
     );
 
   startProcess = (options: StartOptions): Promise<Proc> =>
     this.withPM2<Proc>((cb) => pm2.start(options, cb));
 
-  stopProcess = (processName: string): Promise<Proc> =>
-    this.withPM2<Proc>((cb) => pm2.stop(processName, cb));
+  stopProcess = (processId: number): Promise<Proc> =>
+    this.withPM2<Proc>((cb) => pm2.stop(processId, cb));
 
-  restartProcess = (processName: string): Promise<Proc> =>
-    this.withPM2<Proc>((cb) => pm2.restart(processName, cb));
+  restartProcess = (processId: number): Promise<Proc> =>
+    this.withPM2<Proc>((cb) => pm2.restart(processId, cb));
 
-  reloadProcess = (processName: string): Promise<Proc> =>
-    this.withPM2<Proc>((cb) => pm2.reload(processName, cb));
+  reloadProcess = (processId: number): Promise<Proc> =>
+    this.withPM2<Proc>((cb) => pm2.reload(processId, cb));
 
-  deleteProcess = (processName: string): Promise<Proc> =>
-    this.withPM2<Proc>((cb) => pm2.delete(processName, cb));
+  deleteProcess = (processId: number): Promise<Proc> =>
+    this.withPM2<Proc>((cb) => pm2.delete(processId, cb));
 
-  flushLogs = (processName?: string): Promise<void> =>
-    this.withPM2<void>((cb) => pm2.flush(processName as string, cb));
+  flushLogs = (processId?: number): Promise<void> =>
+    this.withPM2<void>((cb) => pm2.flush(processId as number, cb));
 
   healthCheck = () => ({
     status: "ok",
     uptime: process.uptime(),
     timestamp: new Date().toISOString(),
   })
-    
+
 }
 
 export const pm2Service = new PM2Service();
@@ -99,16 +99,40 @@ export const pm2Service = new PM2Service();
 export const pm2Routes = new Elysia({ prefix: "/pm2" })
   .get("/list", () => pm2Service.listProcesses())
   .get("/health", () => pm2Service.healthCheck())
-  .get("/describe/:name", ({ params }) => pm2Service.describeProcess(params.name))
+  .get(
+    "/describe/:id",
+    ({ params }) => pm2Service.describeProcess(params.id),
+    { params: t.Object({ id: t.Number() }) },
+  )
   .post("/start", ({ body }) => pm2Service.startProcess(body as StartOptions))
-  .post("/stop/:name", ({ params }) => pm2Service.stopProcess(params.name))
-  .post("/restart/:name", ({ params }) => pm2Service.restartProcess(params.name))
-  .post("/reload/:name", ({ params }) => pm2Service.reloadProcess(params.name))
-  .delete("/delete/:name", ({ params }) => pm2Service.deleteProcess(params.name))
-  .post("/flush/:name?", ({ params }) => pm2Service.flushLogs(params.name));
+  .post(
+    "/stop/:id",
+    ({ params }) => pm2Service.stopProcess(params.id),
+    { params: t.Object({ id: t.Number() }) },
+  )
+  .post(
+    "/restart/:id",
+    ({ params }) => pm2Service.restartProcess(params.id),
+    { params: t.Object({ id: t.Number() }) },
+  )
+  .post(
+    "/reload/:id",
+    ({ params }) => pm2Service.reloadProcess(params.id),
+    { params: t.Object({ id: t.Number() }) },
+  )
+  .delete(
+    "/delete/:id",
+    ({ params }) => pm2Service.deleteProcess(params.id),
+    { params: t.Object({ id: t.Number() }) },
+  )
+  .post(
+    "/flush/:id?",
+    ({ params }) => pm2Service.flushLogs(params.id),
+    { params: t.Object({ id: t.Optional(t.Number()) }) },
+  );
 
 const port = Number(process.env.SERVER_PORT ?? 4000);
 
 const app = new Elysia().use(pm2Routes).listen(port);
 
-console.log(`P2M API is running at ${app.server?.hostname}:${app.server?.port}`);
+console.log(`PM2 API is running at ${app.server?.hostname}:${app.server?.port}`);
