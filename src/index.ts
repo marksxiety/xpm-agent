@@ -6,6 +6,7 @@ import { respond } from "./utils/response";
 import { classifyPm2Error, formatValidationMessage } from "./utils/errors";
 import { pm2Service } from "./services/pm2.service";
 import { getRouteMeta } from "./meta/process";
+import PackageJson from "../package.json";
 
 export const pm2Routes = new Elysia({ prefix: "/pm2" })
   .mapResponse(({ set, response }) => {
@@ -38,8 +39,8 @@ const app = new Elysia()
     swagger({
       documentation: {
         info: {
-          title: "PM2 Process Manager API",
-          version: "1.0.0",
+          title: "Process Manager API",
+          version: PackageJson.version ?? '',
           description: "REST API for managing PM2 processes. Identify processes by their numeric pm_id (see GET /pm2/list).",
         },
       },
