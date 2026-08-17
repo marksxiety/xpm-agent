@@ -85,12 +85,20 @@ class PM2Service {
 
   flushLogs = (processName?: string): Promise<void> =>
     this.withPM2<void>((cb) => pm2.flush(processName as string, cb));
+
+  healthCheck = () => ({
+    status: "ok",
+    uptime: process.uptime(),
+    timestamp: new Date().toISOString(),
+  })
+    
 }
 
 export const pm2Service = new PM2Service();
 
 export const pm2Routes = new Elysia({ prefix: "/pm2" })
   .get("/list", () => pm2Service.listProcesses())
+  .get("/health", () => pm2Service.healthCheck())
   .get("/describe/:name", ({ params }) => pm2Service.describeProcess(params.name))
   .post("/start", ({ body }) => pm2Service.startProcess(body as StartOptions))
   .post("/stop/:name", ({ params }) => pm2Service.stopProcess(params.name))
