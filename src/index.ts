@@ -1,4 +1,4 @@
-import { Elysia, t } from "elysia";
+import { Elysia, t, ValidationError } from "elysia";
 import pm2 from "pm2";
 import type { ProcessDescription, Proc, StartOptions } from "pm2";
 
@@ -19,6 +19,33 @@ interface ProcessSummary {
   cwd: string | undefined;
   watch: boolean;
   autorestart: boolean | undefined;
+}
+
+interface ApiResponse<T = unknown> {
+  success: boolean;
+  message: string;
+  info: T
+}
+
+const SuccessResponse = <T>(message: string, info: T): ApiResponse<T> => ({
+  success: true,
+  message,
+  info,
+});
+
+function classifyPm2Error(err: unknown): { status: number; message: string } {
+  const raw = err instanceof Error ? err.message : String((err as any)?.msg ?? err);
+  const text = raw.toLowerCase();
+
+  if (/process.*not found|process or namespace not found|app not found|no process found/.test(text))
+    return { status: 404, message: "Process not found" };
+  if (/script not found/.test(text))
+    return { status: 400, message: "Script not found — check the 'script' path in your request" };
+  if (/econnrefused|connect|etimedout|daemon/.test(text))
+    return { status: 503, message: "Cannot connect to PM2 daemon" };
+
+  console.error("PM2 error:", raw);
+  return { status: 500, message: `PM2 operation failed: ${raw}` };
 }
 
 function summarizeProcess(process: ProcessDescription): ProcessSummary {
@@ -97,40 +124,48 @@ class PM2Service {
 export const pm2Service = new PM2Service();
 
 export const pm2Routes = new Elysia({ prefix: "/pm2" })
-  .get("/list", () => pm2Service.listProcesses())
-  .get("/health", () => pm2Service.healthCheck())
+  .onError(({ code, error, set }) => {
+    if (code === "VALIDATION") {
+      set.status = 422;
+      return { success: false, message: `Validation failed: ${error.message}`, info: null };
+    }
+    const { status, message } = classifyPm2Error(error);
+    set.status = status;
+    return { success: false, message, info: null };
+  })
+  .get("/list", () => SuccessResponse("PM2 process list retrieved successfully", pm2Service.listProcesses()))
+  .get("/health", () => SuccessResponse("PM2 health check passed", pm2Service.healthCheck()))
   .get(
     "/describe/:id",
-    ({ params }) => pm2Service.describeProcess(params.id),
+    ({ params }) => SuccessResponse("PM2 process described successfully", pm2Service.describeProcess(params.id)),
     { params: t.Object({ id: t.Number() }) },
   )
-  .post("/start", ({ body }) => pm2Service.startProcess(body as StartOptions))
+  .post("/start", ({ body }) => SuccessResponse("PM2 process started successfully", pm2Service.startProcess(body as StartOptions)))
   .post(
     "/stop/:id",
-    ({ params }) => pm2Service.stopProcess(params.id),
+    ({ params }) => SuccessResponse("PM2 process stopped successfully", pm2Service.stopProcess(params.id)),
     { params: t.Object({ id: t.Number() }) },
   )
   .post(
     "/restart/:id",
-    ({ params }) => pm2Service.restartProcess(params.id),
+    ({ params }) => SuccessResponse("PM2 process restarted successfully", pm2Service.restartProcess(params.id)),
     { params: t.Object({ id: t.Number() }) },
   )
   .post(
     "/reload/:id",
-    ({ params }) => pm2Service.reloadProcess(params.id),
+    ({ params }) => SuccessResponse("PM2 process reloaded successfully", pm2Service.reloadProcess(params.id)),
     { params: t.Object({ id: t.Number() }) },
   )
   .delete(
     "/delete/:id",
-    ({ params }) => pm2Service.deleteProcess(params.id),
+    ({ params }) => SuccessResponse("PM2 process deleted successfully", pm2Service.deleteProcess(params.id)),
     { params: t.Object({ id: t.Number() }) },
   )
   .post(
     "/flush/:id?",
-    ({ params }) => pm2Service.flushLogs(params.id),
+    ({ params }) => SuccessResponse("PM2 logs flushed successfully", pm2Service.flushLogs(params.id)),
     { params: t.Object({ id: t.Optional(t.Number()) }) },
   );
-
 const port = Number(process.env.SERVER_PORT ?? 4000);
 
 const app = new Elysia().use(pm2Routes).listen(port);
