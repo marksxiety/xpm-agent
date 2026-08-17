@@ -1,65 +1,11 @@
 import { Elysia, t } from "elysia";
 import swagger from "@elysiajs/swagger";
 import pm2 from "pm2";
-import type { ProcessDescription, Proc, StartOptions } from "pm2";
-import type { ProcessSummary, ApiResponse } from "./types";
-
-
-const SuccessResponse = <T>(message: string, info: T): ApiResponse<T> => ({
-  success: true,
-  message,
-  info,
-});
-
-function classifyPm2Error(err: unknown): { status: number; message: string } {
-  const raw = err instanceof Error ? err.message : String((err as any)?.msg ?? err);
-  const text = raw.toLowerCase();
-
-  if (/process.*not found|process or namespace not found|app not found|no process found/.test(text))
-    return { status: 404, message: "Process not found" };
-  if (/script not found/.test(text))
-    return { status: 400, message: "Script not found — check the 'script' path in your request" };
-  if (/econnrefused|connect|etimedout|daemon/.test(text))
-    return { status: 503, message: "Cannot connect to PM2 daemon" };
-
-  console.error("PM2 error:", raw);
-  return { status: 500, message: `PM2 operation failed: ${raw}` };
-}
-
-function formatValidationMessage(message: string): string {
-  try {
-    const parsed = JSON.parse(message);
-    return parsed.summary ?? message;
-  } catch {
-    return message;
-  }
-}
-
-function summarizeProcess(process: ProcessDescription): ProcessSummary {
-  const env = process.pm2_env as any;
-  return {
-    pid: process.pid ?? 0,
-    pm_id: process.pm_id ?? env?.pm_id ?? -1,
-    name: process.name ?? env?.name ?? "",
-    namespace: env?.namespace ?? "default",
-    status: env?.status ?? "unknown",
-    uptime: env?.pm_uptime,
-    restarts: env?.restart_time ?? 0,
-    unstable_restarts: env?.unstable_restarts ?? 0,
-    exec_mode: env?.exec_mode ?? "fork",
-    instances: env?.instances,
-    interpreter: env?.exec_interpreter ?? "none",
-    cpu: process.monit?.cpu ?? 0,
-    memory: process.monit?.memory ?? 0,
-    cwd: env?.pm_cwd,
-    watch: Boolean(env?.watch),
-    autorestart: env?.autorestart,
-  };
-}
-
-function toProcessDescriptions(procs: Proc | Proc[] | undefined): ProcessDescription[] {
-  return (Array.isArray(procs) ? procs : [procs]).filter(Boolean) as unknown as ProcessDescription[];
-}
+import type { ProcessDescription, StartOptions } from "pm2";
+import type { ProcessSummary } from "./types";
+import { SuccessResponse } from "./utils/response";
+import { classifyPm2Error, formatValidationMessage } from "./utils/errors";
+import { summarizeProcess, toProcessDescriptions } from "./utils/process";
 
 class PM2Service {
 
