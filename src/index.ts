@@ -1,5 +1,4 @@
 import { Elysia } from "elysia";
-import type { Context } from "elysia";
 import swagger from "@elysiajs/swagger";
 import type { StartOptions } from "pm2";
 import type { ApiResponse } from "./types";
@@ -8,67 +7,30 @@ import { classifyPm2Error, formatValidationMessage } from "./utils/errors";
 import { pm2Service } from "./services/pm2.service";
 import { getRouteMeta } from "./meta/process";
 
-const handle = async <T>(set: Context["set"], task: () => ApiResponse<T> | Promise<ApiResponse<T>>) => {
-  const response = await task();
-  set.status = response.status;
-  return response;
-};
-
 export const pm2Routes = new Elysia({ prefix: "/pm2" })
-  .onError(({ code, error, set }) => {
+  .mapResponse(({ set, response }) => {
+    if (response && typeof response === "object" && "status" in response) {
+      set.status = (response as ApiResponse).status;
+      delete (response as { status?: unknown }).status;
+    }
+  })
+  .onError(({ code, error }) => {
     if (code === "VALIDATION") {
-      set.status = 422;
       return respond(`Validation failed: ${formatValidationMessage(error.message)}`, null, { success: false, status: 422 });
     }
     const { status, message } = classifyPm2Error(error);
-    set.status = status;
     return respond(message, null, { success: false, status });
   })
-  .get(
-    "/list",
-    ({ set }) => handle(set, () => pm2Service.listProcesses()),
-    getRouteMeta("list"),
-  )
-  .get(
-    "/health",
-    ({ set }) => handle(set, () => pm2Service.healthCheck()),
-    getRouteMeta("health"),
-  )
-  .get(
-    "/describe/:id",
-    ({ params, set }) => handle(set, () => pm2Service.describeProcess(params.id)),
-    getRouteMeta("describe"),
-  )
-  .post(
-    "/start",
-    ({ body, set }) => handle(set, () => pm2Service.startProcess(body as StartOptions)),
-    getRouteMeta("start"),
-  )
-  .post(
-    "/stop/:id",
-    ({ params, set }) => handle(set, () => pm2Service.stopProcess(params.id)),
-    getRouteMeta("stop"),
-  )
-  .post(
-    "/restart/:id",
-    ({ params, set }) => handle(set, () => pm2Service.restartProcess(params.id)),
-    getRouteMeta("restart"),
-  )
-  .post(
-    "/reload/:id",
-    ({ params, set }) => handle(set, () => pm2Service.reloadProcess(params.id)),
-    getRouteMeta("reload"),
-  )
-  .delete(
-    "/delete/:id",
-    ({ params, set }) => handle(set, () => pm2Service.deleteProcess(params.id)),
-    getRouteMeta("delete"),
-  )
-  .post(
-    "/flush/:id?",
-    ({ params, set }) => handle(set, () => pm2Service.flushLogs(params.id)),
-    getRouteMeta("flush"),
-  );
+  .get("/list", () => pm2Service.listProcesses(), getRouteMeta("list"))
+  .get("/health", () => pm2Service.healthCheck(), getRouteMeta("health"))
+  .get("/describe/:id", ({ params }) => pm2Service.describeProcess(params.id), getRouteMeta("describe"))
+  .post("/start", ({ body }) => pm2Service.startProcess(body as StartOptions), getRouteMeta("start"))
+  .post("/stop/:id", ({ params }) => pm2Service.stopProcess(params.id), getRouteMeta("stop"))
+  .post("/restart/:id", ({ params }) => pm2Service.restartProcess(params.id), getRouteMeta("restart"))
+  .post("/reload/:id", ({ params }) => pm2Service.reloadProcess(params.id), getRouteMeta("reload"))
+  .delete("/delete/:id", ({ params }) => pm2Service.deleteProcess(params.id), getRouteMeta("delete"))
+  .post("/flush/:id?", ({ params }) => pm2Service.flushLogs(params.id), getRouteMeta("flush"));
+
 const port = Number(process.env.SERVER_PORT ?? 4000);
 
 const app = new Elysia()
