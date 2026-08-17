@@ -1,31 +1,8 @@
-import { Elysia, t, ValidationError } from "elysia";
+import { Elysia, t } from "elysia";
 import pm2 from "pm2";
 import type { ProcessDescription, Proc, StartOptions } from "pm2";
+import type { ProcessSummary, ApiResponse } from "./types";
 
-interface ProcessSummary {
-  pid: number;
-  pm_id: number;
-  name: string;
-  namespace: string;
-  status: string;
-  uptime: number | undefined;
-  restarts: number;
-  unstable_restarts: number;
-  exec_mode: string;
-  instances: number | undefined;
-  interpreter: string;
-  cpu: number;
-  memory: number;
-  cwd: string | undefined;
-  watch: boolean;
-  autorestart: boolean | undefined;
-}
-
-interface ApiResponse<T = unknown> {
-  success: boolean;
-  message: string;
-  info: T
-}
 
 const SuccessResponse = <T>(message: string, info: T): ApiResponse<T> => ({
   success: true,
@@ -90,10 +67,13 @@ class PM2Service {
       pm2.list((err, list) => cb(err, list?.map(summarizeProcess))),
     );
 
-  describeProcess = (processId: number): Promise<ProcessSummary[]> =>
-    this.withPM2<ProcessSummary[]>((cb) =>
-      pm2.describe(processId, (err, list) => cb(err, list?.map(summarizeProcess))),
+  describeProcess = async (processId: number): Promise<ProcessSummary[]> => {
+    const list = await this.withPM2<ProcessSummary[]>((cb) =>
+      pm2.describe(processId, (err, l) => cb(err, l?.map(summarizeProcess))),
     );
+    if (list.length === 0) throw new Error(`Process ${processId} not found`);
+    return list;
+  };
 
   startProcess = (options: StartOptions): Promise<Proc> =>
     this.withPM2<Proc>((cb) => pm2.start(options, cb));
@@ -133,37 +113,37 @@ export const pm2Routes = new Elysia({ prefix: "/pm2" })
     set.status = status;
     return { success: false, message, info: null };
   })
-  .get("/list", () => SuccessResponse("PM2 process list retrieved successfully", pm2Service.listProcesses()))
+  .get("/list", async () => SuccessResponse("PM2 process list retrieved successfully", await pm2Service.listProcesses()))
   .get("/health", () => SuccessResponse("PM2 health check passed", pm2Service.healthCheck()))
   .get(
     "/describe/:id",
-    ({ params }) => SuccessResponse("PM2 process described successfully", pm2Service.describeProcess(params.id)),
+    async ({ params }) => SuccessResponse("PM2 process described successfully", await pm2Service.describeProcess(params.id)),
     { params: t.Object({ id: t.Number() }) },
   )
-  .post("/start", ({ body }) => SuccessResponse("PM2 process started successfully", pm2Service.startProcess(body as StartOptions)))
+  .post("/start", async ({ body }) => SuccessResponse("PM2 process started successfully", await pm2Service.startProcess(body as StartOptions)))
   .post(
     "/stop/:id",
-    ({ params }) => SuccessResponse("PM2 process stopped successfully", pm2Service.stopProcess(params.id)),
+    async ({ params }) => SuccessResponse("PM2 process stopped successfully", await pm2Service.stopProcess(params.id)),
     { params: t.Object({ id: t.Number() }) },
   )
   .post(
     "/restart/:id",
-    ({ params }) => SuccessResponse("PM2 process restarted successfully", pm2Service.restartProcess(params.id)),
+    async ({ params }) => SuccessResponse("PM2 process restarted successfully", await pm2Service.restartProcess(params.id)),
     { params: t.Object({ id: t.Number() }) },
   )
   .post(
     "/reload/:id",
-    ({ params }) => SuccessResponse("PM2 process reloaded successfully", pm2Service.reloadProcess(params.id)),
+    async ({ params }) => SuccessResponse("PM2 process reloaded successfully", await pm2Service.reloadProcess(params.id)),
     { params: t.Object({ id: t.Number() }) },
   )
   .delete(
     "/delete/:id",
-    ({ params }) => SuccessResponse("PM2 process deleted successfully", pm2Service.deleteProcess(params.id)),
+    async ({ params }) => SuccessResponse("PM2 process deleted successfully", await pm2Service.deleteProcess(params.id)),
     { params: t.Object({ id: t.Number() }) },
   )
   .post(
     "/flush/:id?",
-    ({ params }) => SuccessResponse("PM2 logs flushed successfully", pm2Service.flushLogs(params.id)),
+    async ({ params }) => SuccessResponse("PM2 logs flushed successfully", await pm2Service.flushLogs(params.id)),
     { params: t.Object({ id: t.Optional(t.Number()) }) },
   );
 const port = Number(process.env.SERVER_PORT ?? 4000);
