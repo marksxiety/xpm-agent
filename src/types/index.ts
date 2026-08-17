@@ -21,5 +21,6 @@ export interface ProcessSummary {
 export interface ApiResponse<T = unknown> {
     success: boolean;
     message: string;
-    info: T
+    info: T | null;
+    status: number;
 }
