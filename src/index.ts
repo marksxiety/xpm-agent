@@ -2,6 +2,47 @@ import { Elysia } from "elysia";
 import pm2 from "pm2";
 import type { ProcessDescription, Proc, StartOptions } from "pm2";
 
+interface ProcessSummary {
+  pid: number;
+  pm_id: number;
+  name: string;
+  namespace: string;
+  status: string;
+  uptime: number | undefined;
+  restarts: number;
+  unstable_restarts: number;
+  exec_mode: string;
+  instances: number | undefined;
+  interpreter: string;
+  cpu: number;
+  memory: number;
+  cwd: string | undefined;
+  watch: boolean;
+  autorestart: boolean | undefined;
+}
+
+function summarizeProcess(process: ProcessDescription): ProcessSummary {
+  const env = process.pm2_env as any;
+  return {
+    pid: process.pid ?? 0,
+    pm_id: process.pm_id ?? -1,
+    name: process.name ?? "",
+    namespace: env?.namespace ?? "default",
+    status: env?.status ?? "unknown",
+    uptime: env?.pm_uptime,
+    restarts: env?.restart_time ?? 0,
+    unstable_restarts: env?.unstable_restarts ?? 0,
+    exec_mode: env?.exec_mode ?? "fork",
+    instances: env?.instances,
+    interpreter: env?.exec_interpreter ?? "none",
+    cpu: process.monit?.cpu ?? 0,
+    memory: process.monit?.memory ?? 0,
+    cwd: env?.pm_cwd,
+    watch: Boolean(env?.watch),
+    autorestart: env?.autorestart,
+  };
+}
+
 class PM2Service {
   
   private withPM2<T>(fn: (cb: (err: Error | null, result?: T) => void) => void): Promise<T> {
@@ -17,11 +58,15 @@ class PM2Service {
     });
   }
 
-  listProcesses = (): Promise<ProcessDescription[]> =>
-    this.withPM2<ProcessDescription[]>((cb) => pm2.list(cb));
+  listProcesses = (): Promise<ProcessSummary[]> =>
+    this.withPM2<ProcessSummary[]>((cb) =>
+      pm2.list((err, list) => cb(err, list?.map(summarizeProcess))),
+    );
 
-  describeProcess = (processName: string): Promise<ProcessDescription[]> =>
-    this.withPM2<ProcessDescription[]>((cb) => pm2.describe(processName, cb));
+  describeProcess = (processName: string): Promise<ProcessSummary[]> =>
+    this.withPM2<ProcessSummary[]>((cb) =>
+      pm2.describe(processName, (err, list) => cb(err, list?.map(summarizeProcess))),
+    );
 
   startProcess = (options: StartOptions): Promise<Proc> =>
     this.withPM2<Proc>((cb) => pm2.start(options, cb));
