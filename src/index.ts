@@ -25,6 +25,15 @@ function classifyPm2Error(err: unknown): { status: number; message: string } {
   return { status: 500, message: `PM2 operation failed: ${raw}` };
 }
 
+function formatValidationMessage(message: string): string {
+  try {
+    const parsed = JSON.parse(message);
+    return parsed.summary ?? message;
+  } catch {
+    return message;
+  }
+}
+
 function summarizeProcess(process: ProcessDescription): ProcessSummary {
   const env = process.pm2_env as any;
   return {
@@ -107,7 +116,11 @@ export const pm2Routes = new Elysia({ prefix: "/pm2" })
   .onError(({ code, error, set }) => {
     if (code === "VALIDATION") {
       set.status = 422;
-      return { success: false, message: `Validation failed: ${error.message}`, info: null };
+      return {
+        success: false,
+        message: `Validation failed: ${formatValidationMessage(error.message)}`,
+        info: null,
+      };
     }
     const { status, message } = classifyPm2Error(error);
     set.status = status;
