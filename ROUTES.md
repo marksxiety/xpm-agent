@@ -148,7 +148,21 @@ Fetches detailed info for a single process by its `pm_id`. Unlike `/list`, retur
 
 ### POST /start
 
-Registers and launches a new process under PM2. PM2 will keep the process alive according to its `autorestart`/`watch` settings.
+Registers and launches a new process under PM2. PM2 will keep the process alive according to its `autorestart`/`watch`/`cron_restart` settings.
+
+The API is language-agnostic: every process is `interpreter` + `script` + `args`. Pick the combination that fits your runtime.
+
+**Language recipes:**
+
+| Language | `interpreter` | `script` | `args` |
+|---|---|---|---|
+| Node | `node` (default) | `index.js` | `--port=3000` |
+| Bun | `bun` | `index.ts` | — |
+| PHP web | `php` | `server.php` | `-S 127.0.0.1:8080` |
+| PHP artisan | `php` | `artisan` | `schedule:run` |
+| Python | `python` | `app.py` | `--port 5000` |
+| Go / binary | `none` | `./my-binary` | `--port 5000` |
+| Shell / `.bat` | `none` | `start.bat` | — |
 
 **Request body (Postman → Body → raw → JSON):**
 
@@ -158,10 +172,16 @@ Registers and launches a new process under PM2. PM2 will keep the process alive 
   "name": "my-service",
   "namespace": "DPR",
   "cwd": "C:\\apps\\my-service",
-  "instances": 2,
+  "exec_mode": "fork",
   "interpreter": "node",
+  "node_args": "--env-file=.env",
+  "args": "--port 3000",
+  "env": {
+    "NODE_ENV": "production"
+  },
   "watch": false,
-  "autorestart": true
+  "autorestart": true,
+  "cron_restart": "*/5 * * * *"
 }
 ```
 
@@ -171,24 +191,46 @@ Registers and launches a new process under PM2. PM2 will keep the process alive 
 | `name` | string | no | Process name shown in pm2 list |
 | `namespace` | string | no | PM2 namespace; defaults to `"default"`. Use to isolate same-named processes. |
 | `cwd` | string | no | Working directory for the script |
-| `instances` | number \| string | no | Number of instances (cluster mode) |
-| `interpreter` | string | no | Interpreter to use: `node`, `bun`, `none`, ... |
+| `instances` | number \| string | no | Number of instances (`1`, `2`, `"max"`). **One `ProcessSummary` row is returned per instance.** Requires `exec_mode: "cluster"`; Node only. |
+| `exec_mode` | `"fork"` \| `"cluster"` | no | Execution mode. `"cluster"` is required for `instances > 1`. Defaults to `"fork"`. |
+| `interpreter` | string | no | Interpreter: `node`, `bun`, `python`, `php`, or `none` (script itself is executable). Defaults to `node`. |
+| `node_args` | string \| string[] | no | Arguments to the **interpreter** (Node/Bun only), e.g. `--env-file=.env`. |
+| `args` | string \| string[] | no | Arguments to the **script** itself, e.g. `-S 127.0.0.1:8080 server.php`. |
+| `env` | object\<string, string\> | no | Environment variables injected into the spawned process. |
 | `watch` | boolean | no | Restart on file changes |
 | `autorestart` | boolean | no | Restart automatically on crash |
+| `cron_restart` | string | no | Cron expression to periodically restart the process, e.g. `*/5 * * * *`. |
 
-**Response `200`:**
+**Response `200`** — `info` is an array of `ProcessSummary`, one per launched instance:
 
 ```json
 {
   "success": true,
   "message": "PM2 process started successfully",
-  "info": {
-    "name": "my-service",
-    "pm_id": 2,
-    "pid": 12345
-  }
+  "info": [
+    {
+      "pid": 12345,
+      "pm_id": 2,
+      "name": "my-service",
+      "namespace": "DPR",
+      "status": "online",
+      "uptime": 1786687862669,
+      "restarts": 0,
+      "unstable_restarts": 0,
+      "exec_mode": "fork_mode",
+      "instances": 1,
+      "interpreter": "node",
+      "cpu": 0,
+      "memory": 0,
+      "cwd": "C:\\apps\\my-service",
+      "watch": false,
+      "autorestart": true
+    }
+  ]
 }
 ```
+
+Starting with `instances: 2` returns **2 rows** (one per cluster instance). To run a single process, omit `instances` (or set `exec_mode: "fork"`).
 
 **Error `422`** (missing `script`):
 
@@ -224,16 +266,32 @@ Gracefully stops a running process. The process stays **registered** in PM2 (sta
 
 **Request:** `POST /pm2/stop/0` (no body)
 
-**Response `200`:**
+**Response `200`** — `info` is an array of `ProcessSummary`:
 
 ```json
 {
   "success": true,
   "message": "PM2 process stopped successfully",
-  "info": {
-    "name": "client",
-    "pm_id": 0
-  }
+  "info": [
+    {
+      "pid": 0,
+      "pm_id": 0,
+      "name": "client",
+      "namespace": "DPR",
+      "status": "stopped",
+      "uptime": 1786687862669,
+      "restarts": 3,
+      "unstable_restarts": 0,
+      "exec_mode": "fork_mode",
+      "instances": 1,
+      "interpreter": "node",
+      "cpu": 0,
+      "memory": 0,
+      "cwd": "C:\\apps\\daily-production-report",
+      "watch": false,
+      "autorestart": true
+    }
+  ]
 }
 ```
 
@@ -257,16 +315,32 @@ Kills and re-launches a process. Also works on stopped processes (acts as start)
 
 **Request:** `POST /pm2/restart/0` (no body)
 
-**Response `200`:**
+**Response `200`** — `info` is an array of `ProcessSummary`:
 
 ```json
 {
   "success": true,
   "message": "PM2 process restarted successfully",
-  "info": {
-    "name": "client",
-    "pm_id": 0
-  }
+  "info": [
+    {
+      "pid": 0,
+      "pm_id": 0,
+      "name": "client",
+      "namespace": "DPR",
+      "status": "online",
+      "uptime": 1786687862669,
+      "restarts": 4,
+      "unstable_restarts": 0,
+      "exec_mode": "fork_mode",
+      "instances": 1,
+      "interpreter": "node",
+      "cpu": 0,
+      "memory": 0,
+      "cwd": "C:\\apps\\daily-production-report",
+      "watch": false,
+      "autorestart": true
+    }
+  ]
 }
 ```
 
@@ -284,16 +358,32 @@ Zero-downtime reload — restarts instances one at a time. Only meaningful for *
 
 **Request:** `POST /pm2/reload/0` (no body)
 
-**Response `200`:**
+**Response `200`** — `info` is an array of `ProcessSummary`:
 
 ```json
 {
   "success": true,
   "message": "PM2 process reloaded successfully",
-  "info": {
-    "name": "client",
-    "pm_id": 0
-  }
+  "info": [
+    {
+      "pid": 0,
+      "pm_id": 0,
+      "name": "client",
+      "namespace": "DPR",
+      "status": "online",
+      "uptime": 1786687862669,
+      "restarts": 4,
+      "unstable_restarts": 0,
+      "exec_mode": "cluster_mode",
+      "instances": 2,
+      "interpreter": "node",
+      "cpu": 0,
+      "memory": 0,
+      "cwd": "C:\\apps\\daily-production-report",
+      "watch": false,
+      "autorestart": true
+    }
+  ]
 }
 ```
 
@@ -311,16 +401,32 @@ Stops the process **and removes it from PM2's registry entirely**. The `pm_id` i
 
 **Request:** `DELETE /pm2/delete/0` (no body)
 
-**Response `200`:**
+**Response `200`** — `info` is an array of `ProcessSummary`:
 
 ```json
 {
   "success": true,
   "message": "PM2 process deleted successfully",
-  "info": {
-    "name": "client",
-    "pm_id": 0
-  }
+  "info": [
+    {
+      "pid": 0,
+      "pm_id": 0,
+      "name": "client",
+      "namespace": "DPR",
+      "status": "stopped",
+      "uptime": 1786687862669,
+      "restarts": 4,
+      "unstable_restarts": 0,
+      "exec_mode": "fork_mode",
+      "instances": 1,
+      "interpreter": "node",
+      "cpu": 0,
+      "memory": 0,
+      "cwd": "C:\\apps\\daily-production-report",
+      "watch": false,
+      "autorestart": true
+    }
+  ]
 }
 ```
 
@@ -352,11 +458,11 @@ Clears (empties) the log files for one process, or for **all** processes if the 
 
 ## ProcessSummary Fields
 
-The `info` payload for `/list` and `/describe/:id`:
+The `info` payload for `/list`, `/describe/:id`, `/start`, `/stop/:id`, `/restart/:id`, `/reload/:id`, and `/delete/:id` — always an array of summaries.
 
 | Field | Type | Description |
 |---|---|---|
-| `pid` | number | OS process id (0 if not running) |
+| `pid` | number | OS process id (0 if not running, or on operation responses) |
 | `pm_id` | number | PM2 internal id — **the id used in `:id` routes** |
 | `name` | string | Process name |
 | `namespace` | string | PM2 namespace (default: `"default"`) |
@@ -367,11 +473,13 @@ The `info` payload for `/list` and `/describe/:id`:
 | `exec_mode` | string | `fork_mode` or `cluster_mode` |
 | `instances` | number | Instance count (cluster mode) |
 | `interpreter` | string | Interpreter used (`node`, `bun`, `none`, ...) |
-| `cpu` | number | Current CPU usage (%) |
-| `memory` | number | Current memory usage (bytes) |
+| `cpu` | number | Current CPU usage (%) — `0` on operation responses |
+| `memory` | number | Current memory usage (bytes) — `0` on operation responses |
 | `cwd` | string | Working directory |
 | `watch` | boolean | File-watch enabled |
 | `autorestart` | boolean | Auto-restart on crash enabled |
+
+> **Note:** on `/start`, `/stop`, `/restart`, `/reload`, `/delete` responses, PM2 returns metadata-only snapshots, so `pid`, `cpu`, and `memory` may be `0`. Poll `GET /list` for live metrics.
 
 ## Error Statuses
 
@@ -389,3 +497,5 @@ All errors use the envelope with `success: false` and `info: null`.
 
 - `stop` keeps the process registered and restartable; `delete` removes it permanently and frees the `pm_id` (which PM2 may recycle).
 - `:id` always means the numeric `pm_id` from `GET /list` — process **names are not accepted** (names can collide across namespaces).
+- `instances > 1` (with `exec_mode: "cluster"`) launches one Node process per CPU instance — the response then contains **one row per instance**.
+- `env` values injected via `/start` are applied to the spawned process only; they are **not echoed back** in responses (all responses are sanitized `ProcessSummary` snapshots).
