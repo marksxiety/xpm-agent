@@ -21,7 +21,7 @@ class PM2Service {
 
   private handleError<T>(err: unknown): ApiResponse<T> {
     const { status, message } = classifyPm2Error(err);
-    return respond(message, null, { success: false, status });
+    return respond(message, null, { success: false, status }) as ApiResponse<T>;
   }
 
   listProcesses = async (): Promise<ApiResponse<ProcessSummary[]>> => {
