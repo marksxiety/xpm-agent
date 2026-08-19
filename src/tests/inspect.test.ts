@@ -9,7 +9,7 @@ function issues(payload: Payload): string[] {
   return inspect("start", payload).map((issue) => issue.field);
 }
 
-describe("inspect('start')", () => {
+describe("pm2 start command", () => {
   test("returns no issues for a clean Node config", () => {
     const payload: Payload = {
       name: "client",
