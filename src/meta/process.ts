@@ -89,6 +89,11 @@ const routeMeta = {
         description: "Cron expression to periodically restart the process, e.g. '*/5 * * * *'.",
         examples: ["*/5 * * * *"],
       })),
+      log_file: t.Optional(t.String({
+        description:
+          "Log file base name. Two files are written to the PM2 logs directory (~/.pm2/logs/): '<base>-out.log' (stdout) and '<base>-error.log' (stderr). Defaults to '<namespace>-<name>' when omitted. Any extension or directory path is stripped.",
+        examples: ["my-service.log"],
+      })),
     }),
     detail: {
       summary: "Register and start a new process",
@@ -130,10 +135,17 @@ const routeMeta = {
   },
   delete: {
     params: processIdParams,
+    body: t.Object({
+      delete_logs: t.Optional(t.Boolean({
+        description:
+          "Also delete the process's log files (<base>-out.log and <base>-error.log) from ~/.pm2/logs/. Defaults to false — PM2 does not remove log files on delete.",
+        examples: [true],
+      })),
+    }),
     detail: {
       summary: "Delete a process permanently",
       description:
-        "Stops the process **and removes it from PM2's registry entirely**. The `pm_id` is freed and may be recycled by PM2 for future processes. Unlike stop, this cannot be undone via restart.",
+        "Stops the process **and removes it from PM2's registry entirely**. The `pm_id` is freed and may be recycled by PM2 for future processes. Unlike stop, this cannot be undone via restart.\n\nBy default the process's log files are left on disk (PM2 never removes them). Pass `delete_logs: true` to also delete the `-out.log`/`-error.log` files from `~/.pm2/logs/`.",
       tags: ["Processes"],
       operationId: "deleteProcess",
     },
