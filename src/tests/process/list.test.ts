@@ -18,7 +18,7 @@ mock.module("pm2", () => ({
     },
 }));
 
-const { pm2Service } = await import("../services/pm2.service");
+const { pm2Service } = await import("../../services/pm2.service");
 
 describe("p2m list command", () => {
     test("return an empty list when no processes are running", async () => {

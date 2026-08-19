@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { inspect } from "../utils/inspect";
+import { inspect } from "../../utils/inspect";
 import type { Static } from "elysia";
-import { StartPayload } from "../schemas/process";
+import { StartPayload } from "../../schemas/process";
 
 type Payload = Static<typeof StartPayload>;
 
