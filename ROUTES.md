@@ -24,6 +24,8 @@ Every response — success or error — uses the same shape:
 | `message` | string | Human-readable result or error description |
 | `info` | any | The actual payload on success; `null` on error |
 
+> **Exception:** the `/start` configuration-guide `422` returns the list of violations in `info` (an array of `{ field, message }`), not `null` — see [POST /start](#post-start).
+
 ---
 
 ## Routes
@@ -148,9 +150,12 @@ Fetches detailed info for a single process by its `pm_id`. Unlike `/list`, retur
 
 ### POST /start
 
-Registers and launches a new process under PM2. PM2 will keep the process alive according to its `autorestart`/`watch`/`cron_restart` settings.
+Registers and launches a new process under PM2. `name` and `script` are **required**; every other field is an optional PM2 start option and is passed through **verbatim** — this API applies no defaults. When a field is omitted, PM2 applies its own built-in default (see [Defaults & provenance](#defaults--provenance) below).
 
-The API is language-agnostic: every process is `interpreter` + `script` + `args`. Pick the combination that fits your runtime.
+The body is validated **twice**:
+
+1. **Schema validation** — wrong types or missing required fields → `422` (handled by the API validation layer).
+2. **Configuration guide** — cross-field checks that catch impossible or misleading combos (e.g. a `.js` script with `interpreter: "php"`) → `422` with the list of issues in `info`.
 
 **Language recipes:**
 
@@ -159,7 +164,7 @@ The API is language-agnostic: every process is `interpreter` + `script` + `args`
 | Node | `node` (default) | `index.js` | `--port=3000` |
 | Bun | `bun` | `index.ts` | — |
 | PHP web | `php` | `server.php` | `-S 127.0.0.1:8080` |
-| PHP artisan | `php` | `artisan` | `schedule:run` |
+| PHP artisan | `php` | `artisan` | `schedule:work` |
 | Python | `python` | `app.py` | `--port 5000` |
 | Go / binary | `none` | `./my-binary` | `--port 5000` |
 | Shell / `.bat` | `none` | `start.bat` | — |
@@ -168,40 +173,56 @@ The API is language-agnostic: every process is `interpreter` + `script` + `args`
 
 ```json
 {
-  "script": "C:\\apps\\my-service\\index.js",
-  "name": "my-service",
-  "namespace": "DPR",
-  "cwd": "C:\\apps\\my-service",
-  "exec_mode": "fork",
+  "script": ".output/server/index.mjs",
+  "name": "client",
+  "cwd": "C:\\Users\\<username>\\daily-production-report\\client",
+  "args": ["--port", "3000"],
   "interpreter": "node",
-  "node_args": "--env-file=.env",
-  "args": "--port 3000",
-  "env": {
-    "NODE_ENV": "production"
-  },
-  "watch": false,
+  "interpreter_args": ["--max-old-space-size=512"],
+  "namespace": "DPR",
+  "exec_mode": "fork",
+  "instances": 1,
   "autorestart": true,
-  "cron_restart": "*/5 * * * *",
-  "log_file": "my-service.log"
+  "watch": false,
+  "ignore_watch": ["node_modules", "logs", "*.log"],
+  "watch_delay": 1000,
+  "windowsHide": true
 }
 ```
 
-| Field | Type | Required | Description |
+| Field | Type | Required | Description / default |
 |---|---|---|---|
-| `script` | string | **yes** | Path to the script to run |
-| `name` | string | no | Process name shown in pm2 list |
-| `namespace` | string | no | PM2 namespace; defaults to `"default"`. Use to isolate same-named processes. |
-| `cwd` | string | no | Working directory for the script |
-| `instances` | number \| string | no | Number of instances (`1`, `2`, `"max"`). **One `ProcessSummary` row is returned per instance.** Requires `exec_mode: "cluster"`; Node only. |
-| `exec_mode` | `"fork"` \| `"cluster"` | no | Execution mode. `"cluster"` is required for `instances > 1`. Defaults to `"fork"`. |
-| `interpreter` | string | no | Interpreter: `node`, `bun`, `python`, `php`, or `none` (script itself is executable). Defaults to `node`. |
-| `node_args` | string \| string[] | no | Arguments to the **interpreter** (Node/Bun only), e.g. `--env-file=.env`. |
-| `args` | string \| string[] | no | Arguments to the **script** itself, e.g. `-S 127.0.0.1:8080 server.php`. |
-| `env` | object\<string, string\> | no | Environment variables injected into the spawned process. |
-| `watch` | boolean | no | Restart on file changes |
-| `autorestart` | boolean | no | Restart automatically on crash |
-| `cron_restart` | string | no | Cron expression to periodically restart the process, e.g. `*/5 * * * *`. |
-| `log_file` | string | no | Log file **base name**. Two files are written to `~/.pm2/logs/`: `<base>-out.log` (stdout) and `<base>-error.log` (stderr). Defaults to `<namespace>-<name>` when omitted. Any extension or directory path is stripped. |
+| `name` | string | **yes** | Process name shown in `pm2 list`. Used in log file names and lifecycle commands. |
+| `script` | string | **yes** | Path to the script to run. Resolved against the API server's cwd when `cwd` is omitted. |
+| `cwd` | string | no | Working directory the process is launched from. **No pm2 default** — almost always set this. |
+| `namespace` | string | no | PM2 namespace. Defaults to `"default"` (pm2 built-in). Use to isolate same-named processes. |
+| `interpreter` | string | no | Interpreter used to launch `script`. Defaults to `"node"` (pm2 built-in). Use `"none"` for binaries/executables. |
+| `args` | string \| string[] | no | Arguments passed to the script itself. No pm2 default. |
+| `interpreter_args` | string \| string[] | no | Arguments passed to the interpreter process (e.g. `--max-old-space-size=512`). Node-family only. No pm2 default. |
+| `node_args` | string \| string[] | no | Arguments passed to the Node interpreter (e.g. `--env-file=.env`). Alias of `interpreter_args` for node. Node-family only. No pm2 default. |
+| `env` | object\<string, string\> | no | Environment variables injected into the spawned process. Defaults to `{}` (pm2 passes only this object, not the shell env). |
+| `autorestart` | boolean | no | Restart automatically on crash. Defaults to `true` (pm2 built-in). Set `false` for one-shot jobs. |
+| `windowsHide` | boolean | no | Hide the process console window on Windows. Defaults to `false` (pm2 built-in). **Recommended `true` on Windows hosts.** |
+| `exec_mode` | `"fork"` \| `"cluster"` | no | Execution mode. Defaults to `"fork"` (pm2 built-in). `"cluster"` required for `instances > 1`; Node-only. |
+| `instances` | number \| `"max"` | no | Number of instances. Defaults to `1` (pm2 built-in). `"max"` = one per CPU core. Requires `exec_mode: "cluster"`. |
+| `watch` | boolean \| string[] | no | Restart on file changes. `true` watches the whole tree; an array watches only those paths. Defaults to `false` (pm2 built-in). |
+| `ignore_watch` | string[] | no | Paths/glob patterns excluded from `watch`. No pm2 default. Recommended `["node_modules", "logs", "*.log"]` when `watch` is on — otherwise pm2 restarts on its own log writes. |
+| `watch_delay` | number | no | Delay (ms) before restarting a watched process after a change. **No pm2 default** — restarts fire immediately. |
+| `cron_restart` | string | no | Cron expression to periodically restart the process, e.g. `"0 2 * * *"`. No pm2 default. |
+| `log_file` | string | no | Log file **base name**. Two files written to `~/.pm2/logs/`: `<base>-out.log` (stdout) and `<base>-error.log` (stderr). Defaults to `<namespace>-<name>` when omitted (pm2 built-in). Extension/directory path stripped. |
+
+**Defaults & provenance:**
+
+Every default listed above is **PM2's own runtime default** — it is applied by PM2 when the field is omitted. This API passes your JSON through to PM2 unchanged and applies **no** defaults of its own. Provenance is stated per field: "(pm2 built-in)" = applied by PM2 if omitted; "No pm2 default" = nothing is applied and PM2 behaves as documented.
+
+**Configuration guide rules (each violation blocks with `422`):**
+
+- Node-extension script (`.js`, `.mjs`, `.cjs`, `.ts`, …) with a `php`/`python` interpreter
+- `artisan` or `.php` script without `interpreter: "php"`
+- `artisan` script with no `args` (artisan needs a subcommand: `serve`, `schedule:work`, …)
+- `node_args` / `interpreter_args` with a non-node-family interpreter
+- `exec_mode: "cluster"` with a non-node-family interpreter
+- `instances > 1` / `"max"` with `exec_mode: "fork"`
 
 **Response `200`** — `info` is an array of `ProcessSummary`, one per launched instance:
 
@@ -213,7 +234,7 @@ The API is language-agnostic: every process is `interpreter` + `script` + `args`
     {
       "pid": 12345,
       "pm_id": 2,
-      "name": "my-service",
+      "name": "client",
       "namespace": "DPR",
       "status": "online",
       "uptime": 1786687862669,
@@ -234,13 +255,28 @@ The API is language-agnostic: every process is `interpreter` + `script` + `args`
 
 Starting with `instances: 2` returns **2 rows** (one per cluster instance). To run a single process, omit `instances` (or set `exec_mode: "fork"`).
 
-**Error `422`** (missing `script`):
+**Error `422`** (schema violation — e.g. missing `name`):
 
 ```json
 {
   "success": false,
-  "message": "Validation failed: Expected property 'script' to be string but found: undefined",
+  "message": "Validation failed: Expected property 'name' to be string but found: undefined",
   "info": null
+}
+```
+
+**Error `422`** (configuration guide violation — note `info` carries the issues):
+
+```json
+{
+  "success": false,
+  "message": "Invalid process configuration",
+  "info": [
+    {
+      "field": "interpreter",
+      "message": "script 'index.js' looks like a Node file — interpreter should be 'node', 'bun', or 'none'"
+    }
+  ]
 }
 ```
 
@@ -494,14 +530,14 @@ The `info` payload for `/list`, `/describe/:id`, `/start`, `/stop/:id`, `/restar
 ## Error Statuses
 
 | Status | When |
-|---|---|
-| 422 | Validation failed (non-numeric `id`, missing `script` in body) |
+|---|---|---|
+| 422 | Schema validation failed (non-numeric `id`, missing `name`/`script` in body) **or** a `/start` configuration-guide violation (e.g. `.js` script with `php` interpreter) |
 | 404 | Process with the given `pm_id` not found |
 | 400 | Script path in `/start` body not found |
 | 503 | Cannot connect to the PM2 daemon |
 | 500 | Unexpected PM2 failure |
 
-All errors use the envelope with `success: false` and `info: null`.
+All errors use the envelope with `success: false`; `info` is `null` except for the `/start` configuration-guide `422`, where it contains the list of violations.
 
 ## Lifecycle Notes
 
@@ -509,4 +545,6 @@ All errors use the envelope with `success: false` and `info: null`.
 - `:id` always means the numeric `pm_id` from `GET /list` — process **names are not accepted** (names can collide across namespaces).
 - `instances > 1` (with `exec_mode: "cluster"`) launches one Node process per CPU instance — the response then contains **one row per instance**.
 - `env` values injected via `/start` are applied to the spawned process only; they are **not echoed back** in responses (all responses are sanitized `ProcessSummary` snapshots).
+- `/start` passes every field through to PM2 verbatim — it applies no defaults and no environment variables of its own (see [Defaults & provenance](#defaults--provenance)).
+- `windowsHide` is **recommended `true` on Windows hosts** (pm2's own default is `false`) to avoid a spawned console window per process.
 - **Name/namespace are immutable after start** — PM2 has no rename. To rename, `delete` (optionally with `delete_logs: true`) and `start` under the new name. Logs are named after the name/namespace, so a rename starts new `-out.log`/`-error.log` files.
