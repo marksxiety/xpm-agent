@@ -1,8 +1,8 @@
 import path from "node:path";
-import os from "node:os";
+import { config } from "../config";
 
 export function pm2LogsDir(): string {
-  return path.join(process.env.PM2_HOME ?? path.join(os.homedir(), ".pm2"), "logs");
+  return path.join(config.PM2_HOME, "logs");
 }
 
 export function resolveLogFiles(input: {
