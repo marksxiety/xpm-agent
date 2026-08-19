@@ -181,7 +181,8 @@ The API is language-agnostic: every process is `interpreter` + `script` + `args`
   },
   "watch": false,
   "autorestart": true,
-  "cron_restart": "*/5 * * * *"
+  "cron_restart": "*/5 * * * *",
+  "log_file": "my-service.log"
 }
 ```
 
@@ -200,6 +201,7 @@ The API is language-agnostic: every process is `interpreter` + `script` + `args`
 | `watch` | boolean | no | Restart on file changes |
 | `autorestart` | boolean | no | Restart automatically on crash |
 | `cron_restart` | string | no | Cron expression to periodically restart the process, e.g. `*/5 * * * *`. |
+| `log_file` | string | no | Log file **base name**. Two files are written to `~/.pm2/logs/`: `<base>-out.log` (stdout) and `<base>-error.log` (stderr). Defaults to `<namespace>-<name>` when omitted. Any extension or directory path is stripped. |
 
 **Response `200`** — `info` is an array of `ProcessSummary`, one per launched instance:
 
@@ -393,13 +395,21 @@ Zero-downtime reload — restarts instances one at a time. Only meaningful for *
 
 Stops the process **and removes it from PM2's registry entirely**. The `pm_id` is freed and may be recycled by PM2 for future processes. Unlike stop, this cannot be undone via restart.
 
+By default the process's log files (`-out.log` / `-error.log` in `~/.pm2/logs/`) are **left on disk** — PM2 never removes them. Pass `delete_logs: true` to also delete them.
+
 **Path params:**
 
 | Param | Type | Required | Description |
 |---|---|---|---|
 | `id` | number | yes | `pm_id` of the process (from `GET /list`) |
 
-**Request:** `DELETE /pm2/delete/0` (no body)
+**Body (optional):**
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `delete_logs` | boolean | no | When `true`, also deletes the process's `-out.log`/`-error.log` files from `~/.pm2/logs/`. Default `false`. |
+
+**Request:** `DELETE /pm2/delete/0` (keep logs) or `DELETE /pm2/delete/0` with body `{ "delete_logs": true }` (also remove log files)
 
 **Response `200`** — `info` is an array of `ProcessSummary`:
 
@@ -499,3 +509,4 @@ All errors use the envelope with `success: false` and `info: null`.
 - `:id` always means the numeric `pm_id` from `GET /list` — process **names are not accepted** (names can collide across namespaces).
 - `instances > 1` (with `exec_mode: "cluster"`) launches one Node process per CPU instance — the response then contains **one row per instance**.
 - `env` values injected via `/start` are applied to the spawned process only; they are **not echoed back** in responses (all responses are sanitized `ProcessSummary` snapshots).
+- **Name/namespace are immutable after start** — PM2 has no rename. To rename, `delete` (optionally with `delete_logs: true`) and `start` under the new name. Logs are named after the name/namespace, so a rename starts new `-out.log`/`-error.log` files.
