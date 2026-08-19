@@ -36,69 +36,10 @@ const routeMeta = {
     },
   },
   start: {
-    body: t.Object({
-      script: t.String({
-        description: "Path to the script to run (required)",
-        examples: ["C:\\apps\\my-service\\index.js"],
-      }),
-      name: t.Optional(t.String({
-        description: "Process name shown in pm2 list",
-        examples: ["my-service"],
-      })),
-      namespace: t.Optional(t.String({
-        description: "PM2 namespace (defaults to 'default'). Use to isolate same-named processes.",
-        examples: ["default"],
-      })),
-      cwd: t.Optional(t.String({
-        description: "Working directory for the script",
-        examples: ["C:\\apps\\my-service"],
-      })),
-      instances: t.Optional(t.Union([t.Number(), t.String()], {
-        description: "Number of instances (cluster mode). One row is returned per instance. Requires exec_mode 'cluster'.",
-        examples: [1, 2, "max"],
-      })),
-      exec_mode: t.Optional(t.Union([t.Literal("fork"), t.Literal("cluster")], {
-        description: "Execution mode. 'cluster' is required for instances > 1 (Node only). 'fork' (default) for a single process.",
-        examples: ["fork"],
-      })),
-      interpreter: t.Optional(t.String({
-        description: "Interpreter to use, e.g. 'node', 'bun', 'python', 'php', or 'none' for an executable/binary/script.",
-        examples: ["node", "none", "python", "php"],
-      })),
-      node_args: t.Optional(t.Union([t.String(), t.Array(t.String())], {
-        description: "Arguments passed to the interpreter itself (Node/Bun only), e.g. '--env-file=.env'.",
-        examples: ["--env-file=.env"],
-      })),
-      args: t.Optional(t.Union([t.String(), t.Array(t.String())], {
-        description: "Arguments passed to the script itself, e.g. PHP built-in server flags.",
-        examples: ["-S 127.0.0.1:8080 server.php", "--port 5000"],
-      })),
-      env: t.Optional(t.Record(t.String(), t.String(), {
-        description: "Environment variables injected into the spawned process.",
-        examples: [{ NODE_ENV: "production", PORT: "3000" }],
-      })),
-      watch: t.Optional(t.Boolean({
-        description: "Restart on file changes",
-        examples: [false],
-      })),
-      autorestart: t.Optional(t.Boolean({
-        description: "Restart automatically on crash",
-        examples: [true],
-      })),
-      cron_restart: t.Optional(t.String({
-        description: "Cron expression to periodically restart the process, e.g. '*/5 * * * *'.",
-        examples: ["*/5 * * * *"],
-      })),
-      log_file: t.Optional(t.String({
-        description:
-          "Log file base name. Two files are written to the PM2 logs directory (~/.pm2/logs/): '<base>-out.log' (stdout) and '<base>-error.log' (stderr). Defaults to '<namespace>-<name>' when omitted. Any extension or directory path is stripped.",
-        examples: ["my-service.log"],
-      })),
-    }),
     detail: {
       summary: "Register and start a new process",
       description:
-        "Registers and launches a new process under PM2. `script` is required; other fields are PM2 start options. PM2 will keep the process alive according to its `autorestart`/`watch` settings.\n\nLanguage recipes:\n- **Node**: `script: index.js`, `interpreter: node`, `node_args: --env-file=.env`\n- **Bun**: `script: index.ts`, `interpreter: bun`\n- **PHP**: `script: server.php`, `interpreter: php`, `args: -S 127.0.0.1:8080`\n- **Python**: `script: app.py`, `interpreter: python`, `args: --port 5000`\n- **Go/binary**: `script: ./my-binary`, `interpreter: none`\n\nThe response `info` is always an array — one `ProcessSummary` per launched instance.",
+        "Registers and launches a new process under PM2. `name` and `script` are required; every other field is an optional PM2 option and is passed through verbatim — this API applies no defaults. When a field is omitted, PM2 applies its own built-in default: `interpreter` → 'node', `exec_mode` → 'fork', `instances` → 1, `autorestart` → true, `watch` → false, `windowsHide` → false, `namespace` → 'default', `env` → {}.\n\nThe body is validated twice:\n1. **Schema validation (422)** — wrong types / missing required fields, handled by the API's validation layer.\n2. **Configuration guide (422)** — cross-field checks that catch impossible or misleading combos before PM2 sees them. Returns the list of issues in `info` (see error example). Rules: Node-extension scripts must not use a php/python interpreter; `artisan`/`.php` scripts require `php`; `artisan` needs a subcommand in `args`; `node_args`/`interpreter_args` only apply to node-family interpreters; `exec_mode: 'cluster'` is Node-only; `instances > 1` requires `exec_mode: 'cluster'`.\n\nThe response `info` is always an array — one `ProcessSummary` per launched instance.",
       tags: ["Processes"],
       operationId: "startProcess",
     },
