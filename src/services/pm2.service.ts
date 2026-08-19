@@ -1,9 +1,11 @@
+import { promises as fs } from "node:fs";
 import pm2 from "pm2";
 import type { ProcessDescription, StartOptions } from "pm2";
 import type { ApiResponse, ProcessSummary } from "../types";
 import { respond } from "../utils/response";
 import { classifyPm2Error } from "../utils/errors";
 import { summarizeProcess, toProcessDescriptions } from "../utils/process";
+import { resolveLogFiles } from "../utils/log";
 
 class PM2Service {
   private withPM2<T>(fn: (cb: (err: Error | null, result?: T) => void) => void): Promise<T> {
@@ -47,10 +49,12 @@ class PM2Service {
     }
   };
 
-  startProcess = async (options: StartOptions): Promise<ApiResponse<ProcessSummary[]>> => {
+  startProcess = async (body: StartOptions & { log_file?: string }): Promise<ApiResponse<ProcessSummary[]>> => {
     try {
+      const { log_file, ...rest } = body;
+      const logOptions = resolveLogFiles({ script: rest.script ?? "", name: rest.name, namespace: rest.namespace, log_file });
       const launched = await this.withPM2<ProcessDescription[]>((cb) =>
-        pm2.start(options, (err, procs) => cb(err, toProcessDescriptions(procs))),
+        pm2.start({ ...rest, ...logOptions }, (err, procs) => cb(err, toProcessDescriptions(procs))),
       );
       const ids = launched
         .map((p) => p.pm_id ?? (p.pm2_env as any)?.pm_id)
@@ -98,11 +102,22 @@ class PM2Service {
     }
   };
 
-  deleteProcess = async (processId: number): Promise<ApiResponse<ProcessSummary[]>> => {
+  deleteProcess = async (processId: number, deleteLogs = false): Promise<ApiResponse<ProcessSummary[]>> => {
     try {
+      let logFiles: string[] = [];
+      if (deleteLogs) {
+        const desc = await this.withPM2<ProcessDescription[]>((cb) => pm2.describe(processId, cb));
+        logFiles = desc.flatMap((p) => {
+          const env = p.pm2_env as any;
+          return [env?.out_file, env?.err_file].filter((f): f is string => typeof f === "string" && f.length > 0);
+        });
+      }
       const procs = await this.withPM2<ProcessDescription[]>((cb) =>
         pm2.delete(processId, (err, p) => cb(err, toProcessDescriptions(p))),
       );
+      if (logFiles.length > 0) {
+        await Promise.all(logFiles.map((file) => fs.unlink(file).catch(() => {})));
+      }
       return respond("PM2 process deleted successfully", procs.map(summarizeProcess));
     } catch (err) {
       return this.handleError(err);
