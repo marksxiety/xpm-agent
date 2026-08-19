@@ -29,7 +29,7 @@ export const pm2Routes = new Elysia({ prefix: "/pm2" })
   .post("/stop/:id", ({ params }) => pm2Service.stopProcess(params.id), getRouteMeta("stop"))
   .post("/restart/:id", ({ params }) => pm2Service.restartProcess(params.id), getRouteMeta("restart"))
   .post("/reload/:id", ({ params }) => pm2Service.reloadProcess(params.id), getRouteMeta("reload"))
-  .delete("/delete/:id", ({ params }) => pm2Service.deleteProcess(params.id), getRouteMeta("delete"))
+  .delete("/delete/:id", ({ params, body }) => pm2Service.deleteProcess(params.id, body?.delete_logs ?? false), getRouteMeta("delete"))
   .post("/flush/:id?", ({ params }) => pm2Service.flushLogs(params.id), getRouteMeta("flush"));
 
 const port = Number(process.env.SERVER_PORT ?? 4000);
