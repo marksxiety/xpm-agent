@@ -1,4 +1,6 @@
-export function getCurrentTimeStamp(timezone: string = process.env.SERVER_TIMEZONE ?? 'Asia/Manila'): number {
+import { config } from "../config";
+
+export function getCurrentTimeStamp(timezone: string = config.SERVER_TIMEZONE): number {
   const parts = new Intl.DateTimeFormat('en-US', {
     timeZone: timezone,
     year: 'numeric', month: '2-digit', day: '2-digit',
