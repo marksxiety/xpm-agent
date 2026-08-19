@@ -117,4 +117,44 @@ describe("p2m list command", () => {
             },
         ]);
     });
+
+    test("return 503 when the PM2 daemon is not running", async () => {
+        state.processes = [];
+        state.listError = new Error("PM2 daemon not running");
+
+        const response = await pm2Service.listProcesses();
+        expect(response.success).toBe(false);
+        expect(response.status).toBe(503);
+        expect(response.message).toBe("Cannot connect to PM2 daemon");
+    });
+
+    test("return 500 when returns unexpected error", async () => {
+        state.processes = [];
+        state.listError = new Error("Unexpected error");
+
+        const response = await pm2Service.listProcesses();
+        expect(response.success).toBe(false);
+        expect(response.status).toBe(500);
+        expect(response.message).toBe("PM2 operation failed: Unexpected error");
+    });
+
+    test("return 404 when returns process not found error", async () => {
+        state.processes = [];
+        state.listError = new Error("Process not found");
+
+        const response = await pm2Service.listProcesses();
+        expect(response.success).toBe(false);
+        expect(response.status).toBe(404);
+        expect(response.message).toBe("Process not found");
+    });
+
+    test("return 400 when returns script not found error", async () => {
+        state.processes = [];
+        state.listError = new Error("Script not found");
+        const response = await pm2Service.listProcesses();
+        
+        expect(response.success).toBe(false);
+        expect(response.status).toBe(400);
+        expect(response.message).toBe("Script not found — check the 'script' path in your request");
+    })
 });
