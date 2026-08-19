@@ -6,6 +6,7 @@ import { respond } from "./utils/response";
 import { classifyPm2Error, formatValidationMessage } from "./utils/errors";
 import { pm2Service } from "./services/pm2.service";
 import { getRouteMeta } from "./meta/process";
+import { config } from "./config";
 import PackageJson from "../package.json";
 
 export const pm2Routes = new Elysia({ prefix: "/pm2" })
@@ -32,8 +33,6 @@ export const pm2Routes = new Elysia({ prefix: "/pm2" })
   .delete("/delete/:id", ({ params, body }) => pm2Service.deleteProcess(params.id, body?.delete_logs ?? false), getRouteMeta("delete"))
   .post("/flush/:id?", ({ params }) => pm2Service.flushLogs(params.id), getRouteMeta("flush"));
 
-const port = Number(process.env.SERVER_PORT ?? 4000);
-
 const app = new Elysia()
   .use(
     swagger({
@@ -47,6 +46,6 @@ const app = new Elysia()
     }),
   )
   .use(pm2Routes)
-  .listen(port);
+  .listen(config.SERVER_PORT);
 
 console.log(`PM2 API is running at ${app.server?.hostname}:${app.server?.port}`);
