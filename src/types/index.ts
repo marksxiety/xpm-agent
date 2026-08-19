@@ -5,7 +5,7 @@ export interface ProcessSummary {
     name: string;
     namespace: string;
     status: string;
-    uptime: number | undefined;
+    uptime: number;
     restarts: number;
     unstable_restarts: number;
     exec_mode: string;
