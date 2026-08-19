@@ -8,8 +8,6 @@ export function classifyPm2Error(err: unknown): { status: number; message: strin
     return { status: 400, message: "Script not found — check the 'script' path in your request" };
   if (/econnrefused|connect|etimedout|daemon/.test(text))
     return { status: 503, message: "Cannot connect to PM2 daemon" };
-
-  console.error("PM2 error:", raw);
   return { status: 500, message: `PM2 operation failed: ${raw}` };
 }
 
