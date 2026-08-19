@@ -6,6 +6,7 @@ import { respond } from "../utils/response";
 import { classifyPm2Error } from "../utils/errors";
 import { summarizeProcess, toProcessDescriptions } from "../utils/process";
 import { resolveLogFiles } from "../utils/log";
+import { getCurrentTimeStamp } from "../utils/datetime";
 
 class PM2Service {
   private withPM2<T>(fn: (cb: (err: Error | null, result?: T) => void) => void): Promise<T> {
@@ -133,11 +134,11 @@ class PM2Service {
     }
   };
 
-  healthCheck = (): ApiResponse<{ status: string; uptime: number; timestamp: string }> =>
+  healthCheck = (): ApiResponse<{ status: string; uptime: number; timestamp: number }> =>
     respond("PM2 health check passed", {
       status: "ok",
       uptime: process.uptime(),
-      timestamp: new Date().toISOString(),
+      timestamp: getCurrentTimeStamp(),
     });
 }
 
