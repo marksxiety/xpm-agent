@@ -6,14 +6,11 @@ export function pm2LogsDir(): string {
 }
 
 export function resolveLogFiles(input: {
-  script: string;
-  name?: string;
-  namespace?: string;
-  log_file?: string;
+  name: string | undefined;
+  namespace?: string | undefined;
 }): { output: string; error: string } {
-  const name = input.name ?? path.basename(input.script, path.extname(input.script));
   const namespace = input.namespace ?? "default";
-  const base = input.log_file ? path.basename(input.log_file, path.extname(input.log_file)) : `${namespace}-${name}`;
+  const base = `${namespace}-${input.name ?? "default"}`;
   return {
     output: path.join(pm2LogsDir(), `${base}-out.log`),
     error: path.join(pm2LogsDir(), `${base}-error.log`),
