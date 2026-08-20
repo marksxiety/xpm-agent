@@ -150,7 +150,7 @@ Fetches detailed info for a single process by its `pm_id`. Unlike `/list`, retur
 
 ### POST /start
 
-Registers and launches a new process under PM2. `name` and `script` are **required**; every other field is an optional PM2 start option and is passed through **verbatim** — this API applies no defaults. When a field is omitted, PM2 applies its own built-in default (see [Defaults & provenance](#defaults--provenance) below).
+Registers and launches a new process under PM2. `name`, `script`, and `interpreter` are **required**; every other field is an optional PM2 start option and is passed through **verbatim** — this API applies no defaults. When a field is omitted, PM2 applies its own built-in default (see [Defaults & provenance](#defaults--provenance) below).
 
 The body is validated **twice**:
 
@@ -159,13 +159,15 @@ The body is validated **twice**:
 
 **Language recipes:**
 
+`interpreter` must be an absolute path to the interpreter executable (or `"none"` for bare binaries) — bare names like `"node"`/`"php"` are rejected.
+
 | Language | `interpreter` | `script` | `args` |
 |---|---|---|---|
-| Node | `node` (default) | `index.js` | `--port=3000` |
-| Bun | `bun` | `index.ts` | — |
-| PHP web | `php` | `server.php` | `-S 127.0.0.1:8080` |
-| PHP artisan | `php` | `artisan` | `schedule:work` |
-| Python | `python` | `app.py` | `--port 5000` |
+| Node | `C:\Program Files\nodejs\node.exe` | `index.js` | `--port=3000` |
+| Bun | `C:\Users\<user>\.bun\bin\bun.exe` | `index.ts` | — |
+| PHP web | `C:\php\php.exe` | `server.php` | `-S 127.0.0.1:8080` |
+| PHP artisan | `C:\php\php.exe` | `artisan` | `schedule:work` |
+| Python | `C:\Python312\python.exe` | `app.py` | `--port 5000` |
 | Go / binary | `none` | `./my-binary` | `--port 5000` |
 | Shell / `.bat` | `none` | `start.bat` | — |
 
@@ -178,13 +180,14 @@ The body is validated **twice**:
   "cwd": "C:\\Example\\Application",
   "script": ".output/server/index.mjs",
   "args": ["--port", "3000"],
-  "interpreter": "node",
+  "interpreter": "C:\\Program Files\\nodejs\\node.exe",
   "interpreter_args": ["--env-file=.env"],
   "exec_mode": "fork",
   "instances": 1,
   "autorestart": true,
   "max_restarts": 10,
-  "windowsHide": true
+  "windowsHide": true,
+  "watch": false
 }
 ```
 
@@ -195,7 +198,7 @@ The body is validated **twice**:
 | `cwd` | string | no | Working directory the process is launched from. **No pm2 default** — almost always set this. |
 | `script` | string | **yes** | Path to the script to run. Resolved against the API server's cwd when `cwd` is omitted. |
 | `args` | string \| string[] | no | Arguments passed to the script itself. No pm2 default. |
-| `interpreter` | string | no | Interpreter used to launch `script`. Defaults to `"node"` (pm2 built-in). Use `"none"` for binaries/executables. |
+| `interpreter` | string | **yes** | Absolute path to the interpreter executable (e.g. `C:\Program Files\nodejs\node.exe`). **Required.** Use `"none"` when `script` is itself a binary. Bare names like `"node"`/`"php"` are rejected — only `"none"` is accepted as a bare value. |
 | `interpreter_args` | string \| string[] | no | Arguments passed to the interpreter process (e.g. `--env-file=.env`, `--max-old-space-size=512`). Node-family only. No pm2 default. |
 | `exec_mode` | `"fork"` \| `"cluster"` | no | Execution mode. Defaults to `"fork"` (pm2 built-in). `"cluster"` required for `instances > 1`; Node-only. |
 | `instances` | number \| `"max"` | no | Number of instances. Defaults to `1` (pm2 built-in). `"max"` = one per CPU core. Requires `exec_mode: "cluster"`. |
@@ -214,8 +217,9 @@ Every default listed above is **PM2's own runtime default** — it is applied by
 
 **Configuration guide rules (each violation blocks with `422`):**
 
+- `interpreter` not an absolute path — bare names like `"node"`/`"php"` are rejected (only `"none"` is accepted as a bare value)
 - Node-extension script (`.js`, `.mjs`, `.cjs`, `.ts`, …) with a `php`/`python` interpreter
-- `artisan` or `.php` script without `interpreter: "php"`
+- `artisan` or `.php` script without a PHP interpreter executable path
 - `artisan` script with no `args` (artisan needs a subcommand: `serve`, `schedule:work`, …)
 - `interpreter_args` with a non-node-family interpreter
 - `exec_mode: "cluster"` with a non-node-family interpreter
@@ -239,7 +243,7 @@ Every default listed above is **PM2's own runtime default** — it is applied by
       "unstable_restarts": 0,
       "exec_mode": "fork_mode",
       "instances": 1,
-      "interpreter": "node",
+      "interpreter": "C:\\Program Files\\nodejs\\node.exe",
       "cpu": 0,
       "memory": 0,
       "cwd": "C:\\apps\\my-service",
@@ -271,7 +275,7 @@ Starting with `instances: 2` returns **2 rows** (one per cluster instance). To r
   "info": [
     {
       "field": "interpreter",
-      "message": "script 'index.js' looks like a Node file — interpreter should be 'node', 'bun', or 'none'"
+      "message": "interpreter must be an absolute path to the executable (e.g. 'C:\\Program Files\\nodejs\\node.exe'), not a bare name like 'node' — only 'none' is accepted as a bare value"
     }
   ]
 }
@@ -319,7 +323,7 @@ Gracefully stops a running process. The process stays **registered** in PM2 (sta
       "unstable_restarts": 0,
       "exec_mode": "fork_mode",
       "instances": 1,
-      "interpreter": "node",
+      "interpreter": "C:\\Program Files\\nodejs\\node.exe",
       "cpu": 0,
       "memory": 0,
       "cwd": "C:\\apps\\daily-production-report",
@@ -368,7 +372,7 @@ Kills and re-launches a process. Also works on stopped processes (acts as start)
       "unstable_restarts": 0,
       "exec_mode": "fork_mode",
       "instances": 1,
-      "interpreter": "node",
+      "interpreter": "C:\\Program Files\\nodejs\\node.exe",
       "cpu": 0,
       "memory": 0,
       "cwd": "C:\\apps\\daily-production-report",
@@ -411,7 +415,7 @@ Zero-downtime reload — restarts instances one at a time. Only meaningful for *
       "unstable_restarts": 0,
       "exec_mode": "cluster_mode",
       "instances": 2,
-      "interpreter": "node",
+      "interpreter": "C:\\Program Files\\nodejs\\node.exe",
       "cpu": 0,
       "memory": 0,
       "cwd": "C:\\apps\\daily-production-report",
@@ -462,7 +466,7 @@ By default the process's log files (`-out.log` / `-error.log` in `~/.pm2/logs/`)
       "unstable_restarts": 0,
       "exec_mode": "fork_mode",
       "instances": 1,
-      "interpreter": "node",
+      "interpreter": "C:\\Program Files\\nodejs\\node.exe",
       "cpu": 0,
       "memory": 0,
       "cwd": "C:\\apps\\daily-production-report",
@@ -515,7 +519,7 @@ The `info` payload for `/list`, `/describe/:id`, `/start`, `/stop/:id`, `/restar
 | `unstable_restarts` | number | Consecutive unstable restarts |
 | `exec_mode` | string | `fork_mode` or `cluster_mode` |
 | `instances` | number | Instance count (cluster mode) |
-| `interpreter` | string | Interpreter used (`node`, `bun`, `none`, ...) |
+| `interpreter` | string | Absolute interpreter path (e.g. `C:\Program Files\nodejs\node.exe`), or `none` |
 | `cpu` | number | Current CPU usage (%) — `0` on operation responses |
 | `memory` | number | Current memory usage (bytes) — `0` on operation responses |
 | `cwd` | string | Working directory |
