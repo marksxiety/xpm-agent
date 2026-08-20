@@ -75,13 +75,6 @@ export function inspectStart(options: StartPayloadType): StartIssue[] {
     });
   }
 
-  if (options.node_args !== undefined && !isNodeFamily(interpreter)) {
-    issues.push({
-      field: "node_args",
-      message: "'node_args' only applies to node-family interpreters ('node', 'bun')",
-    });
-  }
-
   if (options.interpreter_args !== undefined && !isNodeFamily(interpreter)) {
     issues.push({
       field: "interpreter_args",
