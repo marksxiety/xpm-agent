@@ -6,7 +6,7 @@ export function pm2LogsDir(): string {
 }
 
 export function resolveLogFiles(input: {
-  name: string | undefined;
+  name?: string | undefined;
   namespace?: string | undefined;
 }): { output: string; error: string } {
   const namespace = input.namespace ?? "default";
