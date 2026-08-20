@@ -36,14 +36,18 @@ Only `script` is required. Every process is `interpreter` + `script` + `args`, s
 
 ```json
 {
-  "script": "C:\\apps\\my-service\\index.js",
-  "name": "my-service",
-  "exec_mode": "fork",
+  "name": "example-app",
+  "namespace": "example",
+  "cwd": "C:\\Example\\Application",
+  "script": ".output/server/index.mjs",
+  "args": ["--port", "3000"],
   "interpreter": "node",
-  "node_args": "--env-file=.env",
-  "args": "--port 3000",
-  "env": { "NODE_ENV": "production" },
-  "autorestart": true
+  "interpreter_args": ["--env-file=.env"],
+  "exec_mode": "fork",
+  "instances": 1,
+  "autorestart": true,
+  "max_restarts": 10,
+  "windowsHide": true
 }
 ```
 
