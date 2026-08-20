@@ -1,106 +1,153 @@
+import { win32 } from "node:path";
 import type { Static } from "elysia";
 import { StartPayload } from "../schemas/process";
-
-export interface StartIssue {
-  field: string;
-  message: string;
-}
-
-export type InspectCommand = "start" | "stop" | "restart" | "reload" | "delete" | "flush";
+import type { StartIssue, RuntimeProfile, EntrypointConvention, InspectCommand } from "../types/inspect"
 
 type StartPayloadType = Static<typeof StartPayload>;
 
-const NODE_FAMILY = ["node", "bun"];
-const NODE_EXTENSIONS = /\.(?:m?js|cjs|ts|tsx|jsx|mts|cts)$/i;
-const PHP_EXTENSIONS = /\.(?:php|phtml)$/i;
+// ---------------------------------------------------------------------------
+// Runtime profiles
+//
+// Each profile describes a language/runtime family: how to recognize it from
+// either the interpreter executable or the script's file extension, and what
+// PM2 features it supports. Adding a new runtime is a matter of adding an
+// entry here — inspectStart() itself never references a specific language.
+// ---------------------------------------------------------------------------
+const RUNTIME_PROFILES: RuntimeProfile[] = [
+  {
+    id: "node",
+    executableNames: ["node", "bun"],
+    scriptExtensions: /\.(?:m?js|cjs|ts|tsx|jsx|mts|cts)$/i,
+    supportsClusterMode: true,
+    supportsInterpreterArgs: true,
+  },
+  {
+    id: "php",
+    executableNames: ["php"],
+    scriptExtensions: /\.(?:php|phtml)$/i,
+    supportsClusterMode: false,
+    supportsInterpreterArgs: false,
+  },
+  {
+    id: "python",
+    executableNames: ["python", "python3", "py", "pythonw"],
+    scriptExtensions: /\.pyw?$/i,
+    supportsClusterMode: false,
+    supportsInterpreterArgs: true, // e.g. -O, -u
+  },
+  {
+    id: "go",
+    executableNames: ["go"],
+    scriptExtensions: /\.go$/i,
+    supportsClusterMode: false,
+    supportsInterpreterArgs: false,
+  },
+];
 
-function scriptBasename(script: string): string {
-  return script.split(/[\\/]/).pop() ?? script;
-}
 
-function isArtisanScript(options: StartPayloadType): boolean {
-  return scriptBasename(options.script ?? "") === "artisan";
-}
+// ---------------------------------------------------------------------------
+// Entrypoint conventions
+//
+// Framework-specific entrypoint rules (artisan, manage.py, ...) are not
+// runtime checks — they're naming conventions tied to a runtime by id.
+// Keeping this table separate from RUNTIME_PROFILES means language support
+// and framework convention support can evolve independently.
+// ---------------------------------------------------------------------------
 
-function hasNodeExtension(script: string): boolean {
-  return NODE_EXTENSIONS.test(script);
-}
+const ENTRYPOINT_CONVENTIONS: EntrypointConvention[] = [
+  {
+    matches: (s) => s.split(/[\\/]/).pop() === "artisan",
+    requiredRuntimeId: "php",
+    requiresArgs: true,
+  },
+  {
+    matches: (s) => s.split(/[\\/]/).pop() === "manage.py",
+    requiredRuntimeId: "python",
+    requiresArgs: true,
+  },
+];
 
-function hasPhpExtension(script: string): boolean {
-  return PHP_EXTENSIONS.test(script);
-}
-
-function isNodeFamily(interpreter?: string): boolean {
-  return interpreter === undefined || NODE_FAMILY.includes(interpreter);
-}
-
-function isPhp(interpreter?: string): boolean {
-  return interpreter === "php";
-}
-
-function instancesGreaterThanOne(options: StartPayloadType): boolean {
-  return options.instances === "max" || (typeof options.instances === "number" && options.instances > 1);
-}
 
 export function inspectStart(options: StartPayloadType): StartIssue[] {
   const issues: StartIssue[] = [];
   const script = options.script ?? "";
   const interpreter = options.interpreter;
 
-  if (isArtisanScript(options) && interpreter !== undefined && interpreter !== "php") {
+  // win32 is deliberate: interpreters are Windows executable paths (e.g.
+  // C:\...\node.exe) regardless of the OS running this check, so validation
+  // must not vary by host platform.
+  if (interpreter !== "none" && !win32.isAbsolute(interpreter)) {
     issues.push({
       field: "interpreter",
-      message: "script is an artisan binary — interpreter should be 'php'",
+      message:
+        "interpreter must be an absolute path to the executable (e.g. 'C:\\Program Files\\nodejs\\node.exe'), not a bare name like 'node' or 'py' — only 'none' is accepted as a bare value",
     });
   }
 
-  if (isArtisanScript(options) && !options.args) {
-    issues.push({
-      field: "args",
-      message: "artisan requires a subcommand in 'args', e.g. 'serve', 'schedule:work', 'queue:work'",
-    });
-  }
+  const interpreterProfile =
+    interpreter === "none"
+      ? undefined
+      : RUNTIME_PROFILES.find((p) =>
+        p.executableNames.includes(
+          (interpreter.split(/[\\/]/).pop() ?? interpreter).replace(/\.exe$/i, "").toLowerCase(),
+        ),
+      );
+  const scriptProfile = RUNTIME_PROFILES.find((p) => p.scriptExtensions.test(script));
 
-  if (hasPhpExtension(script) && !isPhp(interpreter)) {
-    issues.push({
-      field: "interpreter",
-      message: `script '${script}' looks like a PHP file — interpreter should be 'php'`,
-    });
-  }
-
-  if (hasNodeExtension(script) && interpreter !== undefined && !isNodeFamily(interpreter)) {
+  if (scriptProfile && interpreterProfile && scriptProfile.id !== interpreterProfile.id) {
     issues.push({
       field: "interpreter",
-      message: `script '${script}' looks like a Node file — interpreter should be 'node', 'bun', or 'none'`,
+      message: `script '${script}' looks like a ${scriptProfile.id} file — interpreter should be a ${scriptProfile.id} executable path`,
     });
   }
 
-  if (options.interpreter_args !== undefined && !isNodeFamily(interpreter)) {
+  if (options.interpreter_args !== undefined && !interpreterProfile?.supportsInterpreterArgs) {
     issues.push({
       field: "interpreter_args",
-      message: "'interpreter_args' only applies to node-family interpreters ('node', 'bun')",
+      message: `'interpreter_args' isn't supported by this interpreter${interpreterProfile ? ` (${interpreterProfile.id})` : ""
+        }`,
     });
   }
 
-  if (options.exec_mode === "cluster" && !isNodeFamily(interpreter)) {
+  if (options.exec_mode === "cluster" && !interpreterProfile?.supportsClusterMode) {
     issues.push({
       field: "exec_mode",
-      message: "cluster mode is Node-only — use 'fork' for other interpreters",
+      message: `cluster mode isn't supported by this interpreter${interpreterProfile ? ` (${interpreterProfile.id})` : ""
+        } — use 'fork' instead`,
     });
   }
 
-  if (instancesGreaterThanOne(options) && options.exec_mode !== "cluster") {
+  if (
+    (options.instances === "max" || (typeof options.instances === "number" && options.instances > 1)) &&
+    options.exec_mode !== "cluster"
+  ) {
     issues.push({
       field: "instances",
-      message: "'instances' has no effect in fork mode — set exec_mode to 'cluster' (Node only)",
+      message: "'instances' has no effect in fork mode — set exec_mode to 'cluster' if supported",
     });
+  }
+
+  for (const convention of ENTRYPOINT_CONVENTIONS) {
+    if (!convention.matches(script)) continue;
+
+    if (convention.requiredRuntimeId && interpreterProfile?.id !== convention.requiredRuntimeId) {
+      issues.push({
+        field: "interpreter",
+        message: `script matches a known entrypoint convention — interpreter should be a ${convention.requiredRuntimeId} executable`,
+      });
+    }
+
+    if (convention.requiresArgs && !options.args) {
+      issues.push({
+        field: "args",
+        message: "this entrypoint requires a subcommand in 'args'",
+      });
+    }
   }
 
   return issues;
 }
 
-export function inspect(command: "start", input: StartPayloadType): StartIssue[];
-export function inspect(command: Exclude<InspectCommand, "start">, input: unknown): StartIssue[];
 export function inspect(command: InspectCommand, input: StartPayloadType | unknown): StartIssue[] {
   switch (command) {
     case "start":
