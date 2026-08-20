@@ -209,7 +209,6 @@ The body is validated **twice**:
 | `ignore_watch` | string[] | no | Paths/glob patterns excluded from `watch`. No pm2 default. Recommended `["node_modules", "logs", "*.log"]` when `watch` is on — otherwise pm2 restarts on its own log writes. |
 | `watch_delay` | number | no | Delay (ms) before restarting a watched process after a change. **No pm2 default** — restarts fire immediately. |
 | `cron_restart` | string | no | Cron expression to periodically restart the process, e.g. `"0 2 * * *"`. No pm2 default. |
-| `log_file` | string | no | Log file **base name**. Two files written to `~/.pm2/logs/`: `<base>-out.log` (stdout) and `<base>-error.log` (stderr). Defaults to `<namespace>-<name>` when omitted (pm2 built-in). Extension/directory path stripped. |
 
 **Defaults & provenance:**
 
