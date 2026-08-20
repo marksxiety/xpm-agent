@@ -101,9 +101,4 @@ export const StartPayload = t.Object({
       "Cron expression to periodically restart the process, e.g. `'*/5 * * * *'`. No pm2 default.",
     examples: ["*/5 * * * *"],
   })),
-  log_file: t.Optional(t.String({
-    description:
-      "Log file base name. Two files are written to the PM2 logs directory (`~/.pm2/logs/`): `<base>-out.log` (stdout) and `<base>-error.log` (stderr). Defaults to `<namespace>-<name>` when omitted (pm2 built-in). Any extension or directory path is stripped.",
-    examples: ["my-service.log"],
-  })),
 });
