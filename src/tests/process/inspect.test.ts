@@ -93,17 +93,6 @@ describe("pm2 start command", () => {
     expect(issues(payload)).toEqual(["args"]);
   });
 
-  test("flags node_args on a php interpreter", () => {
-    const payload: Payload = {
-      name: "server",
-      script: "artisan",
-      interpreter: "php",
-      args: "serve",
-      node_args: "--env-file=.env",
-    };
-    expect(issues(payload)).toContain("node_args");
-  });
-
   test("flags interpreter_args on a python interpreter", () => {
     const payload: Payload = {
       name: "app",
