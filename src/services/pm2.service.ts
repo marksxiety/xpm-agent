@@ -50,12 +50,11 @@ class PM2Service {
     }
   };
 
-  startProcess = async (body: StartOptions & { log_file?: string }): Promise<ApiResponse<ProcessSummary[]>> => {
+  startProcess = async (body: StartOptions): Promise<ApiResponse<ProcessSummary[]>> => {
     try {
-      const { log_file, ...rest } = body;
-      const logOptions = resolveLogFiles({ script: rest.script ?? "", name: rest.name, namespace: rest.namespace, log_file });
+      const logOptions = resolveLogFiles({ name: body.name ?? body.script, namespace: body.namespace });
       const launched = await this.withPM2<ProcessDescription[]>((cb) =>
-        pm2.start({ ...rest, ...logOptions }, (err, procs) => cb(err, toProcessDescriptions(procs))),
+        pm2.start({ ...body, ...logOptions }, (err, procs) => cb(err, toProcessDescriptions(procs))),
       );
       const ids = launched
         .map((p) => p.pm_id ?? (p.pm2_env as any)?.pm_id)
