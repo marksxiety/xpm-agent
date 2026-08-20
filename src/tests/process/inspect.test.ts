@@ -5,16 +5,19 @@ import { StartPayload } from "../../schemas/process";
 
 type Payload = Static<typeof StartPayload>;
 
+const NODE = "C:\\Program Files\\nodejs\\node.exe";
+
 function issues(payload: Payload): string[] {
   return inspect("start", payload).map((issue) => issue.field);
 }
 
-describe("pm2 start command", () => {
+describe("start inspection", () => {
   test("returns no issues for a clean Node config", () => {
     const payload: Payload = {
       name: "client",
       script: ".output/server/index.mjs",
-      interpreter: "node",
+      interpreter: NODE,
+      interpreter_args: ["--env-file=.env"],
       exec_mode: "fork",
       instances: 1,
     };
@@ -29,86 +32,46 @@ describe("pm2 start command", () => {
     const payload: Payload = {
       name: "api",
       script: "server.js",
-      interpreter: "node",
+      interpreter: NODE,
       exec_mode: "cluster",
       instances: 2,
     };
     expect(issues(payload)).toEqual([]);
   });
 
-  test("returns no issues for a PHP artisan serve", () => {
-    const payload: Payload = {
-      name: "server",
-      script: "artisan",
-      interpreter: "php",
-      args: "serve --host=127.0.0.1 --port=8000",
-    };
-    expect(issues(payload)).toEqual([]);
-  });
-
-  test("returns no issues for a PHP artisan worker with autorestart off", () => {
+  test("returns no issues for a bare binary with interpreter 'none'", () => {
     const payload: Payload = {
       name: "worker",
-      script: "artisan",
-      interpreter: "php",
-      args: "schedule:work",
-      autorestart: false,
+      script: "./my-binary",
+      interpreter: "none",
     };
     expect(issues(payload)).toEqual([]);
   });
 
-  test("flags a Node script with a php interpreter", () => {
+  test("flags a bare 'node' interpreter that is not an absolute path", () => {
     const payload: Payload = {
       name: "client",
-      script: "index.js",
-      interpreter: "php",
-    };
-    expect(issues(payload)).toEqual(["interpreter"]);
-  });
-
-  test("flags a php script when interpreter is omitted (defaults to node)", () => {
-    const payload: Payload = {
-      name: "server",
-      script: "server.php",
-    };
-    expect(issues(payload)).toEqual(["interpreter"]);
-  });
-
-  test("flags artisan with a node interpreter", () => {
-    const payload: Payload = {
-      name: "server",
-      script: "artisan",
+      script: ".output/server/index.mjs",
       interpreter: "node",
-      args: "serve",
     };
     expect(issues(payload)).toEqual(["interpreter"]);
   });
 
-  test("flags artisan without a subcommand", () => {
-    const payload: Payload = {
-      name: "server",
-      script: "artisan",
-      interpreter: "php",
-    };
-    expect(issues(payload)).toEqual(["args"]);
-  });
-
-  test("flags interpreter_args on a python interpreter", () => {
+  test("flags interpreter_args on a non-node interpreter", () => {
     const payload: Payload = {
       name: "app",
       script: "app.py",
-      interpreter: "python",
+      interpreter: "none",
       interpreter_args: ["--max-old-space-size=512"],
     };
-    expect(issues(payload)).toContain("interpreter_args");
+    expect(issues(payload)).toEqual(["interpreter_args"]);
   });
 
-  test("flags cluster mode on a php interpreter", () => {
+  test("flags cluster mode on a non-node interpreter", () => {
     const payload: Payload = {
       name: "server",
-      script: "artisan",
-      interpreter: "php",
-      args: "serve",
+      script: "server.py",
+      interpreter: "none",
       exec_mode: "cluster",
       instances: 2,
     };
@@ -119,7 +82,7 @@ describe("pm2 start command", () => {
     const payload: Payload = {
       name: "api",
       script: "server.js",
-      interpreter: "node",
+      interpreter: NODE,
       exec_mode: "fork",
       instances: 2,
     };
@@ -130,7 +93,7 @@ describe("pm2 start command", () => {
     const payload: Payload = {
       name: "api",
       script: "server.js",
-      interpreter: "node",
+      interpreter: NODE,
       instances: "max",
     };
     expect(issues(payload)).toContain("instances");
