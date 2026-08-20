@@ -37,12 +37,11 @@ export const StartPayload = t.Object({
       "Arguments passed to the script itself. Examples: `-S 127.0.0.1:8080 server.php` (PHP built-in server), `--port 3000`, or `schedule:work` (artisan subcommand). No pm2 default.",
     examples: ["-S 127.0.0.1:8080 server.php", "--port 3000", ["--port", "3000"]],
   })),
-  interpreter: t.Optional(t.String({
+  interpreter: t.String({
     description:
-      "Interpreter used to launch `script`. Defaults to `'node'` (pm2 built-in). Use `'none'` when `script` is itself an executable/binary. Other common values: `bun`, `python`, `php`, `ruby`.",
-    examples: ["node", "bun", "python", "php", "none"],
-    default: "node",
-  })),
+      "Absolute path to the interpreter executable used to launch `script`. Required. Use `'none'` when `script` is itself an executable/binary. Bare names like `'node'`/`'php'` are rejected — only `'none'` is accepted as a bare value.",
+    examples: ["C:\\Program Files\\nodejs\\node.exe", "C:\\php\\php.exe", "C:\\Python312\\python.exe", "none"],
+  }),
   interpreter_args: t.Optional(t.Union([t.String(), t.Array(t.String())], {
     description:
       "Arguments passed to the interpreter process (e.g. Node/V8 flags like `--max-old-space-size=512` or `--env-file=.env`). Only applies when `interpreter` is node-family (`node`, `bun`, etc.). No pm2 default.",
@@ -112,12 +111,13 @@ export const StartPayload = t.Object({
     cwd: "C:\\Example\\Application",
     script: ".output/server/index.mjs",
     args: ["--port", "3000"],
-    interpreter: "node",
+    interpreter: "C:\\Program Files\\nodejs\\node.exe",
     interpreter_args: ["--env-file=.env"],
     exec_mode: "fork",
     instances: 1,
     autorestart: true,
     max_restarts: 10,
     windowsHide: true,
+    watch: false,
   }],
 });
