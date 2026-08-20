@@ -20,58 +20,49 @@ describe("resolveLogFiles", () => {
 
     test("returns error log file paths based on passed parameters", () => {
         const input = {
-            script: "C:\\Apps\\index.js",
             name: "my-app",
             namespace: "my-namespace",
-            log_file: "C:\\Logs\\my-app.log"
         }
         
         const { error } = resolveLogFiles(input);
-        expect(error).toBe(`${process.env.PM2_HOME}\\logs\\my-app-error.log`);
+        expect(error).toBe(`${process.env.PM2_HOME}\\logs\\my-namespace-my-app-error.log`);
     })
 
     test("returns output log file paths based on passed parameters", () => {
         const input = {
-            script: "C:\\Apps\\index.js",
             name: "my-app",
             namespace: "my-namespace",
-            log_file: "C:\\Logs\\my-app.log"
         }
         
         const { output } = resolveLogFiles(input);
-        expect(output).toBe(`${process.env.PM2_HOME}\\logs\\my-app-out.log`);
+        expect(output).toBe(`${process.env.PM2_HOME}\\logs\\my-namespace-my-app-out.log`);
     })
 
     test("return default log file paths when name and namespace are not provided", () => {
-        const input = {
-            script: "C:\\Apps\\index.js",
-            log_file: "C:\\Logs\\my-app.log"
-        }
+        const input = {}
 
         const { error, output } = resolveLogFiles(input);
-        expect(error).toBe(`${process.env.PM2_HOME}\\logs\\my-app-error.log`);
-        expect(output).toBe(`${process.env.PM2_HOME}\\logs\\my-app-out.log`);
+        expect(error).toBe(`${process.env.PM2_HOME}\\logs\\default-default-error.log`);
+        expect(output).toBe(`${process.env.PM2_HOME}\\logs\\default-default-out.log`);
     })
 
-    test("return default log file paths when log_file is not provided", () => {
+    test("return default log file paths when name is not provided", () => {
         const input = {
-            script: "C:\\Apps\\index.js",
-            name: "my-app",
             namespace: "my-namespace"
         }
 
         const { error, output } = resolveLogFiles(input);
-        expect(error).toBe(`${process.env.PM2_HOME}\\logs\\my-namespace-my-app-error.log`);
-        expect(output).toBe(`${process.env.PM2_HOME}\\logs\\my-namespace-my-app-out.log`);
+        expect(error).toBe(`${process.env.PM2_HOME}\\logs\\my-namespace-default-error.log`);
+        expect(output).toBe(`${process.env.PM2_HOME}\\logs\\my-namespace-default-out.log`);
     })
 
-    test("return default log file paths when name, namespace and log_file are not provided", () => {
+    test("return default log file paths when namespace is not provided", () => {
         const input = {
-            script: "C:\\Apps\\index.js"
+            name: "my-app",
         }
 
         const { error, output } = resolveLogFiles(input);
-        expect(error).toBe(`${process.env.PM2_HOME}\\logs\\default-index-error.log`);
-        expect(output).toBe(`${process.env.PM2_HOME}\\logs\\default-index-out.log`);
+        expect(error).toBe(`${process.env.PM2_HOME}\\logs\\default-my-app-error.log`);
+        expect(output).toBe(`${process.env.PM2_HOME}\\logs\\default-my-app-out.log`);
     })
 });
