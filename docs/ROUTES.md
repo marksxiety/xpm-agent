@@ -173,19 +173,17 @@ The body is validated **twice**:
 
 ```json
 {
+  "name": "example-app",
+  "namespace": "example",
+  "cwd": "C:\\Example\\Application",
   "script": ".output/server/index.mjs",
-  "name": "client",
-  "cwd": "C:\\Users\\<username>\\daily-production-report\\client",
   "args": ["--port", "3000"],
   "interpreter": "node",
-  "interpreter_args": ["--max-old-space-size=512"],
-  "namespace": "DPR",
+  "interpreter_args": ["--env-file=.env"],
   "exec_mode": "fork",
   "instances": 1,
   "autorestart": true,
-  "watch": false,
-  "ignore_watch": ["node_modules", "logs", "*.log"],
-  "watch_delay": 1000,
+  "max_restarts": 10,
   "windowsHide": true
 }
 ```
@@ -193,18 +191,18 @@ The body is validated **twice**:
 | Field | Type | Required | Description / default |
 |---|---|---|---|
 | `name` | string | **yes** | Process name shown in `pm2 list`. Used in log file names and lifecycle commands. |
-| `script` | string | **yes** | Path to the script to run. Resolved against the API server's cwd when `cwd` is omitted. |
-| `cwd` | string | no | Working directory the process is launched from. **No pm2 default** — almost always set this. |
 | `namespace` | string | no | PM2 namespace. Defaults to `"default"` (pm2 built-in). Use to isolate same-named processes. |
-| `interpreter` | string | no | Interpreter used to launch `script`. Defaults to `"node"` (pm2 built-in). Use `"none"` for binaries/executables. |
+| `cwd` | string | no | Working directory the process is launched from. **No pm2 default** — almost always set this. |
+| `script` | string | **yes** | Path to the script to run. Resolved against the API server's cwd when `cwd` is omitted. |
 | `args` | string \| string[] | no | Arguments passed to the script itself. No pm2 default. |
-| `interpreter_args` | string \| string[] | no | Arguments passed to the interpreter process (e.g. `--max-old-space-size=512`). Node-family only. No pm2 default. |
-| `node_args` | string \| string[] | no | Arguments passed to the Node interpreter (e.g. `--env-file=.env`). Alias of `interpreter_args` for node. Node-family only. No pm2 default. |
-| `env` | object\<string, string\> | no | Environment variables injected into the spawned process. Defaults to `{}` (pm2 passes only this object, not the shell env). |
-| `autorestart` | boolean | no | Restart automatically on crash. Defaults to `true` (pm2 built-in). Set `false` for one-shot jobs. |
-| `windowsHide` | boolean | no | Hide the process console window on Windows. Defaults to `false` (pm2 built-in). **Recommended `true` on Windows hosts.** |
+| `interpreter` | string | no | Interpreter used to launch `script`. Defaults to `"node"` (pm2 built-in). Use `"none"` for binaries/executables. |
+| `interpreter_args` | string \| string[] | no | Arguments passed to the interpreter process (e.g. `--env-file=.env`, `--max-old-space-size=512`). Node-family only. No pm2 default. |
 | `exec_mode` | `"fork"` \| `"cluster"` | no | Execution mode. Defaults to `"fork"` (pm2 built-in). `"cluster"` required for `instances > 1`; Node-only. |
 | `instances` | number \| `"max"` | no | Number of instances. Defaults to `1` (pm2 built-in). `"max"` = one per CPU core. Requires `exec_mode: "cluster"`. |
+| `autorestart` | boolean | no | Restart automatically on crash. Defaults to `true` (pm2 built-in). Set `false` for one-shot jobs. |
+| `max_restarts` | number | no | Consecutive unstable-restart limit (a crash within `min_uptime` of launch counts as unstable). At the limit, PM2 marks the process `errored` and stops. `0` = never restart — prefer `autorestart: false` for that. Defaults to `16` (pm2 built-in). |
+| `windowsHide` | boolean | no | Hide the process console window on Windows. Defaults to `false` (pm2 built-in). **Recommended `true` on Windows hosts.** |
+| `env` | object\<string, string\> | no | Environment variables injected into the spawned process. Defaults to `{}` (pm2 passes only this object, not the shell env). |
 | `watch` | boolean \| string[] | no | Restart on file changes. `true` watches the whole tree; an array watches only those paths. Defaults to `false` (pm2 built-in). |
 | `ignore_watch` | string[] | no | Paths/glob patterns excluded from `watch`. No pm2 default. Recommended `["node_modules", "logs", "*.log"]` when `watch` is on — otherwise pm2 restarts on its own log writes. |
 | `watch_delay` | number | no | Delay (ms) before restarting a watched process after a change. **No pm2 default** — restarts fire immediately. |
@@ -219,7 +217,7 @@ Every default listed above is **PM2's own runtime default** — it is applied by
 - Node-extension script (`.js`, `.mjs`, `.cjs`, `.ts`, …) with a `php`/`python` interpreter
 - `artisan` or `.php` script without `interpreter: "php"`
 - `artisan` script with no `args` (artisan needs a subcommand: `serve`, `schedule:work`, …)
-- `node_args` / `interpreter_args` with a non-node-family interpreter
+- `interpreter_args` with a non-node-family interpreter
 - `exec_mode: "cluster"` with a non-node-family interpreter
 - `instances > 1` / `"max"` with `exec_mode: "fork"`
 
