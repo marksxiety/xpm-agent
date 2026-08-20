@@ -32,7 +32,7 @@ Identifies processes by their numeric `pm_id` (see `GET /pm2/list`) and exposes 
 
 ## Starting a process
 
-Only `script` is required. Every process is `interpreter` + `script` + `args`, so any language works:
+`name`, `script`, and `interpreter` are required. `interpreter` must be an absolute path to the interpreter executable — bare names like `"node"` are rejected; use `"none"` when `script` is itself a binary. Every process is `interpreter` + `script` + `args`, so any language works:
 
 ```json
 {
@@ -41,13 +41,14 @@ Only `script` is required. Every process is `interpreter` + `script` + `args`, s
   "cwd": "C:\\Example\\Application",
   "script": ".output/server/index.mjs",
   "args": ["--port", "3000"],
-  "interpreter": "node",
+  "interpreter": "C:\\Program Files\\nodejs\\node.exe",
   "interpreter_args": ["--env-file=.env"],
   "exec_mode": "fork",
   "instances": 1,
   "autorestart": true,
   "max_restarts": 10,
-  "windowsHide": true
+  "windowsHide": true,
+  "watch": false
 }
 ```
 
