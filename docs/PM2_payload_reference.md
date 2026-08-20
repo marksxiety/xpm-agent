@@ -137,7 +137,7 @@ Where stdout/stderr and combined output are written, how they are formatted, and
 
 Less common settings for special cases: V8 flags, scheduled restarts, git versioning, deploy hooks, and cluster-specific env manipulation.
 
-- `node_args` — V8/Node flags (alternative to `interpreter_args` for node).
+- `node_args` — V8/Node flags (alternative to `interpreter_args` for node). PM2 supports it, but this API's `/start` schema rejects it — use `interpreter_args` instead.
 - `cron_restart` — cron pattern to force periodic restart.
 - `vizion` — disable git metadata versioning.
 - `post_update` — commands run after a `pm2 pull`/deploy update.
