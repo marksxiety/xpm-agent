@@ -10,7 +10,7 @@ Identifies the process and defines how its entry script is invoked: the file pat
 - `name` — process name shown in `pm2 list`.
 - `cwd` — working directory for the process.
 - `args` — arguments passed to the script (array or string).
-- `interpreter` — `"node"`, `"python3"`, `"php"`, `"none"`, or a full exe path.
+- `interpreter` — `"node"`, `"python3"`, `"php"`, `"none"`, or a full exe path. **This API requires the absolute path** (e.g. `C:\Program Files\nodejs\node.exe`) or `"none"` — bare names like `"node"` are rejected by `/start`.
 - `interpreter_args` — arguments passed to the interpreter itself.
 - `namespace` — logical grouping (`pm2 list` can show/filter by this).
 
