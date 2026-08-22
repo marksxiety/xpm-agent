@@ -73,6 +73,13 @@ export function inspectStart(options: StartPayloadType): StartIssue[] {
   const script = options.script ?? "";
   const interpreter = options.interpreter;
 
+  if (options.name?.trim() === "") {
+    issues.push({
+      field: "name",
+      message: "name is required and cannot be empty",
+    });
+  }
+
   // win32 is deliberate: interpreters are Windows executable paths (e.g.
   // C:\...\node.exe) regardless of the OS running this check, so validation
   // must not vary by host platform.
