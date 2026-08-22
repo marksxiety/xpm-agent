@@ -4,7 +4,6 @@ import type { StartOptions } from "pm2";
 import type { ApiResponse } from "./types";
 import { respond } from "./utils/response";
 import { classifyPm2Error, formatValidationMessage } from "./utils/errors";
-import { inspect } from "./utils/inspect";
 import { pm2Service } from "./services/pm2.service";
 import { getRouteMeta } from "./meta/process";
 import { StartPayload } from "./schemas/process";
@@ -28,13 +27,10 @@ export const pm2Routes = new Elysia({ prefix: "/pm2" })
   .get("/list", () => pm2Service.listProcesses(), getRouteMeta("list"))
   .get("/health", () => pm2Service.healthCheck(), getRouteMeta("health"))
   .get("/describe/:id", ({ params }) => pm2Service.describeProcess(params.id), getRouteMeta("describe"))
-  .post("/start", ({ body }) => {
-    const issues = inspect("start", body);
-    if (issues.length > 0) {
-      return respond("Invalid process configuration", issues, { success: false, status: 422 });
-    }
-    return pm2Service.startProcess(body as StartOptions);
-  }, { ...getRouteMeta("start"), body: StartPayload })
+  .post("/start", ({ body }) => pm2Service.startProcess(body as StartOptions), {
+    ...getRouteMeta("start"),
+    body: StartPayload,
+  })
   .post("/stop/:id", ({ params }) => pm2Service.stopProcess(params.id), getRouteMeta("stop"))
   .post("/restart/:id", ({ params }) => pm2Service.restartProcess(params.id), getRouteMeta("restart"))
   .post("/reload/:id", ({ params }) => pm2Service.reloadProcess(params.id), getRouteMeta("reload"))
