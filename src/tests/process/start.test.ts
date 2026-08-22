@@ -1,5 +1,7 @@
 import { describe, expect, mock, test } from "bun:test";
 import type { ProcessDescription, StartOptions, Proc } from "pm2";
+import type { ProcessSummary } from "../../types";
+import { StartIssue } from "../../types/inspect";
 
 const state = {
     started: [] as ProcessDescription[],
@@ -38,7 +40,7 @@ describe("pm2 start command", () => {
 
         expect(response.success).toBe(true);
         expect(response.info).toHaveLength(1);
-        expect(response.info?.[0].name).toBe("example-app");
+        expect((response.info as ProcessSummary[])?.[0].name).toBe("example-app");
     })
 
     test("return an error when PM2 fails to start the process", async () => {
@@ -62,4 +64,28 @@ describe("pm2 start command", () => {
         expect(response.status).toBe(400);
         expect(response.message).toBe("Script not found — check the 'script' path in your request");
     });
+
+    test("return an error if name is empty or not provided", async () => {
+        
+        state.started = [];
+        state.startError = null;
+
+        const response = await pm2Service.startProcess({
+            name: "",
+            namespace: "example",
+            cwd: "C:\\Example\\Application",
+            script: ".output/server/index.mjs",
+            args: ["--port", "3000"],
+            interpreter: "C:\\Program Files\\nodejs\\node.exe",
+            exec_mode: "fork",
+            instances: 1,
+            autorestart: true,
+            watch: false,
+        })
+
+        expect(response.success).toBe(false);
+        expect(response.status).toBe(422);
+        expect(response.message).toBe("Invalid process configuration");
+        expect(response.info as unknown as StartIssue[]).toEqual([{ field: "name", message: "name is required and cannot be empty" }]);
+    })
 });
