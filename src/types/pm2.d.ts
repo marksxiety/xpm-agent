@@ -25,4 +25,9 @@ declare module "pm2" {
      */
     cron_restart?: string;
   }
+
+  /**
+   * Flush ALL process logs (pm2's own `pm2 flush` with no id does this).
+   */
+  export function flush(errback: ErrResultCallback): void;
 }
