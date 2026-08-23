@@ -94,6 +94,47 @@ describe("pm2 start service", () => {
         expect(response.info as unknown as StartIssue[]).toEqual([{ field: "name", message: "name is required and cannot be empty" }]);
     });
 
+    test("returns 422 with the issue list when script is empty", async () => {
+        resetState();
+
+        const response = await pm2Service.startProcess({ ...VALID_PAYLOAD, script: "" });
+
+        expect(response.success).toBe(false);
+        expect(response.status).toBe(422);
+        expect(response.message).toBe("Invalid process configuration");
+        expect(response.info as unknown as StartIssue[]).toEqual([{ field: "script", message: "script is required and cannot be empty" }]);
+    });
+
+    test("returns 422 with the issue list when instances is a string other than 'max'", async () => {
+        resetState();
+
+        const response = await pm2Service.startProcess({
+            ...VALID_PAYLOAD,
+            // @ts-expect-error Testing runtime validation for an invalid type
+            instances: "2",
+        });
+
+        expect(response.success).toBe(false);
+        expect(response.status).toBe(422);
+        expect(response.message).toBe("Invalid process configuration");
+        expect(response.info as unknown as StartIssue[]).toEqual([
+            { field: "instances", message: "instances must be a positive integer or 'max'" },
+        ]);
+    });
+
+    test("returns 422 with the issue list when instances is zero", async () => {
+        resetState();
+
+        const response = await pm2Service.startProcess({ ...VALID_PAYLOAD, instances: 0 });
+
+        expect(response.success).toBe(false);
+        expect(response.status).toBe(422);
+        expect(response.message).toBe("Invalid process configuration");
+        expect(response.info as unknown as StartIssue[]).toEqual([
+            { field: "instances", message: "instances must be a positive integer or 'max'" },
+        ]);
+    });
+
     test("returns 422 with the issue list when instances exceeds 1 in fork mode", async () => {
         resetState();
 
@@ -181,6 +222,18 @@ describe("pm2 start route", () => {
         expect(body.info).toHaveLength(1);
         expect((body.info as { pm_id: number; name: string }[])[0].pm_id).toBe(3);
         expect((body.info as { pm_id: number; name: string }[])[0].name).toBe("my-app");
+    });
+
+    test("returns 200 with a posix interpreter on a linux target", async () => {
+        resetState();
+        state.started = [{ pm_id: 3, name: "my-app" }];
+        state.list = [{ pm_id: 3, name: "my-app" }];
+
+        const { status, body } = await postStart({ ...VALID_PAYLOAD, targetOs: "linux", interpreter: "/usr/bin/node" });
+
+        expect(status).toBe(200);
+        expect(body.success).toBe(true);
+        expect((body.info as { pm_id: number; name: string }[])[0].pm_id).toBe(3);
     });
 
     test("returns 422 when a required field (script) is missing", async () => {
