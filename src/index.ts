@@ -37,19 +37,22 @@ export const pm2Routes = new Elysia({ prefix: "/pm2" })
   .delete("/delete/:id", ({ params, body }) => pm2Service.deleteProcess(params.id, body?.delete_logs ?? false), getRouteMeta("delete"))
   .post("/flush/:id?", ({ params }) => pm2Service.flushLogs(params.id), getRouteMeta("flush"));
 
-const app = new Elysia()
-  .use(
-    swagger({
-      documentation: {
-        info: {
-          title: "Process Manager API",
-          version: PackageJson.version ?? '',
-          description: "REST API for managing PM2 processes. Identify processes by their numeric pm_id (see GET /pm2/list).",
+export const createApp = () =>
+  new Elysia()
+    .use(
+      swagger({
+        documentation: {
+          info: {
+            title: "Process Manager API",
+            version: PackageJson.version ?? '',
+            description: "REST API for managing PM2 processes. Identify processes by their numeric pm_id (see GET /pm2/list).",
+          },
         },
-      },
-    }),
-  )
-  .use(pm2Routes)
-  .listen(config.SERVER_PORT);
+      }),
+    )
+    .use(pm2Routes);
 
-console.log(`PM2 API is running at ${app.server?.hostname}:${app.server?.port}`);
+if (import.meta.main) {
+  const app = createApp().listen(config.SERVER_PORT);
+  console.log(`PM2 API is running at ${app.server?.hostname}:${app.server?.port}`);
+}
