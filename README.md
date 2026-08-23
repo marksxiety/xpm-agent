@@ -3,7 +3,7 @@
 <p align="center">
   <a href="https://github.com/marksxiety/x-process-manager-api/actions/workflows/tests.yml"><img src="https://github.com/marksxiety/x-process-manager-api/actions/workflows/tests.yml/badge.svg" alt="Tests"></a>
   <a href="https://github.com/marksxiety/x-process-manager-api/actions/workflows/lint.yml"><img src="https://github.com/marksxiety/x-process-manager-api/actions/workflows/lint.yml/badge.svg" alt="Lint"></a>
-  <a href="https://github.com/marksxiety/x-process-manager-api/releases"><img src="https://img.shields.io/github/v/release/marksxiety/x-process-manager-api" alt="Release"></a>
+  <a href="https://github.com/marksxiety/x-process-manager-api/releases/latest"><img src="https://img.shields.io/github/v/release/marksxiety/x-process-manager-api?label=release&include_prereleases" alt="Release"></a>
 </p>
 
 <p align="center"><b>PM2, but make it an API.</b> Stop SSH-ing in just to restart a process. This Bun + Elysia service exposes PM2's full lifecycle (list, start, stop, restart, reload, delete, flush) as clean REST endpoints — so ops scripts, dashboards, and automations can drive PM2 like any other API.</p>
