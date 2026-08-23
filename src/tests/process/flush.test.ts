@@ -71,6 +71,17 @@ describe("pm2 flush service", () => {
         expect(response.status).toBe(503);
         expect(response.message).toBe("Cannot connect to PM2 daemon");
     });
+
+    test("returns 500 with the raw message on an unexpected flush error", async () => {
+        resetState();
+        state.flushError = new Error("Unexpected error");
+
+        const response = await pm2Service.flushLogs(3);
+
+        expect(response.success).toBe(false);
+        expect(response.status).toBe(500);
+        expect(response.message).toBe("PM2 operation failed: Unexpected error");
+    });
 });
 
 describe("pm2 flush route", () => {
