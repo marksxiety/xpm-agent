@@ -1,22 +1,26 @@
-# PM2 Process Manager API
+<h1 align="center">x-process-manager-api</h1>
 
-REST API for managing [PM2](https://pm2.io/) processes. Built with [Elysia](https://elysiajs.com/) on the Bun runtime.
+<p align="center">
+  <a href="https://github.com/marksxiety/x-process-manager-api/actions/workflows/tests.yml"><img src="https://github.com/marksxiety/x-process-manager-api/actions/workflows/tests.yml/badge.svg" alt="Tests"></a>
+  <a href="https://github.com/marksxiety/x-process-manager-api/actions/workflows/lint.yml"><img src="https://github.com/marksxiety/x-process-manager-api/actions/workflows/lint.yml/badge.svg" alt="Lint"></a>
+  <a href="https://github.com/marksxiety/x-process-manager-api/tags"><img src="https://img.shields.io/github/v/tag/marksxiety/x-process-manager-api" alt="Release"></a>
+</p>
 
-## Quick start
+<p align="center"><b>PM2, but make it an API.</b> Stop SSH-ing in just to restart a process. This Bun + Elysia service exposes PM2's full lifecycle (list, start, stop, restart, reload, delete, flush) as clean REST endpoints — so ops scripts, dashboards, and automations can drive PM2 like any other API.</p>
 
-```bash
-bun install
-bun run dev
-```
+## Prerequisites
 
-The server listens on `http://localhost:4000` by default (override with `SERVER_PORT`).
+- **Bun** — required. Runtime and package manager for this project.
+- **npm** — used for running package scripts (comes with Node.js).
 
-- Interactive docs: <http://localhost:4000/swagger>
-- API reference: [ROUTES.md](./ROUTES.md)
+## Libraries
 
-## What it does
+- **[pm2](https://pm2.io/)** — the process manager this API drives; handles daemonization, restarts, and log rotation.
+- **[pm2-windows-startup](https://www.npmjs.com/package/pm2-windows-startup)** — boots PM2 (and your processes) automatically when Windows starts.
+- **[ElysiaJS](https://elysiajs.com/)** — the HTTP framework powering the REST endpoints.
+- **[@elysiajs/swagger](https://github.com/elysiajs/documentation)** — interactive API docs at `/swagger`.
 
-Identifies processes by their numeric `pm_id` (see `GET /pm2/list`) and exposes the full lifecycle:
+## Routes at a glance
 
 | Route | Method | Purpose |
 |---|---|---|
@@ -30,40 +34,10 @@ Identifies processes by their numeric `pm_id` (see `GET /pm2/list`) and exposes 
 | `/pm2/delete/:id` | DELETE | Stop and remove permanently |
 | `/pm2/flush/:id?` | POST | Empty log files (all if id omitted) |
 
-## Starting a process
+## Documentation
 
-`name`, `script`, and `interpreter` are required. `interpreter` must be an absolute path to the interpreter executable — bare names like `"node"` are rejected; use `"none"` when `script` is itself a binary. Every process is `interpreter` + `script` + `args`, so any language works:
-
-```json
-{
-  "name": "example-app",
-  "namespace": "example",
-  "cwd": "C:\\Example\\Application",
-  "script": ".output/server/index.mjs",
-  "args": ["--port", "3000"],
-  "interpreter": "C:\\Program Files\\nodejs\\node.exe",
-  "interpreter_args": ["--env-file=.env"],
-  "exec_mode": "fork",
-  "instances": 1,
-  "autorestart": true,
-  "max_restarts": 10,
-  "windowsHide": true,
-  "watch": false
-}
-```
-
-Language recipes (Node, Bun, PHP, Python, Go/binary, shell) are in [ROUTES.md](./ROUTES.md).
-
-## Notes
-
-- Every response uses a uniform envelope: `{ success, message, info }`.
-- All process payloads are sanitized `ProcessSummary` snapshots — full `pm2_env` (including environment variables) is never exposed.
-- `instances > 1` requires `exec_mode: "cluster"` (Node only) and returns one row per instance.
-- This API is an internal ops tool; it accepts arbitrary `env` and `args`, so keep it on a trusted network only.
-
-## Development
-
-```bash
-bun run dev        # watch mode
-bun run typecheck  # tsc --noEmit
-```
+| File | What it covers |
+|---|---|
+| [SETUP.md](./docs/SETUP.md) | Install, configure, and run the service under PM2 |
+| [ROUTES.md](./docs/ROUTES.md) | Full API reference — routes, envelopes, language recipes |
+| [PM2 REFERENCE](./docs/PM2_payload_reference.md) | Every field accepted by `POST /pm2/start` |
