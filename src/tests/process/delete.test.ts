@@ -2,9 +2,17 @@ import { describe, expect, mock, test } from "bun:test";
 import type { ProcessDescription } from "pm2";
 import type { ApiResponse, ProcessSummary } from "../../types";
 
+const fsState = {
+    unlinkError: null as Error | null,
+    unlinkCalls: [] as string[],
+};
+
 mock.module("node:fs", () => ({
     promises: {
-        unlink: async () => { },
+        unlink: async (filePath: string) => {
+            fsState.unlinkCalls.push(filePath);
+            if (fsState.unlinkError) throw fsState.unlinkError;
+        },
     },
 }));
 
@@ -36,6 +44,8 @@ function resetState() {
     state.deleted = [];
     state.deleteError = null;
     state.connectError = null;
+    fsState.unlinkError = null;
+    fsState.unlinkCalls = [];
 }
 
 async function requestDelete(processId: number | string, body?: object): Promise<{ status: number; body: ApiResponse }> {
@@ -79,6 +89,58 @@ describe("pm2 delete service", () => {
         expect(response.success).toBe(true);
         expect(response.message).toBe("PM2 process deleted successfully");
         expect(response.info).toHaveLength(1);
+    });
+
+    test("returns success and unlinks both log files when a log file does not exist", async () => {
+        resetState();
+        state.described = [{
+            pm_id: 3,
+            name: "my-app",
+            pm2_env: {
+                pm_out_log_path: "C:\\nonexistent\\my-app-out.log",
+                pm_err_log_path: "C:\\nonexistent\\my-app-error.log",
+            } as ProcessDescription["pm2_env"],
+        }];
+        state.deleted = [{ pm_id: 3, name: "my-app" }];
+        fsState.unlinkError = Object.assign(new Error("ENOENT: no such file or directory"), { code: "ENOENT" });
+        const originalConsoleError = console.error;
+        const errorSpy = mock((message: string, ...args: unknown[]) => {});
+        console.error = errorSpy;
+
+        const response = await pm2Service.deleteProcess(3, true);
+
+        expect(response.success).toBe(true);
+        expect(response.message).toBe("PM2 process deleted successfully");
+        expect(fsState.unlinkCalls).toEqual([
+            "C:\\nonexistent\\my-app-out.log",
+            "C:\\nonexistent\\my-app-error.log",
+        ]);
+        console.error = originalConsoleError;
+    });
+
+    test("logs the failure to console.error when log file removal fails", async () => {
+        resetState();
+        state.described = [{
+            pm_id: 3,
+            name: "my-app",
+            pm2_env: {
+                pm_out_log_path: "C:\\nonexistent\\my-app-out.log",
+                pm_err_log_path: "C:\\nonexistent\\my-app-error.log",
+            } as ProcessDescription["pm2_env"],
+        }];
+        state.deleted = [{ pm_id: 3, name: "my-app" }];
+        fsState.unlinkError = new Error("EPERM: operation not permitted, unlink");
+        const originalConsoleError = console.error;
+        const errorSpy = mock((message: string, ...args: unknown[]) => {});
+        console.error = errorSpy;
+
+        const response = await pm2Service.deleteProcess(3, true);
+
+        expect(response.success).toBe(true);
+        expect(response.message).toBe("PM2 process deleted successfully");
+        expect(errorSpy.mock.calls.length).toBe(2);
+        expect(errorSpy.mock.calls[0][0]).toContain("my-app-out.log");
+        console.error = originalConsoleError;
     });
 
     test("returns 404 when the process is not found", async () => {
