@@ -87,6 +87,13 @@ export function inspectStart(options: StartPayloadType): StartIssue[] {
     });
   }
 
+  if (options.instances !== undefined && options.instances !== "max" && (typeof options.instances !== "number" || options.instances < 1)) {
+    issues.push({
+      field: "instances",
+      message: "instances must be a positive integer or 'max'",
+    });
+  }
+
   // win32 is deliberate: interpreters are Windows executable paths (e.g.
   // C:\...\node.exe) regardless of the OS running this check, so validation
   // must not vary by host platform.
