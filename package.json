@@ -1,6 +1,6 @@
 {
   "name": "x-process-manager-api",
-  "version": "0.0.2-alpha",
+  "version": "0.0.3-alpha",
   "scripts": {
     "test": "bun test src/tests/",
     "dev": "bun run --watch src/index.ts",
