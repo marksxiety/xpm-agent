@@ -118,6 +118,15 @@ describe("p2m list command", () => {
         ]);
     });
 
+    test("return an empty list when pm2 returns undefined", async () => {
+        state.processes = undefined as unknown as ProcessDescription[];
+        state.listError = null;
+
+        const response = await pm2Service.listProcesses();
+        expect(response.success).toBe(true);
+        expect(response.info).toEqual([]);
+    });
+
     test("return 503 when the PM2 daemon is not running", async () => {
         state.processes = [];
         state.listError = new Error("PM2 daemon not running");
