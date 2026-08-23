@@ -98,4 +98,83 @@ describe("start inspection", () => {
     };
     expect(issues(payload)).toContain("instances");
   });
+
+  test("flags an empty script", () => {
+    const payload: Payload = {
+      name: "api",
+      script: "",
+      interpreter: NODE,
+    };
+    expect(issues(payload)).toEqual(["script"]);
+  });
+
+  test("flags a whitespace-only script", () => {
+    const payload: Payload = {
+      name: "api",
+      script: "   ",
+      interpreter: NODE,
+    };
+    expect(issues(payload)).toEqual(["script"]);
+  });
+
+  test("flags instances as a string other than 'max'", () => {
+    const payload: Payload = {
+      name: "api",
+      script: "server.js",
+      interpreter: NODE,
+      // @ts-expect-error Testing runtime validation for an invalid type
+      instances: "2",
+    };
+    expect(issues(payload)).toEqual(["instances"]);
+  });
+
+  test("flags instances of zero", () => {
+    const payload: Payload = {
+      name: "api",
+      script: "server.js",
+      interpreter: NODE,
+      instances: 0,
+    };
+    expect(issues(payload)).toEqual(["instances"]);
+  });
+
+  test("flags negative instances", () => {
+    const payload: Payload = {
+      name: "api",
+      script: "server.js",
+      interpreter: NODE,
+      instances: -1,
+    };
+    expect(issues(payload)).toEqual(["instances"]);
+  });
+
+  test("returns no issues for a posix absolute interpreter on a win32 target", () => {
+    const payload: Payload = {
+      name: "api",
+      script: "server.js",
+      interpreter: "/usr/bin/node",
+      targetOs: "win32",
+    };
+    expect(issues(payload)).toEqual([]);
+  });
+
+  test("flags a windows absolute interpreter on a linux target", () => {
+    const payload: Payload = {
+      name: "api",
+      script: "server.js",
+      interpreter: NODE,
+      targetOs: "linux",
+    };
+    expect(issues(payload)).toEqual(["interpreter"]);
+  });
+
+  test("returns no issues for a posix absolute interpreter on a linux target", () => {
+    const payload: Payload = {
+      name: "api",
+      script: "server.js",
+      interpreter: "/usr/bin/node",
+      targetOs: "linux",
+    };
+    expect(issues(payload)).toEqual([]);
+  });
 });
