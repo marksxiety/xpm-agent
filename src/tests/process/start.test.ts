@@ -88,4 +88,51 @@ describe("pm2 start command", () => {
         expect(response.message).toBe("Invalid process configuration");
         expect(response.info as unknown as StartIssue[]).toEqual([{ field: "name", message: "name is required and cannot be empty" }]);
     })
+
+    test("returns 200 with the launched process when the payload is valid", async () => {
+        state.started = [{
+            name: "my-app"
+        }];
+        state.startError = null;
+
+        const response = await pm2Service.startProcess({
+            name: "my-app",
+            namespace: "example",
+            cwd: "C:\\Example\\Application",
+            script: ".output/server/index.mjs",
+            args: ["--port", "3000"],
+            interpreter: "C:\\Program Files\\nodejs\\node.exe",
+            exec_mode: "fork",
+            instances: 1,
+            autorestart: true,
+            watch: false,
+        })
+
+        expect(response.success).toBe(true);
+        expect(response.info).toHaveLength(1);
+        expect((response.info as ProcessSummary[])?.[0].name).toBe("my-app");
+    })
+
+    test("returns 422 when a required field (script) is missing", async () => {
+        state.started = [];
+        state.startError = null;
+
+        const response = await pm2Service.startProcess({
+            name: "my-app",
+            namespace: "example",
+            cwd: "C:\\Example\\Application",
+            args: ["--port", "3000"],
+            interpreter: "C:\\Program Files\\nodejs\\node.exe",
+            exec_mode: "fork",
+            instances: 1,
+            autorestart: true,
+            watch: false,
+        })
+
+        expect(response.success).toBe(false);
+        expect(response.status).toBe(422);
+        expect(response.message).toBe("Invalid process configuration");
+        expect(response.info as unknown as StartIssue[]).toEqual([{ field: "script", message: "script is required and cannot be empty" }]);
+    })
+
 });
