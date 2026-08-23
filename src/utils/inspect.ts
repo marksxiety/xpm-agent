@@ -56,12 +56,12 @@ const RUNTIME_PROFILES: RuntimeProfile[] = [
 
 const ENTRYPOINT_CONVENTIONS: EntrypointConvention[] = [
   {
-    matches: (s) => s.split(/[\\/]/).pop() === "artisan",
+    matches: (scriptPath) => scriptPath.split(/[\\/]/).pop() === "artisan",
     requiredRuntimeId: "php",
     requiresArgs: true,
   },
   {
-    matches: (s) => s.split(/[\\/]/).pop() === "manage.py",
+    matches: (scriptPath) => scriptPath.split(/[\\/]/).pop() === "manage.py",
     requiredRuntimeId: "python",
     requiresArgs: true,
   },
@@ -94,12 +94,12 @@ export function inspectStart(options: StartPayloadType): StartIssue[] {
   const interpreterProfile =
     interpreter === "none"
       ? undefined
-      : RUNTIME_PROFILES.find((p) =>
-        p.executableNames.includes(
+      : RUNTIME_PROFILES.find((profile) =>
+        profile.executableNames.includes(
           (interpreter.split(/[\\/]/).pop() ?? interpreter).replace(/\.exe$/i, "").toLowerCase(),
         ),
       );
-  const scriptProfile = RUNTIME_PROFILES.find((p) => p.scriptExtensions.test(script));
+  const scriptProfile = RUNTIME_PROFILES.find((profile) => profile.scriptExtensions.test(script));
 
   if (scriptProfile && interpreterProfile && scriptProfile.id !== interpreterProfile.id) {
     issues.push({
