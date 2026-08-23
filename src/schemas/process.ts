@@ -16,6 +16,12 @@ export const StartPayload = t.Object({
     description: "Process name shown in `pm2 list`. Used in log file names and lifecycle commands. Required.",
     examples: ["client", "server", "worker"],
   }),
+  targetOs: t.Optional(t.Union([t.Literal("win32"), t.Literal("linux")], {
+    description:
+      "OS of the target server this process will run on. Determines interpreter path validation rules (Windows drive-letter paths vs POSIX absolute paths). Defaults to 'win32'.",
+    examples: ["win32", "linux"],
+    default: "win32",
+  })),
   namespace: t.Optional(t.String({
     description:
       "PM2 namespace for the process. Defaults to `'default'` (pm2 built-in). Use to isolate same-named processes.",
@@ -108,6 +114,7 @@ export const StartPayload = t.Object({
   examples: [{
     name: "example-app",
     namespace: "example",
+    targetOs: "win32",
     cwd: "C:\\Example\\Application",
     script: ".output/server/index.mjs",
     args: ["--port", "3000"],
