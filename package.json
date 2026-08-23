@@ -10,7 +10,8 @@
   "dependencies": {
     "@elysiajs/swagger": "^1.3.1",
     "elysia": "^1.4.29",
-    "pm2": "^7.0.3"
+    "pm2": "^7.0.3",
+    "pm2-windows-startup": "^1.0.3"
   },
   "devDependencies": {
     "bun-types": "latest",
