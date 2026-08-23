@@ -19,6 +19,7 @@ mock.module("node:fs", () => ({
 const state = {
     described: [] as ProcessDescription[],
     deleted: [] as ProcessDescription[],
+    describeError: null as Error | null,
     deleteError: null as Error | null,
     connectError: null as Error | null,
 };
@@ -28,7 +29,7 @@ mock.module("pm2", () => ({
         connect(cb: (err?: Error | null) => void) { cb(state.connectError); },
         disconnect() { },
         describe(_id: number, cb: (err?: Error | null, procs?: ProcessDescription[]) => void) {
-            cb(null, state.described);
+            cb(state.describeError, state.described);
         },
         delete(_id: number, cb: (err?: Error | null, procs?: ProcessDescription[]) => void) {
             cb(state.deleteError, state.deleted);
@@ -42,10 +43,11 @@ const { createApp } = await import("../../index");
 function resetState() {
     state.described = [];
     state.deleted = [];
+    state.describeError = null;
     state.deleteError = null;
     state.connectError = null;
-    fsState.unlinkError = null;
     fsState.unlinkCalls = [];
+    fsState.unlinkError = null;
 }
 
 async function requestDelete(processId: number | string, body?: object): Promise<{ status: number; body: ApiResponse }> {
@@ -163,6 +165,28 @@ describe("pm2 delete service", () => {
         expect(response.success).toBe(false);
         expect(response.status).toBe(503);
         expect(response.message).toBe("Cannot connect to PM2 daemon");
+    });
+
+    test("returns 500 with the raw message on an unexpected delete error", async () => {
+        resetState();
+        state.deleteError = new Error("Unexpected error");
+
+        const response = await pm2Service.deleteProcess(3);
+
+        expect(response.success).toBe(false);
+        expect(response.status).toBe(500);
+        expect(response.message).toBe("PM2 operation failed: Unexpected error");
+    });
+
+    test("returns the describe error when delete_logs is true and describe fails", async () => {
+        resetState();
+        state.describeError = new Error("Unexpected error");
+
+        const response = await pm2Service.deleteProcess(3, true);
+
+        expect(response.success).toBe(false);
+        expect(response.status).toBe(500);
+        expect(response.message).toBe("PM2 operation failed: Unexpected error");
     });
 });
 
