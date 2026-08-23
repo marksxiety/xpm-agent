@@ -21,7 +21,6 @@ Open `.env` and set:
 | Variable | Description | Example |
 |---|---|---|
 | `SERVER_PORT` | Port the API listens on | `4000` |
-| `SERVER_TIMEZONE` | Timezone used for log timestamps | `Asia/Manila` |
 
 ## 3. Install dependencies
 
