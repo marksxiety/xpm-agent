@@ -1,7 +1,11 @@
-import { win32 } from "node:path";
+import { win32, posix } from "node:path";
 import type { Static } from "elysia";
 import { StartPayload } from "../schemas/process";
 import type { StartIssue, RuntimeProfile, EntrypointConvention, InspectCommand } from "../types/inspect"
+
+function isAbsoluteForTarget(p: string, targetOs: "win32" | "linux"): boolean {
+  return targetOs === "win32" ? win32.isAbsolute(p) : posix.isAbsolute(p);
+}
 
 type StartPayloadType = Static<typeof StartPayload>;
 
@@ -72,6 +76,7 @@ export function inspectStart(options: StartPayloadType): StartIssue[] {
   const issues: StartIssue[] = [];
   const script = options.script ?? "";
   const interpreter = options.interpreter;
+  const targetOs = options.targetOs ?? "win32";
 
   if (options.name?.trim() === "") {
     issues.push({
@@ -94,14 +99,15 @@ export function inspectStart(options: StartPayloadType): StartIssue[] {
     });
   }
 
-  // win32 is deliberate: interpreters are Windows executable paths (e.g.
-  // C:\...\node.exe) regardless of the OS running this check, so validation
-  // must not vary by host platform.
-  if (interpreter !== "none" && !win32.isAbsolute(interpreter)) {
+  // Interpreter paths are validated against the OS the target process will
+  // run on (targetOs), not the OS hosting this API.
+  if (interpreter !== "none" && !isAbsoluteForTarget(interpreter, targetOs)) {
     issues.push({
       field: "interpreter",
       message:
-        "interpreter must be an absolute path to the executable (e.g. 'C:\\Program Files\\nodejs\\node.exe'), not a bare name like 'node' or 'py' — only 'none' is accepted as a bare value",
+        targetOs === "win32"
+          ? "interpreter must be an absolute path to the executable (e.g. 'C:\\Program Files\\nodejs\\node.exe'), not a bare name like 'node' or 'py' — only 'none' is accepted as a bare value"
+          : "interpreter must be an absolute path to the executable (e.g. '/usr/bin/node'), not a bare name like 'node' or 'py' — only 'none' is accepted as a bare value",
     });
   }
 
