@@ -1,0 +1,158 @@
+import { describe, expect, mock, test } from "bun:test";
+import type { ProcessDescription } from "pm2";
+import type { ApiResponse, ProcessSummary } from "../../types";
+
+mock.module("node:fs", () => ({
+    promises: {
+        unlink: async () => { },
+    },
+}));
+
+const state = {
+    described: [] as ProcessDescription[],
+    deleted: [] as ProcessDescription[],
+    deleteError: null as Error | null,
+    connectError: null as Error | null,
+};
+
+mock.module("pm2", () => ({
+    default: {
+        connect(cb: (err?: Error | null) => void) { cb(state.connectError); },
+        disconnect() { },
+        describe(_id: number, cb: (err?: Error | null, procs?: ProcessDescription[]) => void) {
+            cb(null, state.described);
+        },
+        delete(_id: number, cb: (err?: Error | null, procs?: ProcessDescription[]) => void) {
+            cb(state.deleteError, state.deleted);
+        },
+    },
+}));
+
+const { pm2Service } = await import("../../services/pm2.service");
+const { createApp } = await import("../../index");
+
+function resetState() {
+    state.described = [];
+    state.deleted = [];
+    state.deleteError = null;
+    state.connectError = null;
+}
+
+async function requestDelete(processId: number | string, body?: object): Promise<{ status: number; body: ApiResponse }> {
+    const response = await createApp().handle(
+        new Request(`http://localhost/pm2/delete/${processId}`, {
+            method: "DELETE",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify(body ?? {}),
+        }),
+    );
+    return { status: response.status, body: (await response.json()) as ApiResponse };
+}
+
+describe("pm2 delete service", () => {
+    test("returns the deleted process summaries on success", async () => {
+        resetState();
+        state.deleted = [{ pm_id: 3, name: "my-app" }];
+
+        const response = await pm2Service.deleteProcess(3);
+
+        expect(response.success).toBe(true);
+        expect(response.message).toBe("PM2 process deleted successfully");
+        expect(response.info).toHaveLength(1);
+        expect((response.info as ProcessSummary[])?.[0].name).toBe("my-app");
+    });
+
+    test("returns success when delete_logs is true even if log file removal fails", async () => {
+        resetState();
+        state.described = [{
+            pm_id: 3,
+            name: "my-app",
+            pm2_env: {
+                pm_out_log_path: "C:\\nonexistent\\my-app-out.log",
+                pm_err_log_path: "C:\\nonexistent\\my-app-error.log",
+            } as ProcessDescription["pm2_env"],
+        }];
+        state.deleted = [{ pm_id: 3, name: "my-app" }];
+
+        const response = await pm2Service.deleteProcess(3, true);
+
+        expect(response.success).toBe(true);
+        expect(response.message).toBe("PM2 process deleted successfully");
+        expect(response.info).toHaveLength(1);
+    });
+
+    test("returns 404 when the process is not found", async () => {
+        resetState();
+        state.deleteError = new Error("Process not found");
+
+        const response = await pm2Service.deleteProcess(99);
+
+        expect(response.success).toBe(false);
+        expect(response.status).toBe(404);
+        expect(response.message).toBe("Process not found");
+    });
+
+    test("returns 503 when the PM2 daemon is unreachable", async () => {
+        resetState();
+        state.connectError = new Error("connect ECONNREFUSED 127.0.0.1:4444");
+
+        const response = await pm2Service.deleteProcess(3);
+
+        expect(response.success).toBe(false);
+        expect(response.status).toBe(503);
+        expect(response.message).toBe("Cannot connect to PM2 daemon");
+    });
+});
+
+describe("pm2 delete route", () => {
+    test("returns 200 when deleting an existing process", async () => {
+        resetState();
+        state.deleted = [{ pm_id: 3, name: "my-app" }];
+
+        const { status, body } = await requestDelete(3);
+
+        expect(status).toBe(200);
+        expect(body.success).toBe(true);
+        expect(body.message).toBe("PM2 process deleted successfully");
+    });
+
+    test("returns 200 when deleting with delete_logs enabled", async () => {
+        resetState();
+        state.described = [{
+            pm_id: 3,
+            name: "my-app",
+            pm2_env: {
+                pm_out_log_path: "C:\\nonexistent\\my-app-out.log",
+                pm_err_log_path: "C:\\nonexistent\\my-app-error.log",
+            } as ProcessDescription["pm2_env"],
+        }];
+        state.deleted = [{ pm_id: 3, name: "my-app" }];
+
+        const { status, body } = await requestDelete(3, { delete_logs: true });
+
+        expect(status).toBe(200);
+        expect(body.success).toBe(true);
+        expect(body.message).toBe("PM2 process deleted successfully");
+    });
+
+    test("returns 404 when the process does not exist", async () => {
+        resetState();
+        state.deleteError = new Error("Process not found");
+
+        const { status, body } = await requestDelete(99);
+
+        expect(status).toBe(404);
+        expect(body.success).toBe(false);
+        expect(body.message).toBe("Process not found");
+    });
+
+    test("returns 422 when the id is not numeric", async () => {
+        resetState();
+
+        const { status, body } = await requestDelete("abc");
+
+        expect(status).toBe(422);
+        expect(body.success).toBe(false);
+        expect(body.message).toContain("Validation failed");
+    });
+});
