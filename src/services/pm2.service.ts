@@ -180,7 +180,7 @@ class PM2Service {
       if (parsedProcessId === undefined || Number.isNaN(parsedProcessId))
         return respond("Invalid process id", null, { success: false, status: 400 });
       await this.withPM2<void>((callback) => pm2.flush(parsedProcessId, callback));
-      return respond("PM2 logs flushed successfully", null);
+      return respond(`Logs for process ${parsedProcessId} flushed successfully`, null);
     } catch (error) {
       return this.handleError(error);
     }
