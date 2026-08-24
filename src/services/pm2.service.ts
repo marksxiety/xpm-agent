@@ -40,8 +40,8 @@ class PM2Service {
   }
 
   private handleError<T>(error: unknown): ApiResponse<T> {
-    const { status, message } = classifyPm2Error(error);
-    return respond(message, null, { success: false, status }) as ApiResponse<T>;
+    const { code, status, message } = classifyPm2Error(error);
+    return respond(message, null, { success: false, status, code }) as ApiResponse<T>;
   }
 
   listProcesses = async (): Promise<ApiResponse<ProcessSummary[]>> => {
@@ -65,7 +65,11 @@ class PM2Service {
         ),
       );
       if (processDescriptions.length === 0)
-        return respond<ProcessSummary[]>(`Process ${processId} not found`, null, { success: false, status: 404 });
+        return respond<ProcessSummary[]>(`Process ${processId} not found`, null, {
+          success: false,
+          status: 404,
+          code: "PROCESS_NOT_FOUND",
+        });
       return respond("PM2 process described successfully", processDescriptions.map(summarizeProcess));
     } catch (error) {
       return this.handleError(error);
@@ -75,7 +79,11 @@ class PM2Service {
   startProcess = async (payload: StartOptions): Promise<ApiResponse<ProcessSummary[] | StartIssue[]>> => {
     const issues = inspect("start", payload);
     if (issues.length > 0) {
-      return respond("Invalid process configuration", issues, { success: false, status: 422 });
+      return respond("Invalid process configuration", issues, {
+        success: false,
+        status: 422,
+        code: "INVALID_PROCESS_CONFIGURATION",
+      });
     }
 
     try {
@@ -178,7 +186,7 @@ class PM2Service {
     try {
       const parsedProcessId = typeof processId === "string" ? Number(processId) : processId;
       if (parsedProcessId === undefined || Number.isNaN(parsedProcessId))
-        return respond("Invalid process id", null, { success: false, status: 400 });
+        return respond("Invalid process id", null, { success: false, status: 400, code: "INVALID_PROCESS_ID" });
       await this.withPM2<void>((callback) => pm2.flush(parsedProcessId, callback));
       return respond(`Logs for process ${parsedProcessId} flushed successfully`, null);
     } catch (error) {
