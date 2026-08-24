@@ -32,7 +32,7 @@ describe("summarizeProcess", () => {
     test("returns a complete summary for an online process", () => {
         setSystemTime(FIXED_NOW);
 
-        const summary = summarizeProcess(onlineProcess());
+        const { ip_address, ...summary } = summarizeProcess(onlineProcess());
         expect(summary).toEqual({
             pid: 12345,
             pm_id: 0,
@@ -51,6 +51,7 @@ describe("summarizeProcess", () => {
             watch: false,
             autorestart: true,
         });
+        expect(ip_address).toMatch(/^\d{1,3}(\.\d{1,3}){3}$/);
     });
 
     test("returns zero uptime when the process is not online", () => {
@@ -72,7 +73,7 @@ describe("summarizeProcess", () => {
         setSystemTime(FIXED_NOW);
 
         const process: ProcessDescription = { pm_id: 2 };
-        const summary = summarizeProcess(process);
+        const { ip_address, ...summary } = summarizeProcess(process);
         expect(summary).toEqual({
             pid: 0,
             pm_id: 2,
@@ -91,6 +92,7 @@ describe("summarizeProcess", () => {
             watch: false,
             autorestart: undefined,
         });
+        expect(ip_address).toMatch(/^\d{1,3}(\.\d{1,3}){3}$/);
     });
 });
 
