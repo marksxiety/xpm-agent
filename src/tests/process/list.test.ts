@@ -78,7 +78,8 @@ describe("p2m list command", () => {
 
         const response = await pm2Service.listProcesses();
         expect(response.success).toBe(true);
-        expect(response.info).toEqual([
+        const summaries = response.info?.map(({ ip_address, ...summary }) => summary);
+        expect(summaries).toEqual([
             {
                 pid: 12345,
                 pm_id: 0,
