@@ -1,4 +1,6 @@
 
+import type { ErrorCode } from "./error";
+
 export interface ProcessSummary {
     pid: number;
     pm_id: number;
@@ -21,6 +23,7 @@ export interface ProcessSummary {
 export interface ApiResponse<T = unknown> {
     success: boolean;
     message: string;
+    code?: ErrorCode;
     info: T | null;
     status: number;
 }
