@@ -153,6 +153,7 @@ describe("pm2 delete service", () => {
 
         expect(response.success).toBe(false);
         expect(response.status).toBe(404);
+        expect(response.code).toBe("PROCESS_NOT_FOUND");
         expect(response.message).toBe("Process not found");
     });
 
@@ -164,6 +165,7 @@ describe("pm2 delete service", () => {
 
         expect(response.success).toBe(false);
         expect(response.status).toBe(503);
+        expect(response.code).toBe("PM2_DAEMON_UNAVAILABLE");
         expect(response.message).toBe("Cannot connect to PM2 daemon");
     });
 
@@ -175,6 +177,7 @@ describe("pm2 delete service", () => {
 
         expect(response.success).toBe(false);
         expect(response.status).toBe(500);
+        expect(response.code).toBe("PM2_OPERATION_FAILED");
         expect(response.message).toBe("PM2 operation failed: Unexpected error");
     });
 
@@ -186,6 +189,7 @@ describe("pm2 delete service", () => {
 
         expect(response.success).toBe(false);
         expect(response.status).toBe(500);
+        expect(response.code).toBe("PM2_OPERATION_FAILED");
         expect(response.message).toBe("PM2 operation failed: Unexpected error");
     });
 });
@@ -229,6 +233,7 @@ describe("pm2 delete route", () => {
 
         expect(status).toBe(404);
         expect(body.success).toBe(false);
+        expect(body.code).toBe("PROCESS_NOT_FOUND");
         expect(body.message).toBe("Process not found");
     });
 
@@ -239,6 +244,7 @@ describe("pm2 delete route", () => {
 
         expect(status).toBe(422);
         expect(body.success).toBe(false);
+        expect(body.code).toBe("VALIDATION_FAILED");
         expect(body.message).toContain("Validation failed");
     });
 });

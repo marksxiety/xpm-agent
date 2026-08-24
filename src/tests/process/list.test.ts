@@ -134,6 +134,7 @@ describe("p2m list command", () => {
         const response = await pm2Service.listProcesses();
         expect(response.success).toBe(false);
         expect(response.status).toBe(503);
+        expect(response.code).toBe("PM2_DAEMON_UNAVAILABLE");
         expect(response.message).toBe("Cannot connect to PM2 daemon");
     });
 
@@ -144,6 +145,7 @@ describe("p2m list command", () => {
         const response = await pm2Service.listProcesses();
         expect(response.success).toBe(false);
         expect(response.status).toBe(500);
+        expect(response.code).toBe("PM2_OPERATION_FAILED");
         expect(response.message).toBe("PM2 operation failed: Unexpected error");
     });
 
@@ -154,6 +156,7 @@ describe("p2m list command", () => {
         const response = await pm2Service.listProcesses();
         expect(response.success).toBe(false);
         expect(response.status).toBe(404);
+        expect(response.code).toBe("PROCESS_NOT_FOUND");
         expect(response.message).toBe("Process not found");
     });
 
@@ -164,6 +167,7 @@ describe("p2m list command", () => {
         
         expect(response.success).toBe(false);
         expect(response.status).toBe(400);
+        expect(response.code).toBe("SCRIPT_NOT_FOUND");
         expect(response.message).toBe("Script not found — check the 'script' path in your request");
     })
 });

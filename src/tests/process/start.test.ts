@@ -80,6 +80,7 @@ describe("pm2 start service", () => {
 
         expect(response.success).toBe(false);
         expect(response.status).toBe(400);
+        expect(response.code).toBe("SCRIPT_NOT_FOUND");
         expect(response.message).toBe("Script not found — check the 'script' path in your request");
     });
 
@@ -90,6 +91,7 @@ describe("pm2 start service", () => {
 
         expect(response.success).toBe(false);
         expect(response.status).toBe(422);
+        expect(response.code).toBe("INVALID_PROCESS_CONFIGURATION");
         expect(response.message).toBe("Invalid process configuration");
         expect(response.info as unknown as StartIssue[]).toEqual([{ field: "name", message: "name is required and cannot be empty" }]);
     });
@@ -101,6 +103,7 @@ describe("pm2 start service", () => {
 
         expect(response.success).toBe(false);
         expect(response.status).toBe(422);
+        expect(response.code).toBe("INVALID_PROCESS_CONFIGURATION");
         expect(response.message).toBe("Invalid process configuration");
         expect(response.info as unknown as StartIssue[]).toEqual([{ field: "script", message: "script is required and cannot be empty" }]);
     });
@@ -116,6 +119,7 @@ describe("pm2 start service", () => {
 
         expect(response.success).toBe(false);
         expect(response.status).toBe(422);
+        expect(response.code).toBe("INVALID_PROCESS_CONFIGURATION");
         expect(response.message).toBe("Invalid process configuration");
         expect(response.info as unknown as StartIssue[]).toEqual([
             { field: "instances", message: "instances must be a positive integer or 'max'" },
@@ -129,6 +133,7 @@ describe("pm2 start service", () => {
 
         expect(response.success).toBe(false);
         expect(response.status).toBe(422);
+        expect(response.code).toBe("INVALID_PROCESS_CONFIGURATION");
         expect(response.message).toBe("Invalid process configuration");
         expect(response.info as unknown as StartIssue[]).toEqual([
             { field: "instances", message: "instances must be a positive integer or 'max'" },
@@ -142,6 +147,7 @@ describe("pm2 start service", () => {
 
         expect(response.success).toBe(false);
         expect(response.status).toBe(422);
+        expect(response.code).toBe("INVALID_PROCESS_CONFIGURATION");
         expect(response.message).toBe("Invalid process configuration");
         expect(response.info as unknown as StartIssue[]).toEqual([
             { field: "instances", message: "'instances' has no effect in fork mode — set exec_mode to 'cluster' if supported" },
@@ -183,6 +189,7 @@ describe("pm2 start service", () => {
 
         expect(response.success).toBe(false);
         expect(response.status).toBe(503);
+        expect(response.code).toBe("PM2_DAEMON_UNAVAILABLE");
         expect(response.message).toBe("Cannot connect to PM2 daemon");
     });
 
@@ -194,6 +201,7 @@ describe("pm2 start service", () => {
 
         expect(response.success).toBe(false);
         expect(response.status).toBe(503);
+        expect(response.code).toBe("PM2_DAEMON_UNAVAILABLE");
         expect(response.message).toBe("Cannot connect to PM2 daemon");
     });
 
@@ -205,6 +213,7 @@ describe("pm2 start service", () => {
 
         expect(response.success).toBe(false);
         expect(response.status).toBe(500);
+        expect(response.code).toBe("PM2_OPERATION_FAILED");
         expect(response.message).toBe("PM2 operation failed: Unexpected error");
     });
 });
@@ -244,6 +253,7 @@ describe("pm2 start route", () => {
 
         expect(status).toBe(422);
         expect(body.success).toBe(false);
+        expect(body.code).toBe("VALIDATION_FAILED");
         expect(body.message).toContain("Validation failed");
     });
 
@@ -254,6 +264,7 @@ describe("pm2 start route", () => {
 
         expect(status).toBe(422);
         expect(body.success).toBe(false);
+        expect(body.code).toBe("VALIDATION_FAILED");
         expect(body.message).toContain("Validation failed");
     });
 
@@ -264,6 +275,7 @@ describe("pm2 start route", () => {
 
         expect(status).toBe(422);
         expect(body.success).toBe(false);
+        expect(body.code).toBe("INVALID_PROCESS_CONFIGURATION");
         expect(body.message).toBe("Invalid process configuration");
         expect(body.info).toEqual([{ field: "name", message: "name is required and cannot be empty" }]);
     });
@@ -276,6 +288,7 @@ describe("pm2 start route", () => {
 
         expect(status).toBe(400);
         expect(body.success).toBe(false);
+        expect(body.code).toBe("SCRIPT_NOT_FOUND");
         expect(body.message).toBe("Script not found — check the 'script' path in your request");
     });
 
@@ -287,6 +300,7 @@ describe("pm2 start route", () => {
 
         expect(status).toBe(503);
         expect(body.success).toBe(false);
+        expect(body.code).toBe("PM2_DAEMON_UNAVAILABLE");
         expect(body.message).toBe("Cannot connect to PM2 daemon");
     });
 });

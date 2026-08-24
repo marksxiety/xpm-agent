@@ -48,6 +48,7 @@ describe("pm2 flush service", () => {
 
         expect(response.success).toBe(false);
         expect(response.status).toBe(400);
+        expect(response.code).toBe("INVALID_PROCESS_ID");
         expect(response.message).toBe("Invalid process id");
     });
 
@@ -58,6 +59,7 @@ describe("pm2 flush service", () => {
 
         expect(response.success).toBe(false);
         expect(response.status).toBe(400);
+        expect(response.code).toBe("INVALID_PROCESS_ID");
         expect(response.message).toBe("Invalid process id");
     });
 
@@ -69,6 +71,7 @@ describe("pm2 flush service", () => {
 
         expect(response.success).toBe(false);
         expect(response.status).toBe(503);
+        expect(response.code).toBe("PM2_DAEMON_UNAVAILABLE");
         expect(response.message).toBe("Cannot connect to PM2 daemon");
     });
 
@@ -80,6 +83,7 @@ describe("pm2 flush service", () => {
 
         expect(response.success).toBe(false);
         expect(response.status).toBe(500);
+        expect(response.code).toBe("PM2_OPERATION_FAILED");
         expect(response.message).toBe("PM2 operation failed: Unexpected error");
     });
 });
@@ -102,6 +106,7 @@ describe("pm2 flush route", () => {
 
         expect(status).toBe(400);
         expect(body.success).toBe(false);
+        expect(body.code).toBe("INVALID_PROCESS_ID");
         expect(body.message).toBe("Invalid process id");
     });
 
@@ -112,6 +117,7 @@ describe("pm2 flush route", () => {
 
         expect(status).toBe(422);
         expect(body.success).toBe(false);
+        expect(body.code).toBe("VALIDATION_FAILED");
         expect(body.message).toContain("Validation failed");
     });
 });
