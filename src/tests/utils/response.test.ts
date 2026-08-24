@@ -48,4 +48,14 @@ describe("respond", () => {
             status: 201,
         });
     });
+
+    test("includes the error code when provided", () => {
+        expect(respond("Process not found", null, { success: false, status: 404, code: "PROCESS_NOT_FOUND" })).toEqual({
+            success: false,
+            message: "Process not found",
+            code: "PROCESS_NOT_FOUND",
+            info: null,
+            status: 404,
+        });
+    });
 });
