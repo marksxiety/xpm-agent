@@ -16,6 +16,7 @@ export interface ProcessSummary {
     cpu: number;
     memory: number;
     cwd: string | undefined;
+    ip_address: string;
     watch: boolean;
     autorestart: boolean | undefined;
 }
