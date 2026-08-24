@@ -523,6 +523,7 @@ The `info` payload for `/list`, `/describe/:id`, `/start`, `/stop/:id`, `/restar
 | `cpu` | number | Current CPU usage (%) — `0` on operation responses |
 | `memory` | number | Current memory usage (bytes) — `0` on operation responses |
 | `cwd` | string | Working directory |
+| `ipv4` | string | Server IPv4 address the process runs on (e.g. `192.168.1.10`; `127.0.0.1` when no external interface) — same value for every process on the server |
 | `watch` | boolean | File-watch enabled |
 | `autorestart` | boolean | Auto-restart on crash enabled |
 
