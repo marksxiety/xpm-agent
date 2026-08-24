@@ -1,5 +1,6 @@
 import type { ProcessDescription, Proc } from "pm2";
 import type { ProcessSummary } from "../types";
+import { getServerIpv4 } from "./network"
 
 export function summarizeProcess(processDescription: ProcessDescription): ProcessSummary {
   const processEnvironment = processDescription.pm2_env as any;
@@ -21,6 +22,7 @@ export function summarizeProcess(processDescription: ProcessDescription): Proces
     cpu: processDescription.monit?.cpu ?? 0,
     memory: processDescription.monit?.memory ?? 0,
     cwd: processEnvironment?.pm_cwd,
+    ip_address: getServerIpv4(),
     watch: Boolean(processEnvironment?.watch),
     autorestart: processEnvironment?.autorestart,
   };
