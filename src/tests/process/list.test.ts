@@ -78,6 +78,7 @@ describe("p2m list command", () => {
 
         const response = await pm2Service.listProcesses();
         expect(response.success).toBe(true);
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
         const summaries = response.info?.map(({ ip_address, ...summary }) => summary);
         expect(summaries).toEqual([
             {
