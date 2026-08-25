@@ -106,7 +106,7 @@ describe("pm2 delete service", () => {
         state.deleted = [{ pm_id: 3, name: "my-app" }];
         fsState.unlinkError = Object.assign(new Error("ENOENT: no such file or directory"), { code: "ENOENT" });
         const originalConsoleError = console.error;
-        const errorSpy = mock((message: string, ...args: unknown[]) => {});
+        const errorSpy = mock<(...args: unknown[]) => void>(() => {});
         console.error = errorSpy;
 
         const response = await pm2Service.deleteProcess(3, true);
@@ -133,7 +133,7 @@ describe("pm2 delete service", () => {
         state.deleted = [{ pm_id: 3, name: "my-app" }];
         fsState.unlinkError = new Error("EPERM: operation not permitted, unlink");
         const originalConsoleError = console.error;
-        const errorSpy = mock((message: string, ...args: unknown[]) => {});
+        const errorSpy = mock<(...args: unknown[]) => void>(() => {});
         console.error = errorSpy;
 
         const response = await pm2Service.deleteProcess(3, true);
