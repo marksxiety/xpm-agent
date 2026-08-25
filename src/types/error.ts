@@ -10,6 +10,7 @@ export type ErrorCode =
   | "PARSE"
   | "INVALID_COOKIE_SIGNATURE"
   | "INVALID_FILE_TYPE"
+  | "CORS_ORIGIN_NOT_ALLOWED"
   | "INTERNAL_SERVER_ERROR"
   | "UNKNOWN";
 
@@ -34,6 +35,7 @@ export const ERROR_CODES: Record<ErrorCode, ApiErrorDescriptor> = {
   PARSE: { status: 400, message: "Malformed request body" },
   INVALID_COOKIE_SIGNATURE: { status: 401, message: "Invalid cookie signature" },
   INVALID_FILE_TYPE: { status: 400, message: "Invalid file type" },
+  CORS_ORIGIN_NOT_ALLOWED: { status: 403, message: "Origin not allowed by CORS policy" },
   INTERNAL_SERVER_ERROR: { status: 500, message: "Internal server error" },
   UNKNOWN: { status: 500, message: "Unexpected error" },
 };
