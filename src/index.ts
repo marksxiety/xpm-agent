@@ -1,4 +1,5 @@
 import { Elysia } from "elysia";
+import cors from "@elysiajs/cors";
 import swagger from "@elysiajs/swagger";
 import type { StartOptions } from "pm2";
 import type { ApiResponse } from "./types";
@@ -52,6 +53,18 @@ export const pm2Routes = new Elysia({ prefix: "/pm2" })
 
 export const createApp = () =>
   new Elysia()
+    .onRequest(({ request, set }) => {
+      const origin = request.headers.get("Origin");
+      if (origin && !config.CORS_ORIGIN.includes(origin)) {
+        set.status = 403;
+        return respond("Origin not allowed by CORS policy", null, {
+          success: false,
+          status: 403,
+          code: "CORS_ORIGIN_NOT_ALLOWED",
+        });
+      }
+    })
+    .use(cors({ origin: config.CORS_ORIGIN }))
     .use(
       swagger({
         documentation: {
