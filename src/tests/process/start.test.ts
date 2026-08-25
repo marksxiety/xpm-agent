@@ -247,6 +247,7 @@ describe("pm2 start route", () => {
 
     test("returns 422 when a required field (script) is missing", async () => {
         resetState();
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
         const { script: _script, ...withoutScript } = VALID_PAYLOAD;
 
         const { status, body } = await postStart(withoutScript);
