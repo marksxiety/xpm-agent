@@ -157,7 +157,7 @@ class PM2Service {
           pm2.describe(processId, callback),
         );
         logFilePaths = processDescriptions.flatMap((process) => {
-          const processEnvironment = process.pm2_env as any;
+          const processEnvironment = process.pm2_env;
           return [processEnvironment?.pm_out_log_path, processEnvironment?.pm_err_log_path]
             .filter((filePath): filePath is string => typeof filePath === "string" && filePath.length > 0);
         });
