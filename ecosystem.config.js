@@ -1,6 +1,7 @@
 module.exports = {
     apps: [{
-        name: "x-process-manager-api",
+        name: "api-agent",
+        namespace: 'xpm',
         cwd: __dirname,
         script: "bun",
         args: "src/index.ts",
