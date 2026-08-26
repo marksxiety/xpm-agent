@@ -34,7 +34,7 @@ Every response — success or error — uses the same shape:
 
 Returns all PM2-managed processes with live CPU, memory, restart counts, and status. Use this first to discover the `pm_id` values required by other routes.
 
-**Request:** no params, no body
+**Request:** optional query `?logs=N` (integer 1–500) — when present, attaches `logs: { out, error }` to each process summary with the trailing N lines of each stream (default 50, max 500). Omit for a lightweight list without logs.
 
 **Response `200`:**
 
@@ -46,18 +46,19 @@ Returns all PM2-managed processes with live CPU, memory, restart counts, and sta
     {
       "pid": 30628,
       "pm_id": 0,
-      "name": "client",
-      "namespace": "DPR",
+      "name": "example-app",
+      "namespace": "example",
       "status": "online",
       "uptime": 1786687862669,
       "restarts": 3,
       "unstable_restarts": 0,
       "exec_mode": "fork_mode",
       "instances": 1,
-      "interpreter": "none",
+      "interpreter": "C:\\Program Files\\nodejs\\node.exe",
       "cpu": 1.5,
       "memory": 9420800,
-      "cwd": "C:\\apps\\daily-production-report",
+      "cwd": "C:\\Example\\Application",
+      "ip_address": "192.168.1.10",
       "watch": false,
       "autorestart": true
     }
@@ -111,18 +112,19 @@ Fetches detailed info for a single process by its `pm_id`. Unlike `/list`, retur
     {
       "pid": 30628,
       "pm_id": 0,
-      "name": "client",
-      "namespace": "DPR",
+      "name": "example-app",
+      "namespace": "example",
       "status": "online",
       "uptime": 1786687862669,
       "restarts": 3,
       "unstable_restarts": 0,
       "exec_mode": "fork_mode",
       "instances": 1,
-      "interpreter": "none",
+      "interpreter": "C:\\Program Files\\nodejs\\node.exe",
       "cpu": 1.5,
       "memory": 9420800,
-      "cwd": "C:\\apps\\daily-production-report",
+      "cwd": "C:\\Example\\Application",
+      "ip_address": "192.168.1.10",
       "watch": false,
       "autorestart": true
     }
@@ -235,8 +237,8 @@ Every default listed above is **PM2's own runtime default** — it is applied by
     {
       "pid": 12345,
       "pm_id": 2,
-      "name": "client",
-      "namespace": "DPR",
+      "name": "example-app",
+      "namespace": "example",
       "status": "online",
       "uptime": 1786687862669,
       "restarts": 0,
@@ -246,7 +248,8 @@ Every default listed above is **PM2's own runtime default** — it is applied by
       "interpreter": "C:\\Program Files\\nodejs\\node.exe",
       "cpu": 0,
       "memory": 0,
-      "cwd": "C:\\apps\\my-service",
+      "cwd": "C:\\Example\\Application",
+      "ip_address": "192.168.1.10",
       "watch": false,
       "autorestart": true
     }
@@ -315,8 +318,8 @@ Gracefully stops a running process. The process stays **registered** in PM2 (sta
     {
       "pid": 0,
       "pm_id": 0,
-      "name": "client",
-      "namespace": "DPR",
+      "name": "example-app",
+      "namespace": "example",
       "status": "stopped",
       "uptime": 1786687862669,
       "restarts": 3,
@@ -326,7 +329,8 @@ Gracefully stops a running process. The process stays **registered** in PM2 (sta
       "interpreter": "C:\\Program Files\\nodejs\\node.exe",
       "cpu": 0,
       "memory": 0,
-      "cwd": "C:\\apps\\daily-production-report",
+      "cwd": "C:\\Example\\Application",
+      "ip_address": "192.168.1.10",
       "watch": false,
       "autorestart": true
     }
@@ -364,8 +368,8 @@ Kills and re-launches a process. Also works on stopped processes (acts as start)
     {
       "pid": 0,
       "pm_id": 0,
-      "name": "client",
-      "namespace": "DPR",
+      "name": "example-app",
+      "namespace": "example",
       "status": "online",
       "uptime": 1786687862669,
       "restarts": 4,
@@ -375,7 +379,8 @@ Kills and re-launches a process. Also works on stopped processes (acts as start)
       "interpreter": "C:\\Program Files\\nodejs\\node.exe",
       "cpu": 0,
       "memory": 0,
-      "cwd": "C:\\apps\\daily-production-report",
+      "cwd": "C:\\Example\\Application",
+      "ip_address": "192.168.1.10",
       "watch": false,
       "autorestart": true
     }
@@ -407,8 +412,8 @@ Zero-downtime reload — restarts instances one at a time. Only meaningful for *
     {
       "pid": 0,
       "pm_id": 0,
-      "name": "client",
-      "namespace": "DPR",
+      "name": "example-app",
+      "namespace": "example",
       "status": "online",
       "uptime": 1786687862669,
       "restarts": 4,
@@ -418,7 +423,8 @@ Zero-downtime reload — restarts instances one at a time. Only meaningful for *
       "interpreter": "C:\\Program Files\\nodejs\\node.exe",
       "cpu": 0,
       "memory": 0,
-      "cwd": "C:\\apps\\daily-production-report",
+      "cwd": "C:\\Example\\Application",
+      "ip_address": "192.168.1.10",
       "watch": false,
       "autorestart": true
     }
@@ -458,8 +464,8 @@ By default the process's log files (`-out.log` / `-error.log` in `~/.pm2/logs/`)
     {
       "pid": 0,
       "pm_id": 0,
-      "name": "client",
-      "namespace": "DPR",
+      "name": "example-app",
+      "namespace": "example",
       "status": "stopped",
       "uptime": 1786687862669,
       "restarts": 4,
@@ -469,7 +475,8 @@ By default the process's log files (`-out.log` / `-error.log` in `~/.pm2/logs/`)
       "interpreter": "C:\\Program Files\\nodejs\\node.exe",
       "cpu": 0,
       "memory": 0,
-      "cwd": "C:\\apps\\daily-production-report",
+      "cwd": "C:\\Example\\Application",
+      "ip_address": "192.168.1.10",
       "watch": false,
       "autorestart": true
     }
@@ -503,6 +510,54 @@ Clears (empties) the log files for one process, or for **all** processes if the 
 
 ---
 
+### GET /logs/:id
+
+Returns the trailing lines of a process's stdout (`out`) and stderr (`error`) log files. `id` is the process's `pm_id`.
+
+**Path params:**
+
+| Param | Type | Required | Description |
+|---|---|---|---|
+| `id` | number | yes | `pm_id` of the process (from `GET /list`) |
+
+**Query params:**
+
+| Param | Type | Required | Description |
+|---|---|---|---|
+| `tail` | integer | no | Number of trailing log lines to return per stream. Default `50`. Minimum `1`, maximum `500`. |
+| `type` | string | no | Which log stream to return. `"both"` (default), `"output"`, or `"error"`. |
+
+**Request:** `GET /pm2/logs/0` or `GET /pm2/logs/0?tail=10&type=error`
+
+**Response `200`:**
+
+```json
+{
+  "success": true,
+  "message": "PM2 process logs retrieved successfully",
+  "info": {
+    "out": ["log line 1", "log line 2"],
+    "error": ["error line 1"]
+  }
+}
+```
+
+The `out` and `error` arrays contain the last N lines of each respective log file. If a log file does not exist (or a stream the process does not write), that array is empty. Returns `404` if the process `pm_id` is not found.
+
+**Error `404`** (unknown pm_id):
+
+```json
+{ "success": false, "message": "Process not found", "info": null }
+```
+
+**Error `422`** (invalid `tail` or `type`):
+
+```json
+{ "success": false, "message": "Validation failed: ..., "info": null }
+```
+
+---
+
 ## ProcessSummary Fields
 
 The `info` payload for `/list`, `/describe/:id`, `/start`, `/stop/:id`, `/restart/:id`, `/reload/:id`, and `/delete/:id` — always an array of summaries.
@@ -523,7 +578,8 @@ The `info` payload for `/list`, `/describe/:id`, `/start`, `/stop/:id`, `/restar
 | `cpu` | number | Current CPU usage (%) — `0` on operation responses |
 | `memory` | number | Current memory usage (bytes) — `0` on operation responses |
 | `cwd` | string | Working directory |
-| `ipv4` | string | Server IPv4 address the process runs on (e.g. `192.168.1.10`; `127.0.0.1` when no external interface) — same value for every process on the server |
+| `ip_address` | string | Server IPv4 address the process runs on (e.g. `192.168.1.10`; `127.0.0.1` when no external interface) — same value for every process on the server |
+| `logs` | object | `out` and `error` string arrays — only present when `?logs=N` is passed on `/list`; each stream capped at 500 lines (default 50). Omitted when no logs query |
 | `watch` | boolean | File-watch enabled |
 | `autorestart` | boolean | Auto-restart on crash enabled |
 
@@ -533,8 +589,9 @@ The `info` payload for `/list`, `/describe/:id`, `/start`, `/stop/:id`, `/restar
 
 | Status | When |
 |---|---|---|
-| 422 | Schema validation failed (non-numeric `id`, missing `name`/`script` in body) **or** a `/start` configuration-guide violation (e.g. `.js` script with `php` interpreter) |
+| 422 | Schema validation failed (non-numeric `id`, missing `name`/`script` in body) **or** a `/start` configuration-guide violation (e.g. `.js` script with `php` interpreter) **or** invalid `tail`/`type` query on `/logs` |
 | 404 | Process with the given `pm_id` not found |
+| 403 | Origin not in `CORS_ORIGIN` allowlist (`CORS_ORIGIN_NOT_ALLOWED`) — browsers sending an `Origin` header without a configured allowlist are rejected |
 | 400 | Script path in `/start` body not found |
 | 503 | Cannot connect to the PM2 daemon |
 | 500 | Unexpected PM2 failure |
