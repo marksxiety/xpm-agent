@@ -9,5 +9,6 @@ module.exports = {
         instances: 1,
         autorestart: true,
         max_restarts: 10,
+        time: true,
     }],
 };
