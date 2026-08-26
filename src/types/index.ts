@@ -19,6 +19,14 @@ export interface ProcessSummary {
     ip_address: string;
     watch: boolean;
     autorestart: boolean | undefined;
+    logs?: ProcessLogs;
+}
+
+export type LogStreamType = "both" | "output" | "error";
+
+export interface ProcessLogs {
+    out?: string[];
+    error?: string[];
 }
 
 export interface ApiResponse<T = unknown> {
