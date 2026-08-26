@@ -21,6 +21,7 @@ Open `.env` and set:
 | Variable | Description | Example |
 |---|---|---|
 | `SERVER_PORT` | Port the API listens on | `4000` |
+| `CORS_ORIGIN` | Comma-separated allowed browser origins (e.g. `http://localhost:3000,http://localhost:5173`). Omit or leave empty to **deny all browser origins** with 403 (`CORS_ORIGIN_NOT_ALLOWED`). Only non-browser clients (curl, Postman) are unaffected. | `http://localhost:3000,http://localhost:5173` |
 
 ## 3. Install dependencies
 
