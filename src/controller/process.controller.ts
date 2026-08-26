@@ -1,16 +1,14 @@
 import { promises as fs } from "node:fs";
-import os from "node:os";
 import pm2 from "pm2";
 import type { ProcessDescription, StartOptions } from "pm2";
-import type { ApiResponse, ProcessSummary, ProcessLogs, LogStreamType, SystemOverview } from "../types";
+import type { ApiResponse, ProcessSummary, ProcessLogs, LogStreamType } from "../types";
 import { respond } from "../utils/response";
 import { classifyPm2Error } from "../utils/errors";
 import { summarizeProcess, toProcessDescriptions } from "../utils/process";
 import { resolveLogFiles, tailLines } from "../utils/log";
-import { getCurrentTimeStamp } from "../utils/datetime";
 import { inspect } from "../utils/inspect";
 import { StartIssue } from "../types/inspect";
-class PM2Service {
+export class ProcessController {
   private withPM2<T>(
     operation: (callback: (operationError: Error | null, result?: T) => void) => void,
   ): Promise<T> {
@@ -53,27 +51,6 @@ class PM2Service {
       if ((readError as NodeJS.ErrnoException).code === "ENOENT") return [];
       throw readError;
     }
-  }
-
-  private getHostMetrics = (): SystemOverview => {
-    const totalBytes = os.totalmem();
-    const freeBytes = os.freemem();
-    const usedBytes = totalBytes - freeBytes;
-    const cpus = os.cpus();
-
-    return {
-      cpu: {
-        cores: cpus.length,
-        model: cpus[0]?.model ?? "Unknown",
-        loadAvg: os.loadavg(),
-      },
-      memory: {
-        totalBytes,
-        freeBytes,
-        usedBytes,
-        percentUsed: Number(((usedBytes / totalBytes) * 100).toFixed(2)),
-      },
-    };
   }
 
   listProcesses = async (tail?: number): Promise<ApiResponse<ProcessSummary[]>> => {
@@ -262,29 +239,6 @@ class PM2Service {
       return this.handleError(error);
     }
   };
-
-  getSystemOverview = async (): Promise<ApiResponse<{ host: SystemOverview; processes: ProcessSummary[] }>> => {
-    try {
-      const listResponse = await this.listProcesses();
-      if (!listResponse.success || !listResponse.info) {
-        return listResponse as unknown as ApiResponse<{ host: SystemOverview; processes: ProcessSummary[] }>;
-      }
-
-      return respond("System overview retrieved successfully", {
-        host: this.getHostMetrics(),
-        processes: listResponse.info,
-      });
-    } catch (error) {
-      return this.handleError(error);
-    }
-  };
-
-  healthCheck = (): ApiResponse<{ status: string; uptime: number; timestamp: number }> =>
-    respond("PM2 health check passed", {
-      status: "ok",
-      uptime: process.uptime(),
-      timestamp: getCurrentTimeStamp(),
-    });
 }
 
-export const pm2Service = new PM2Service();
+export const processController = new ProcessController();
