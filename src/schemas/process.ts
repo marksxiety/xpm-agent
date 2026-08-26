@@ -1,5 +1,44 @@
 import { t } from "elysia";
 
+export const ProcessIdParams = t.Object({ id: t.Number({ description: "pm_id of the process (see GET /list)" }) });
+
+export const FlushParams = t.Object({
+  id: t.Optional(t.Number({ description: "pm_id of the process; omit to flush ALL processes" })),
+});
+
+export const LogsParams = t.Object({ id: t.Number({ description: "pm_id of the process (see GET /list)" }) });
+
+export const LogsQuery = t.Object({
+  tail: t.Optional(t.Integer({
+    description: "Number of trailing log lines to return (default 50, max 500)",
+    minimum: 1,
+    maximum: 500,
+    examples: [50],
+  })),
+  type: t.Optional(t.Union(
+    [t.Literal("both"), t.Literal("output"), t.Literal("error")],
+    { description: "Which log stream(s) to return (default: both)" },
+  )),
+});
+
+export const ListQuery = t.Object({
+  logs: t.Optional(t.Integer({
+    description:
+      "Number of trailing log lines to attach to each process summary (last N lines of both the `out` and `error` streams). Omit for a list without logs. Default 50, max 500.",
+    minimum: 1,
+    maximum: 500,
+    examples: [10],
+  })),
+});
+
+export const DeleteLogsQuery = t.Object({
+  delete_logs: t.Optional(t.Boolean({
+    description:
+      "Also delete the process's log files (<base>-out.log and <base>-error.log) from ~/.pm2/logs/. Defaults to false — PM2 does not remove log files on delete.",
+    examples: [true],
+  })),
+});
+
 /**
  * Flat passthrough schema for POST /pm2/start.
  *
