@@ -9,13 +9,15 @@ const state = {
     startError: null as Error | null,
     listError: null as Error | null,
     connectError: null as Error | null,
+    startOpts: null as StartOptions | null,
 };
 
 mock.module("pm2", () => ({
     default: {
         connect(cb: (err?: Error | null) => void) { cb(state.connectError); },
         disconnect() { },
-        start(_opts: StartOptions, cb: (err?: Error | null, procs?: Proc | Proc[]) => void) {
+        start(opts: StartOptions, cb: (err?: Error | null, procs?: Proc | Proc[]) => void) {
+            state.startOpts = opts;
             cb(state.startError, state.started);
         },
         list(cb: (err?: Error | null, list?: ProcessDescription[]) => void) {
@@ -46,6 +48,7 @@ function resetState() {
     state.startError = null;
     state.listError = null;
     state.connectError = null;
+    state.startOpts = null;
 }
 
 async function postStart(payload: object): Promise<{ status: number; body: ApiResponse }> {
@@ -60,6 +63,24 @@ async function postStart(payload: object): Promise<{ status: number; body: ApiRe
 }
 
 describe("pm2 start service", () => {
+    test("starts the process with time: true so logs are timestamped", async () => {
+        resetState();
+        state.started = [{ name: "my-app" }];
+
+        await pm2Service.startProcess(VALID_PAYLOAD);
+
+        expect(state.startOpts?.time).toBe(true);
+    });
+
+    test("forces time: true even when the payload sets time: false", async () => {
+        resetState();
+        state.started = [{ name: "my-app" }];
+
+        await pm2Service.startProcess({ ...VALID_PAYLOAD, time: false });
+
+        expect(state.startOpts?.time).toBe(true);
+    });
+
     test("returns the launched process when pm2 does not report a pm_id", async () => {
         resetState();
         state.started = [{ name: "my-app" }];
