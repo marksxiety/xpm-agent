@@ -1,4 +1,6 @@
-import { ERROR_CODES, type ClassifiedError } from "../types/error";
+import type { ApiResponse } from "../types";
+import { ERROR_CODES, ELYSIA_CODE_MAP, type ClassifiedError, type ErrorCode } from "../types/error";
+import { respond } from "./response";
 
 export function classifyPm2Error(error: unknown): ClassifiedError {
   const rawMessage = error instanceof Error ? error.message : String((error as { msg?: string })?.msg ?? error);
@@ -24,4 +26,29 @@ export function formatValidationMessage(message: string): string {
   } catch {
     return message;
   }
+}
+
+export function formatElysiaErrorResponse(code: string | number, error: unknown): ApiResponse<null> {
+  if (code === "VALIDATION") {
+    const rawMessage = error instanceof Error ? error.message : String(error);
+    return respond(`Validation failed: ${formatValidationMessage(rawMessage)}`, null, {
+      success: false,
+      status: 422,
+      code: "VALIDATION_FAILED",
+    });
+  }
+  const mappedCode = ELYSIA_CODE_MAP[code] as ErrorCode | undefined;
+  if (mappedCode) {
+    const descriptor = ERROR_CODES[mappedCode];
+    const appendsDetail = mappedCode === "INTERNAL_SERVER_ERROR" || mappedCode === "UNKNOWN";
+    const detail =
+      appendsDetail && error instanceof Error && error.message.length > 0 ? `: ${error.message}` : "";
+    return respond(`${descriptor.message}${detail}`, null, {
+      success: false,
+      status: descriptor.status,
+      code: mappedCode,
+    });
+  }
+  const classified = classifyPm2Error(error);
+  return respond(classified.message, null, { success: false, status: classified.status, code: classified.code });
 }
