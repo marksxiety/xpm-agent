@@ -52,12 +52,12 @@ function resetState() {
     fsState.unlinkError = null;
 }
 
-async function requestDelete(processId: number | string, body?: object): Promise<{ status: number; body: ApiResponse }> {
+async function requestDelete(processId: number | string, deleteLogs = false): Promise<{ status: number; body: ApiResponse }> {
+    const query = deleteLogs ? "?delete_logs=true" : "";
     const response = await createApp().handle(
-        new Request(`http://localhost/pm2/delete/${processId}`, {
+        new Request(`http://localhost/pm2/delete/${processId}${query}`, {
             method: "DELETE",
             headers: { "content-type": "application/json" },
-            body: JSON.stringify(body ?? {}),
         }),
     );
     return { status: response.status, body: (await response.json()) as ApiResponse };
@@ -220,7 +220,7 @@ describe("pm2 delete route", () => {
         }];
         state.deleted = [{ pm_id: 3, name: "my-app" }];
 
-        const { status, body } = await requestDelete(3, { delete_logs: true });
+        const { status, body } = await requestDelete(3, true);
 
         expect(status).toBe(200);
         expect(body.success).toBe(true);
