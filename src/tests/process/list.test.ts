@@ -1,10 +1,18 @@
-import { describe, expect, mock, test, setSystemTime } from "bun:test";
+import { describe, expect, mock, test, setSystemTime, beforeEach, afterAll } from "bun:test";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import type { ProcessDescription } from "pm2";
+import type { ApiResponse, ProcessSummary } from "../../types";
 
 const state = { 
     processes: [] as ProcessDescription[],
     listError: null as Error | null
 }
+
+mock.module("node:fs", () => ({
+    promises: fs,
+}));
 
 mock.module("pm2", () => ({
     default: {
@@ -19,6 +27,15 @@ mock.module("pm2", () => ({
 }));
 
 const { pm2Service } = await import("../../services/pm2.service");
+const { createApp } = await import("../../index");
+
+const TEMP_DIR = path.join(os.tmpdir(), `pm2-list-test-${Date.now()}`);
+const OUT_LOG = path.join(TEMP_DIR, "out.log");
+const ERROR_LOG = path.join(TEMP_DIR, "error.log");
+
+function buildContent(lineCount: number): string {
+    return Array.from({ length: lineCount }, (_, index) => `list-log-${index + 1}`).join("\n") + "\n";
+}
 
 describe("p2m list command", () => {
     test("return an empty list when no processes are running", async () => {
@@ -172,4 +189,115 @@ describe("p2m list command", () => {
         expect(response.code).toBe("SCRIPT_NOT_FOUND");
         expect(response.message).toBe("Script not found — check the 'script' path in your request");
     })
+});
+
+describe("pm2 list with logs", () => {
+    beforeEach(async () => {
+        await fs.mkdir(TEMP_DIR, { recursive: true });
+        await fs.rm(OUT_LOG, { force: true });
+        await fs.rm(ERROR_LOG, { force: true });
+        state.processes = [{
+            pid: 12345,
+            pm_id: 0,
+            name: "client",
+            pm2_env: {
+                pm_out_log_path: OUT_LOG,
+                pm_err_log_path: ERROR_LOG,
+            } as ProcessDescription["pm2_env"],
+        }];
+        state.listError = null;
+    });
+
+    afterAll(async () => {
+        await fs.rm(TEMP_DIR, { recursive: true, force: true });
+    });
+
+    test("attaches trailing lines from both log streams when tail is provided", async () => {
+        await fs.writeFile(OUT_LOG, buildContent(5), "utf8");
+        await fs.writeFile(ERROR_LOG, buildContent(4), "utf8");
+
+        const response = await pm2Service.listProcesses(2);
+
+        expect(response.success).toBe(true);
+        expect((response.info as ProcessSummary[])?.[0].logs).toEqual({
+            out: ["list-log-4", "list-log-5"],
+            error: ["list-log-3", "list-log-4"],
+        });
+    });
+
+    test("attaches empty arrays for log files that do not exist", async () => {
+        await fs.writeFile(ERROR_LOG, buildContent(4), "utf8");
+
+        const response = await pm2Service.listProcesses(2);
+
+        expect(response.success).toBe(true);
+        expect((response.info as ProcessSummary[])?.[0].logs).toEqual({
+            out: [],
+            error: ["list-log-3", "list-log-4"],
+        });
+    });
+
+    test("does not attach logs when tail is omitted", async () => {
+        await fs.writeFile(OUT_LOG, buildContent(5), "utf8");
+
+        const response = await pm2Service.listProcesses();
+
+        expect(response.success).toBe(true);
+        expect((response.info as ProcessSummary[])?.[0].logs).toBeUndefined();
+    });
+});
+
+describe("pm2 list route with logs", () => {
+    beforeEach(async () => {
+        await fs.mkdir(TEMP_DIR, { recursive: true });
+        await fs.rm(OUT_LOG, { force: true });
+        await fs.rm(ERROR_LOG, { force: true });
+        state.processes = [{
+            pid: 12345,
+            pm_id: 0,
+            name: "client",
+            pm2_env: {
+                pm_out_log_path: OUT_LOG,
+                pm_err_log_path: ERROR_LOG,
+            } as ProcessDescription["pm2_env"],
+        }];
+        state.listError = null;
+    });
+
+    afterAll(async () => {
+        await fs.rm(TEMP_DIR, { recursive: true, force: true });
+    });
+
+    async function getList(query: string): Promise<{ status: number; body: ApiResponse }> {
+        const response = await createApp().handle(
+            new Request(`http://localhost/pm2/list${query}`, { method: "GET" }),
+        );
+        return { status: response.status, body: (await response.json()) as ApiResponse };
+    }
+
+    test("returns 200 with logs attached when logs query is provided", async () => {
+        await fs.writeFile(OUT_LOG, buildContent(5), "utf8");
+
+        const { status, body } = await getList("?logs=2");
+
+        expect(status).toBe(200);
+        expect(body.success).toBe(true);
+        expect((body.info as ProcessSummary[])?.[0].logs?.out).toEqual(["list-log-4", "list-log-5"]);
+    });
+
+    test("returns 422 when logs is below the minimum", async () => {
+        const { status, body } = await getList("?logs=0");
+
+        expect(status).toBe(422);
+        expect(body.success).toBe(false);
+        expect(body.code).toBe("VALIDATION_FAILED");
+    });
+
+    test("returns 422 when logs is not numeric", async () => {
+        const { status, body } = await getList("?logs=abc");
+
+        expect(status).toBe(422);
+        expect(body.success).toBe(false);
+        expect(body.code).toBe("VALIDATION_FAILED");
+    });
 });
