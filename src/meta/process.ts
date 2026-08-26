@@ -1,39 +1,8 @@
-import { t } from "elysia";
-
-const processIdParams = t.Object({ id: t.Number({ description: "pm_id of the process (see GET /list)" }) });
-
-const flushParams = t.Object({
-  id: t.Optional(t.Number({ description: "pm_id of the process; omit to flush ALL processes" })),
-});
-
-const logsParams = t.Object({ id: t.Number({ description: "pm_id of the process (see GET /list)" }) });
-
-const logsQuery = t.Object({
-  tail: t.Optional(t.Integer({
-    description: "Number of trailing log lines to return (default 50, max 500)",
-    minimum: 1,
-    maximum: 500,
-    examples: [50],
-  })),
-  type: t.Optional(t.Union(
-    [t.Literal("both"), t.Literal("output"), t.Literal("error")],
-    { description: "Which log stream(s) to return (default: both)" },
-  )),
-});
-
-const listQuery = t.Object({
-  logs: t.Optional(t.Integer({
-    description:
-      "Number of trailing log lines to attach to each process summary (last N lines of both the `out` and `error` streams). Omit for a list without logs. Default 50, max 500.",
-    minimum: 1,
-    maximum: 500,
-    examples: [10],
-  })),
-});
+import { DeleteLogsQuery, FlushParams, ListQuery, LogsParams, LogsQuery, ProcessIdParams, StartPayload } from "../schemas/process";
 
 const routeMeta = {
   list: {
-    query: listQuery,
+    query: ListQuery,
     detail: {
       summary: "List all PM2 processes",
       description:
@@ -52,7 +21,7 @@ const routeMeta = {
     },
   },
   describe: {
-    params: processIdParams,
+    params: ProcessIdParams,
     detail: {
       summary: "Get details of one process",
       description:
@@ -62,6 +31,7 @@ const routeMeta = {
     },
   },
   start: {
+    body: StartPayload,
     detail: {
       summary: "Register and start a new process",
       description:
@@ -71,7 +41,7 @@ const routeMeta = {
     },
   },
   stop: {
-    params: processIdParams,
+    params: ProcessIdParams,
     detail: {
       summary: "Stop a process",
       description:
@@ -81,7 +51,7 @@ const routeMeta = {
     },
   },
   restart: {
-    params: processIdParams,
+    params: ProcessIdParams,
     detail: {
       summary: "Restart a process",
       description:
@@ -91,7 +61,7 @@ const routeMeta = {
     },
   },
   reload: {
-    params: processIdParams,
+    params: ProcessIdParams,
     detail: {
       summary: "Zero-downtime reload",
       description:
@@ -101,24 +71,18 @@ const routeMeta = {
     },
   },
   delete: {
-    params: processIdParams,
-    body: t.Object({
-      delete_logs: t.Optional(t.Boolean({
-        description:
-          "Also delete the process's log files (<base>-out.log and <base>-error.log) from ~/.pm2/logs/. Defaults to false — PM2 does not remove log files on delete.",
-        examples: [true],
-      })),
-    }),
+    params: ProcessIdParams,
+    query: DeleteLogsQuery,
     detail: {
       summary: "Delete a process permanently",
       description:
-        "Stops the process **and removes it from PM2's registry entirely**. The `pm_id` is freed and may be recycled by PM2 for future processes. Unlike stop, this cannot be undone via restart.\n\nBy default the process's log files are left on disk (PM2 never removes them). Pass `delete_logs: true` to also delete the `-out.log`/`-error.log` files from `~/.pm2/logs/`.",
+        "Stops the process **and removes it from PM2's registry entirely**. The `pm_id` is freed and may be recycled by PM2 for future processes. Unlike stop, this cannot be undone via restart.\n\nBy default the process's log files are left on disk (PM2 never removes them). Pass `?delete_logs=true` to also delete the `-out.log`/`-error.log` files from `~/.pm2/logs/`.",
       tags: ["Processes"],
       operationId: "deleteProcess",
     },
   },
   flush: {
-    params: flushParams,
+    params: FlushParams,
     detail: {
       summary: "Flush (empty) log files",
       description:
@@ -128,8 +92,8 @@ const routeMeta = {
     },
   },
   logs: {
-    params: logsParams,
-    query: logsQuery,
+    params: LogsParams,
+    query: LogsQuery,
     detail: {
       summary: "Get process logs",
       description:
