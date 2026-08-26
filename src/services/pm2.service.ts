@@ -1,11 +1,11 @@
 import { promises as fs } from "node:fs";
 import pm2 from "pm2";
 import type { ProcessDescription, StartOptions } from "pm2";
-import type { ApiResponse, ProcessSummary } from "../types";
+import type { ApiResponse, ProcessSummary, ProcessLogs, LogStreamType } from "../types";
 import { respond } from "../utils/response";
 import { classifyPm2Error } from "../utils/errors";
 import { summarizeProcess, toProcessDescriptions } from "../utils/process";
-import { resolveLogFiles } from "../utils/log";
+import { resolveLogFiles, tailLines } from "../utils/log";
 import { getCurrentTimeStamp } from "../utils/datetime";
 import { inspect } from "../utils/inspect";
 import { StartIssue } from "../types/inspect";
@@ -44,14 +44,34 @@ class PM2Service {
     return respond(message, null, { success: false, status, code }) as ApiResponse<T>;
   }
 
-  listProcesses = async (): Promise<ApiResponse<ProcessSummary[]>> => {
+  private async readLogFile(filePath: string | undefined, tail?: number): Promise<string[]> {
+    if (!filePath || filePath.length === 0) return [];
     try {
-      const processSummaries = await this.withPM2<ProcessSummary[]>((callback) =>
-        pm2.list((listError, processDescriptions) =>
-          callback(listError, processDescriptions?.map(summarizeProcess) ?? []),
-        ),
+      return tailLines(await fs.readFile(filePath, "utf8"), tail);
+    } catch (readError) {
+      if ((readError as NodeJS.ErrnoException).code === "ENOENT") return [];
+      throw readError;
+    }
+  }
+
+  listProcesses = async (tail?: number): Promise<ApiResponse<ProcessSummary[]>> => {
+    try {
+      const processDescriptions = await this.withPM2<ProcessDescription[]>((callback) =>
+        pm2.list((listError, list) => callback(listError, list ?? [])),
       );
-      return respond("PM2 process list retrieved successfully", processSummaries);
+      const processSummaries = processDescriptions.map(summarizeProcess);
+      if (tail === undefined) return respond("PM2 process list retrieved successfully", processSummaries);
+      const summariesWithLogs = await Promise.all(
+        processSummaries.map(async (summary, index) => {
+          const processEnvironment = processDescriptions[index].pm2_env;
+          const [out, error] = await Promise.all([
+            this.readLogFile(processEnvironment?.pm_out_log_path, tail),
+            this.readLogFile(processEnvironment?.pm_err_log_path, tail),
+          ]);
+          return { ...summary, logs: { out, error } };
+        }),
+      );
+      return respond("PM2 process list retrieved successfully", summariesWithLogs);
     } catch (error) {
       return this.handleError(error);
     }
@@ -89,7 +109,7 @@ class PM2Service {
     try {
       const logOptions = resolveLogFiles({ name: payload.name || payload.script, namespace: payload.namespace });
       const launchedProcesses = await this.withPM2<ProcessDescription[]>((callback) =>
-        pm2.start({ ...payload, ...logOptions }, (startError, processes) =>
+        pm2.start({ ...payload, ...logOptions, time: true }, (startError, processes) =>
           callback(startError, toProcessDescriptions(processes)),
         ),
       );
@@ -189,6 +209,33 @@ class PM2Service {
         return respond("Invalid process id", null, { success: false, status: 400, code: "INVALID_PROCESS_ID" });
       await this.withPM2<void>((callback) => pm2.flush(parsedProcessId, callback));
       return respond(`Logs for process ${parsedProcessId} flushed successfully`, null);
+    } catch (error) {
+      return this.handleError(error);
+    }
+  };
+
+  getLogs = async (
+    processId: number,
+    tail?: number,
+    type: LogStreamType = "both",
+  ): Promise<ApiResponse<ProcessLogs>> => {
+    try {
+      const processDescriptions = await this.withPM2<ProcessDescription[]>((callback) =>
+        pm2.describe(processId, (describeError, descriptions) =>
+          callback(describeError, descriptions ?? []),
+        ),
+      );
+      if (processDescriptions.length === 0)
+        return respond<ProcessLogs>(`Process ${processId} not found`, null, {
+          success: false,
+          status: 404,
+          code: "PROCESS_NOT_FOUND",
+        });
+      const processEnvironment = processDescriptions[0].pm2_env;
+      const info: ProcessLogs = {};
+      if (type === "both" || type === "output") info.out = await this.readLogFile(processEnvironment?.pm_out_log_path, tail);
+      if (type === "both" || type === "error") info.error = await this.readLogFile(processEnvironment?.pm_err_log_path, tail);
+      return respond("PM2 process logs retrieved successfully", info);
     } catch (error) {
       return this.handleError(error);
     }
