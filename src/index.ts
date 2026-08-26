@@ -38,7 +38,7 @@ export const pm2Routes = new Elysia({ prefix: "/pm2" })
     const classified = classifyPm2Error(error);
     return respond(classified.message, null, { success: false, status: classified.status, code: classified.code });
   })
-  .get("/list", () => pm2Service.listProcesses(), getRouteMeta("list"))
+  .get("/list", ({ query }) => pm2Service.listProcesses(query.logs), getRouteMeta("list"))
   .get("/health", () => pm2Service.healthCheck(), getRouteMeta("health"))
   .get("/describe/:id", ({ params }) => pm2Service.describeProcess(params.id), getRouteMeta("describe"))
   .post("/start", ({ body }) => pm2Service.startProcess(body as StartOptions), {
@@ -49,7 +49,8 @@ export const pm2Routes = new Elysia({ prefix: "/pm2" })
   .post("/restart/:id", ({ params }) => pm2Service.restartProcess(params.id), getRouteMeta("restart"))
   .post("/reload/:id", ({ params }) => pm2Service.reloadProcess(params.id), getRouteMeta("reload"))
   .delete("/delete/:id", ({ params, body }) => pm2Service.deleteProcess(params.id, body?.delete_logs ?? false), getRouteMeta("delete"))
-  .post("/flush/:id?", ({ params }) => pm2Service.flushLogs(params.id), getRouteMeta("flush"));
+  .post("/flush/:id?", ({ params }) => pm2Service.flushLogs(params.id), getRouteMeta("flush"))
+  .get("/logs/:id", ({ params, query }) => pm2Service.getLogs(params.id, query.tail, query.type), getRouteMeta("logs"));
 
 export const createApp = () =>
   new Elysia()
