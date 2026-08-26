@@ -6,7 +6,7 @@
   <a href="https://github.com/marksxiety/x-process-manager-api/releases/latest"><img src="https://img.shields.io/github/v/release/marksxiety/x-process-manager-api?label=release&include_prereleases" alt="Release"></a>
 </p>
 
-<p align="center"><b>PM2, but make it an API.</b> Stop SSH-ing in just to restart a process. This Bun + Elysia service exposes PM2's full lifecycle (list, start, stop, restart, reload, delete, flush) as clean REST endpoints — so ops scripts, dashboards, and automations can drive PM2 like any other API.</p>
+<p align="center"><b>PM2, but make it an API.</b> Stop SSH-ing in just to restart a process. This Bun + Elysia service exposes PM2's full lifecycle (list, start, stop, restart, reload, delete, flush, logs) as clean REST endpoints — so ops scripts, dashboards, and automations can drive PM2 like any other API.</p>
 
 ## Prerequisites
 
@@ -32,6 +32,7 @@
 | `/pm2/restart/:id` | POST | Kill and relaunch |
 | `/pm2/reload/:id` | POST | Zero-downtime reload (cluster mode) |
 | `/pm2/delete/:id` | DELETE | Stop and remove permanently |
+| `/pm2/logs/:id` | GET | Tail a process's `out`/`error` logs (last N lines) |
 | `/pm2/flush/:id?` | POST | Empty log files (all if id omitted) |
 
 ## Documentation
