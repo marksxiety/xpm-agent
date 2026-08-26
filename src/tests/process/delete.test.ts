@@ -1,4 +1,5 @@
 import { describe, expect, mock, test } from "bun:test";
+import realFs from "node:fs/promises";
 import type { ProcessDescription } from "pm2";
 import type { ApiResponse, ProcessSummary } from "../../types";
 
@@ -9,6 +10,7 @@ const fsState = {
 
 mock.module("node:fs", () => ({
     promises: {
+        ...realFs,
         unlink: async (filePath: string) => {
             fsState.unlinkCalls.push(filePath);
             if (fsState.unlinkError) throw fsState.unlinkError;
