@@ -11,15 +11,6 @@ const routeMeta = {
       operationId: "listProcesses",
     },
   },
-  health: {
-    detail: {
-      summary: "API health check",
-      description:
-        "Liveness check for this API server itself (not the PM2 processes). Useful for uptime monitoring and load balancer probes.",
-      tags: ["System"],
-      operationId: "healthCheck",
-    },
-  },
   describe: {
     params: ProcessIdParams,
     detail: {
