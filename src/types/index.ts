@@ -36,3 +36,17 @@ export interface ApiResponse<T = unknown> {
     info: T | null;
     status: number;
 }
+
+export interface SystemOverview {
+    cpu: {
+        cores: number;
+        model: string;
+        loadAvg: number[];
+    },
+    memory: {
+        totalBytes: number;
+        freeBytes: number;
+        usedBytes: number;
+        percentUsed: number;
+    }
+}
