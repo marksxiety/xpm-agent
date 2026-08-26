@@ -5,8 +5,10 @@ import type { StartOptions } from "pm2";
 import type { ApiResponse } from "./types";
 import { respond } from "./utils/response";
 import { formatElysiaErrorResponse } from "./utils/errors";
-import { pm2Service } from "./services/pm2.service";
+import { processController } from "./controller/process.controller";
+import { systemController } from "./controller/system.controller";
 import { getRouteMeta } from "./meta/process";
+import { getSystemRouteMeta } from "./meta/system";
 import { config } from "./config";
 import PackageJson from "../package.json";
 
@@ -18,16 +20,17 @@ export const pm2Routes = new Elysia({ prefix: "/pm2" })
     }
   })
   .onError(({ code, error }) => formatElysiaErrorResponse(code, error))
-  .get("/list", ({ query }) => pm2Service.listProcesses(query.logs), getRouteMeta("list"))
-  .get("/health", () => pm2Service.healthCheck(), getRouteMeta("health"))
-  .get("/describe/:id", ({ params }) => pm2Service.describeProcess(params.id), getRouteMeta("describe"))
-  .post("/start", ({ body }) => pm2Service.startProcess(body as StartOptions), getRouteMeta("start"))
-  .post("/stop/:id", ({ params }) => pm2Service.stopProcess(params.id), getRouteMeta("stop"))
-  .post("/restart/:id", ({ params }) => pm2Service.restartProcess(params.id), getRouteMeta("restart"))
-  .post("/reload/:id", ({ params }) => pm2Service.reloadProcess(params.id), getRouteMeta("reload"))
-  .delete("/delete/:id", ({ params, query }) => pm2Service.deleteProcess(params.id, query.delete_logs ?? false), getRouteMeta("delete"))
-  .post("/flush/:id?", ({ params }) => pm2Service.flushLogs(params.id), getRouteMeta("flush"))
-  .get("/logs/:id", ({ params, query }) => pm2Service.getLogs(params.id, query.tail, query.type), getRouteMeta("logs"));
+  .get("/list", ({ query }) => processController.listProcesses(query.logs), getRouteMeta("list"))
+  .get("/health", () => systemController.healthCheck(), getSystemRouteMeta("health"))
+  .get("/system", () => systemController.getSystemOverview(), getSystemRouteMeta("overview"))
+  .get("/describe/:id", ({ params }) => processController.describeProcess(params.id), getRouteMeta("describe"))
+  .post("/start", ({ body }) => processController.startProcess(body as StartOptions), getRouteMeta("start"))
+  .post("/stop/:id", ({ params }) => processController.stopProcess(params.id), getRouteMeta("stop"))
+  .post("/restart/:id", ({ params }) => processController.restartProcess(params.id), getRouteMeta("restart"))
+  .post("/reload/:id", ({ params }) => processController.reloadProcess(params.id), getRouteMeta("reload"))
+  .delete("/delete/:id", ({ params, query }) => processController.deleteProcess(params.id, query.delete_logs ?? false), getRouteMeta("delete"))
+  .post("/flush/:id?", ({ params }) => processController.flushLogs(params.id), getRouteMeta("flush"))
+  .get("/logs/:id", ({ params, query }) => processController.getLogs(params.id, query.tail, query.type), getRouteMeta("logs"));
 
 export const createApp = () =>
   new Elysia()
