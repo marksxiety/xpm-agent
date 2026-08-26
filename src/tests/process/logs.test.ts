@@ -30,7 +30,7 @@ mock.module("pm2", () => ({
   },
 }));
 
-const { pm2Service } = await import("../../services/pm2.service");
+const { processController } = await import("../../controller/process.controller");
 const { createApp } = await import("../../index");
 
 function resetState() {
@@ -73,7 +73,7 @@ describe("pm2 logs service", () => {
     await fs.writeFile(OUT_LOG, buildContent(5), "utf8");
     await fs.writeFile(ERROR_LOG, buildContent(4), "utf8");
 
-    const response = await pm2Service.getLogs(3, 2);
+    const response = await processController.getLogs(3, 2);
 
     expect(response.success).toBe(true);
     expect(response.message).toBe("PM2 process logs retrieved successfully");
@@ -85,7 +85,7 @@ describe("pm2 logs service", () => {
     await fs.writeFile(OUT_LOG, buildContent(5), "utf8");
     await fs.writeFile(ERROR_LOG, buildContent(4), "utf8");
 
-    const response = await pm2Service.getLogs(3, 2, "output");
+    const response = await processController.getLogs(3, 2, "output");
 
     expect(response.success).toBe(true);
     expect((response.info as ProcessLogs).out).toEqual(["log-line-4", "log-line-5"]);
@@ -96,7 +96,7 @@ describe("pm2 logs service", () => {
     await fs.writeFile(OUT_LOG, buildContent(5), "utf8");
     await fs.writeFile(ERROR_LOG, buildContent(4), "utf8");
 
-    const response = await pm2Service.getLogs(3, 2, "error");
+    const response = await processController.getLogs(3, 2, "error");
 
     expect(response.success).toBe(true);
     expect((response.info as ProcessLogs).out).toBeUndefined();
@@ -106,7 +106,7 @@ describe("pm2 logs service", () => {
   test("returns DEFAULT_TAIL_LINES when tail is omitted", async () => {
     await fs.writeFile(OUT_LOG, buildContent(DEFAULT_TAIL_LINES + 10), "utf8");
 
-    const response = await pm2Service.getLogs(3);
+    const response = await processController.getLogs(3);
 
     expect(response.success).toBe(true);
     expect((response.info as ProcessLogs).out).toHaveLength(DEFAULT_TAIL_LINES);
@@ -116,7 +116,7 @@ describe("pm2 logs service", () => {
   test("caps the tail at MAX_TAIL_LINES", async () => {
     await fs.writeFile(OUT_LOG, buildContent(MAX_TAIL_LINES + 100), "utf8");
 
-    const response = await pm2Service.getLogs(3, MAX_TAIL_LINES + 100);
+    const response = await processController.getLogs(3, MAX_TAIL_LINES + 100);
 
     expect(response.success).toBe(true);
     expect((response.info as ProcessLogs).out).toHaveLength(MAX_TAIL_LINES);
@@ -125,7 +125,7 @@ describe("pm2 logs service", () => {
   test("returns an empty array when a log file does not exist", async () => {
     await fs.writeFile(ERROR_LOG, buildContent(4), "utf8");
 
-    const response = await pm2Service.getLogs(3, 5);
+    const response = await processController.getLogs(3, 5);
 
     expect(response.success).toBe(true);
     expect((response.info as ProcessLogs).out).toEqual([]);
@@ -135,7 +135,7 @@ describe("pm2 logs service", () => {
   test("returns empty streams when the process has no log paths", async () => {
     state.described = [{ pm_id: 3, name: "my-app" }] as ProcessDescription[];
 
-    const response = await pm2Service.getLogs(3, 5);
+    const response = await processController.getLogs(3, 5);
 
     expect(response.success).toBe(true);
     expect((response.info as ProcessLogs).out).toEqual([]);
@@ -145,7 +145,7 @@ describe("pm2 logs service", () => {
   test("returns 404 when the process does not exist", async () => {
     state.described = [];
 
-    const response = await pm2Service.getLogs(99);
+    const response = await processController.getLogs(99);
 
     expect(response.success).toBe(false);
     expect(response.status).toBe(404);
@@ -156,7 +156,7 @@ describe("pm2 logs service", () => {
   test("returns 503 when the PM2 daemon is unreachable", async () => {
     state.connectError = new Error("connect ECONNREFUSED 127.0.0.1:4444");
 
-    const response = await pm2Service.getLogs(3);
+    const response = await processController.getLogs(3);
 
     expect(response.success).toBe(false);
     expect(response.status).toBe(503);
@@ -167,7 +167,7 @@ describe("pm2 logs service", () => {
   test("returns 500 with the raw message on an unexpected describe error", async () => {
     state.describeError = new Error("Unexpected error");
 
-    const response = await pm2Service.getLogs(3);
+    const response = await processController.getLogs(3);
 
     expect(response.success).toBe(false);
     expect(response.status).toBe(500);

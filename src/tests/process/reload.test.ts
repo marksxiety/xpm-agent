@@ -18,7 +18,7 @@ mock.module("pm2", () => ({
     },
 }));
 
-const { pm2Service } = await import("../../services/pm2.service");
+const { processController } = await import("../../controller/process.controller");
 const { createApp } = await import("../../index");
 
 function resetState() {
@@ -39,7 +39,7 @@ describe("pm2 reload service", () => {
         resetState();
         state.reloaded = [{ pm_id: 3, name: "my-app" }];
 
-        const response = await pm2Service.reloadProcess(3);
+        const response = await processController.reloadProcess(3);
 
         expect(response.success).toBe(true);
         expect(response.message).toBe("PM2 process reloaded successfully");
@@ -51,7 +51,7 @@ describe("pm2 reload service", () => {
         resetState();
         state.reloadError = new Error("Process not found");
 
-        const response = await pm2Service.reloadProcess(99);
+        const response = await processController.reloadProcess(99);
 
         expect(response.success).toBe(false);
         expect(response.status).toBe(404);
@@ -63,7 +63,7 @@ describe("pm2 reload service", () => {
         resetState();
         state.connectError = new Error("connect ECONNREFUSED 127.0.0.1:4444");
 
-        const response = await pm2Service.reloadProcess(3);
+        const response = await processController.reloadProcess(3);
 
         expect(response.success).toBe(false);
         expect(response.status).toBe(503);
@@ -75,7 +75,7 @@ describe("pm2 reload service", () => {
         resetState();
         state.reloadError = new Error("Unexpected error");
 
-        const response = await pm2Service.reloadProcess(3);
+        const response = await processController.reloadProcess(3);
 
         expect(response.success).toBe(false);
         expect(response.status).toBe(500);

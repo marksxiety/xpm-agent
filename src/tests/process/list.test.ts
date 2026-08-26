@@ -26,7 +26,7 @@ mock.module("pm2", () => ({
     },
 }));
 
-const { pm2Service } = await import("../../services/pm2.service");
+const { processController } = await import("../../controller/process.controller");
 const { createApp } = await import("../../index");
 
 const TEMP_DIR = path.join(os.tmpdir(), `pm2-list-test-${Date.now()}`);
@@ -42,7 +42,7 @@ describe("p2m list command", () => {
         state.processes = [];
         state.listError = null;
 
-        const response = await pm2Service.listProcesses();
+        const response = await processController.listProcesses();
         expect(response.success).toBe(true);
         expect(response.info).toEqual([]);
     });
@@ -93,7 +93,7 @@ describe("p2m list command", () => {
         ];
         state.listError = null;
 
-        const response = await pm2Service.listProcesses();
+        const response = await processController.listProcesses();
         expect(response.success).toBe(true);
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
         const summaries = response.info?.map(({ ip_address, ...summary }) => summary);
@@ -141,7 +141,7 @@ describe("p2m list command", () => {
         state.processes = undefined as unknown as ProcessDescription[];
         state.listError = null;
 
-        const response = await pm2Service.listProcesses();
+        const response = await processController.listProcesses();
         expect(response.success).toBe(true);
         expect(response.info).toEqual([]);
     });
@@ -150,7 +150,7 @@ describe("p2m list command", () => {
         state.processes = [];
         state.listError = new Error("PM2 daemon not running");
 
-        const response = await pm2Service.listProcesses();
+        const response = await processController.listProcesses();
         expect(response.success).toBe(false);
         expect(response.status).toBe(503);
         expect(response.code).toBe("PM2_DAEMON_UNAVAILABLE");
@@ -161,7 +161,7 @@ describe("p2m list command", () => {
         state.processes = [];
         state.listError = new Error("Unexpected error");
 
-        const response = await pm2Service.listProcesses();
+        const response = await processController.listProcesses();
         expect(response.success).toBe(false);
         expect(response.status).toBe(500);
         expect(response.code).toBe("PM2_OPERATION_FAILED");
@@ -172,7 +172,7 @@ describe("p2m list command", () => {
         state.processes = [];
         state.listError = new Error("Process not found");
 
-        const response = await pm2Service.listProcesses();
+        const response = await processController.listProcesses();
         expect(response.success).toBe(false);
         expect(response.status).toBe(404);
         expect(response.code).toBe("PROCESS_NOT_FOUND");
@@ -182,7 +182,7 @@ describe("p2m list command", () => {
     test("return 400 when returns script not found error", async () => {
         state.processes = [];
         state.listError = new Error("Script not found");
-        const response = await pm2Service.listProcesses();
+        const response = await processController.listProcesses();
         
         expect(response.success).toBe(false);
         expect(response.status).toBe(400);
@@ -216,7 +216,7 @@ describe("pm2 list with logs", () => {
         await fs.writeFile(OUT_LOG, buildContent(5), "utf8");
         await fs.writeFile(ERROR_LOG, buildContent(4), "utf8");
 
-        const response = await pm2Service.listProcesses(2);
+        const response = await processController.listProcesses(2);
 
         expect(response.success).toBe(true);
         expect((response.info as ProcessSummary[])?.[0].logs).toEqual({
@@ -228,7 +228,7 @@ describe("pm2 list with logs", () => {
     test("attaches empty arrays for log files that do not exist", async () => {
         await fs.writeFile(ERROR_LOG, buildContent(4), "utf8");
 
-        const response = await pm2Service.listProcesses(2);
+        const response = await processController.listProcesses(2);
 
         expect(response.success).toBe(true);
         expect((response.info as ProcessSummary[])?.[0].logs).toEqual({
@@ -240,7 +240,7 @@ describe("pm2 list with logs", () => {
     test("does not attach logs when tail is omitted", async () => {
         await fs.writeFile(OUT_LOG, buildContent(5), "utf8");
 
-        const response = await pm2Service.listProcesses();
+        const response = await processController.listProcesses();
 
         expect(response.success).toBe(true);
         expect((response.info as ProcessSummary[])?.[0].logs).toBeUndefined();

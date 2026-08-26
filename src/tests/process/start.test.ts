@@ -26,7 +26,7 @@ mock.module("pm2", () => ({
     },
 }));
 
-const { pm2Service } = await import("../../services/pm2.service");
+const { processController } = await import("../../controller/process.controller");
 const { createApp } = await import("../../index");
 
 const VALID_PAYLOAD: StartOptions = {
@@ -67,7 +67,7 @@ describe("pm2 start service", () => {
         resetState();
         state.started = [{ name: "my-app" }];
 
-        await pm2Service.startProcess(VALID_PAYLOAD);
+        await processController.startProcess(VALID_PAYLOAD);
 
         expect(state.startOpts?.time).toBe(true);
     });
@@ -76,7 +76,7 @@ describe("pm2 start service", () => {
         resetState();
         state.started = [{ name: "my-app" }];
 
-        await pm2Service.startProcess({ ...VALID_PAYLOAD, time: false });
+        await processController.startProcess({ ...VALID_PAYLOAD, time: false });
 
         expect(state.startOpts?.time).toBe(true);
     });
@@ -85,7 +85,7 @@ describe("pm2 start service", () => {
         resetState();
         state.started = [{ name: "my-app" }];
 
-        const response = await pm2Service.startProcess(VALID_PAYLOAD);
+        const response = await processController.startProcess(VALID_PAYLOAD);
 
         expect(response.success).toBe(true);
         expect(response.message).toBe("PM2 process started successfully");
@@ -97,7 +97,7 @@ describe("pm2 start service", () => {
         resetState();
         state.startError = new Error("Script not found");
 
-        const response = await pm2Service.startProcess(VALID_PAYLOAD);
+        const response = await processController.startProcess(VALID_PAYLOAD);
 
         expect(response.success).toBe(false);
         expect(response.status).toBe(400);
@@ -108,7 +108,7 @@ describe("pm2 start service", () => {
     test("returns 422 with the issue list when name is empty", async () => {
         resetState();
 
-        const response = await pm2Service.startProcess({ ...VALID_PAYLOAD, name: "" });
+        const response = await processController.startProcess({ ...VALID_PAYLOAD, name: "" });
 
         expect(response.success).toBe(false);
         expect(response.status).toBe(422);
@@ -120,7 +120,7 @@ describe("pm2 start service", () => {
     test("returns 422 with the issue list when script is empty", async () => {
         resetState();
 
-        const response = await pm2Service.startProcess({ ...VALID_PAYLOAD, script: "" });
+        const response = await processController.startProcess({ ...VALID_PAYLOAD, script: "" });
 
         expect(response.success).toBe(false);
         expect(response.status).toBe(422);
@@ -132,7 +132,7 @@ describe("pm2 start service", () => {
     test("returns 422 with the issue list when instances is a string other than 'max'", async () => {
         resetState();
 
-        const response = await pm2Service.startProcess({
+        const response = await processController.startProcess({
             ...VALID_PAYLOAD,
             // @ts-expect-error Testing runtime validation for an invalid type
             instances: "2",
@@ -150,7 +150,7 @@ describe("pm2 start service", () => {
     test("returns 422 with the issue list when instances is zero", async () => {
         resetState();
 
-        const response = await pm2Service.startProcess({ ...VALID_PAYLOAD, instances: 0 });
+        const response = await processController.startProcess({ ...VALID_PAYLOAD, instances: 0 });
 
         expect(response.success).toBe(false);
         expect(response.status).toBe(422);
@@ -164,7 +164,7 @@ describe("pm2 start service", () => {
     test("returns 422 with the issue list when instances exceeds 1 in fork mode", async () => {
         resetState();
 
-        const response = await pm2Service.startProcess({ ...VALID_PAYLOAD, exec_mode: "fork", instances: 2 });
+        const response = await processController.startProcess({ ...VALID_PAYLOAD, exec_mode: "fork", instances: 2 });
 
         expect(response.success).toBe(false);
         expect(response.status).toBe(422);
@@ -180,7 +180,7 @@ describe("pm2 start service", () => {
         state.started = [{ pm_id: 3, name: "my-app" }];
         state.list = [{ pm_id: 3, name: "my-app" }];
 
-        const response = await pm2Service.startProcess(VALID_PAYLOAD);
+        const response = await processController.startProcess(VALID_PAYLOAD);
 
         expect(response.success).toBe(true);
         expect(response.message).toBe("PM2 process started successfully");
@@ -194,7 +194,7 @@ describe("pm2 start service", () => {
         state.started = [{ name: "my-app", pm2_env: { pm_id: 3 } as ProcessDescription["pm2_env"] }];
         state.list = [{ pm_id: 3, name: "my-app" }];
 
-        const response = await pm2Service.startProcess(VALID_PAYLOAD);
+        const response = await processController.startProcess(VALID_PAYLOAD);
 
         expect(response.success).toBe(true);
         expect(response.info as ProcessSummary[]).toHaveLength(1);
@@ -206,7 +206,7 @@ describe("pm2 start service", () => {
         state.started = [{ pm_id: 3, name: "my-app" }];
         state.listError = new Error("PM2 daemon not running");
 
-        const response = await pm2Service.startProcess(VALID_PAYLOAD);
+        const response = await processController.startProcess(VALID_PAYLOAD);
 
         expect(response.success).toBe(false);
         expect(response.status).toBe(503);
@@ -218,7 +218,7 @@ describe("pm2 start service", () => {
         resetState();
         state.connectError = new Error("connect ECONNREFUSED 127.0.0.1:4444");
 
-        const response = await pm2Service.startProcess(VALID_PAYLOAD);
+        const response = await processController.startProcess(VALID_PAYLOAD);
 
         expect(response.success).toBe(false);
         expect(response.status).toBe(503);
@@ -230,7 +230,7 @@ describe("pm2 start service", () => {
         resetState();
         state.startError = new Error("Unexpected error");
 
-        const response = await pm2Service.startProcess(VALID_PAYLOAD);
+        const response = await processController.startProcess(VALID_PAYLOAD);
 
         expect(response.success).toBe(false);
         expect(response.status).toBe(500);

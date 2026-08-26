@@ -16,7 +16,7 @@ mock.module("pm2", () => ({
     },
 }));
 
-const { pm2Service } = await import("../../services/pm2.service");
+const { processController } = await import("../../controller/process.controller");
 const { createApp } = await import("../../index");
 
 function resetState() {
@@ -34,7 +34,7 @@ describe("pm2 flush service", () => {
     test("returns success when flushing a valid id", async () => {
         resetState();
 
-        const response = await pm2Service.flushLogs(3);
+        const response = await processController.flushLogs(3);
 
         expect(response.success).toBe(true);
         expect(response.message).toBe("Logs for process 3 flushed successfully");
@@ -44,7 +44,7 @@ describe("pm2 flush service", () => {
     test("returns 400 when the id is not numeric", async () => {
         resetState();
 
-        const response = await pm2Service.flushLogs("abc");
+        const response = await processController.flushLogs("abc");
 
         expect(response.success).toBe(false);
         expect(response.status).toBe(400);
@@ -55,7 +55,7 @@ describe("pm2 flush service", () => {
     test("returns 400 when the id is omitted", async () => {
         resetState();
 
-        const response = await pm2Service.flushLogs(undefined);
+        const response = await processController.flushLogs(undefined);
 
         expect(response.success).toBe(false);
         expect(response.status).toBe(400);
@@ -67,7 +67,7 @@ describe("pm2 flush service", () => {
         resetState();
         state.connectError = new Error("connect ECONNREFUSED 127.0.0.1:4444");
 
-        const response = await pm2Service.flushLogs(3);
+        const response = await processController.flushLogs(3);
 
         expect(response.success).toBe(false);
         expect(response.status).toBe(503);
@@ -79,7 +79,7 @@ describe("pm2 flush service", () => {
         resetState();
         state.flushError = new Error("Unexpected error");
 
-        const response = await pm2Service.flushLogs(3);
+        const response = await processController.flushLogs(3);
 
         expect(response.success).toBe(false);
         expect(response.status).toBe(500);

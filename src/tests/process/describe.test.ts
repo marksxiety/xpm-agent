@@ -18,7 +18,7 @@ mock.module("pm2", () => ({
     },
 }));
 
-const { pm2Service } = await import("../../services/pm2.service");
+const { processController } = await import("../../controller/process.controller");
 const { createApp } = await import("../../index");
 
 function resetState() {
@@ -39,7 +39,7 @@ describe("pm2 describe service", () => {
         resetState();
         state.described = [{ pm_id: 3, name: "my-app" }];
 
-        const response = await pm2Service.describeProcess(3);
+        const response = await processController.describeProcess(3);
 
         expect(response.success).toBe(true);
         expect(response.message).toBe("PM2 process described successfully");
@@ -50,7 +50,7 @@ describe("pm2 describe service", () => {
     test("returns 404 when PM2 returns no descriptions", async () => {
         resetState();
 
-        const response = await pm2Service.describeProcess(99);
+        const response = await processController.describeProcess(99);
 
         expect(response.success).toBe(false);
         expect(response.status).toBe(404);
@@ -62,7 +62,7 @@ describe("pm2 describe service", () => {
         resetState();
         state.describeError = new Error("Process not found");
 
-        const response = await pm2Service.describeProcess(99);
+        const response = await processController.describeProcess(99);
 
         expect(response.success).toBe(false);
         expect(response.status).toBe(404);
@@ -74,7 +74,7 @@ describe("pm2 describe service", () => {
         resetState();
         state.connectError = new Error("connect ECONNREFUSED 127.0.0.1:4444");
 
-        const response = await pm2Service.describeProcess(3);
+        const response = await processController.describeProcess(3);
 
         expect(response.success).toBe(false);
         expect(response.status).toBe(503);
@@ -86,7 +86,7 @@ describe("pm2 describe service", () => {
         resetState();
         state.describeError = new Error("Unexpected error");
 
-        const response = await pm2Service.describeProcess(3);
+        const response = await processController.describeProcess(3);
 
         expect(response.success).toBe(false);
         expect(response.status).toBe(500);

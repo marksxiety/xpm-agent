@@ -39,7 +39,7 @@ mock.module("pm2", () => ({
     },
 }));
 
-const { pm2Service } = await import("../../services/pm2.service");
+const { processController } = await import("../../controller/process.controller");
 const { createApp } = await import("../../index");
 
 function resetState() {
@@ -68,7 +68,7 @@ describe("pm2 delete service", () => {
         resetState();
         state.deleted = [{ pm_id: 3, name: "my-app" }];
 
-        const response = await pm2Service.deleteProcess(3);
+        const response = await processController.deleteProcess(3);
 
         expect(response.success).toBe(true);
         expect(response.message).toBe("PM2 process deleted successfully");
@@ -88,7 +88,7 @@ describe("pm2 delete service", () => {
         }];
         state.deleted = [{ pm_id: 3, name: "my-app" }];
 
-        const response = await pm2Service.deleteProcess(3, true);
+        const response = await processController.deleteProcess(3, true);
 
         expect(response.success).toBe(true);
         expect(response.message).toBe("PM2 process deleted successfully");
@@ -111,7 +111,7 @@ describe("pm2 delete service", () => {
         const errorSpy = mock<(...args: unknown[]) => void>(() => {});
         console.error = errorSpy;
 
-        const response = await pm2Service.deleteProcess(3, true);
+        const response = await processController.deleteProcess(3, true);
 
         expect(response.success).toBe(true);
         expect(response.message).toBe("PM2 process deleted successfully");
@@ -138,7 +138,7 @@ describe("pm2 delete service", () => {
         const errorSpy = mock<(...args: unknown[]) => void>(() => {});
         console.error = errorSpy;
 
-        const response = await pm2Service.deleteProcess(3, true);
+        const response = await processController.deleteProcess(3, true);
 
         expect(response.success).toBe(true);
         expect(response.message).toBe("PM2 process deleted successfully");
@@ -151,7 +151,7 @@ describe("pm2 delete service", () => {
         resetState();
         state.deleteError = new Error("Process not found");
 
-        const response = await pm2Service.deleteProcess(99);
+        const response = await processController.deleteProcess(99);
 
         expect(response.success).toBe(false);
         expect(response.status).toBe(404);
@@ -163,7 +163,7 @@ describe("pm2 delete service", () => {
         resetState();
         state.connectError = new Error("connect ECONNREFUSED 127.0.0.1:4444");
 
-        const response = await pm2Service.deleteProcess(3);
+        const response = await processController.deleteProcess(3);
 
         expect(response.success).toBe(false);
         expect(response.status).toBe(503);
@@ -175,7 +175,7 @@ describe("pm2 delete service", () => {
         resetState();
         state.deleteError = new Error("Unexpected error");
 
-        const response = await pm2Service.deleteProcess(3);
+        const response = await processController.deleteProcess(3);
 
         expect(response.success).toBe(false);
         expect(response.status).toBe(500);
@@ -187,7 +187,7 @@ describe("pm2 delete service", () => {
         resetState();
         state.describeError = new Error("Unexpected error");
 
-        const response = await pm2Service.deleteProcess(3, true);
+        const response = await processController.deleteProcess(3, true);
 
         expect(response.success).toBe(false);
         expect(response.status).toBe(500);
