@@ -1,5 +1,5 @@
 import os from "node:os";
-import type { ApiResponse, ProcessSummary, SystemOverview } from "../types";
+import type { ApiResponse, SystemOverview, SystemOverviewWithProcesses } from "../types";
 import { respond } from "../utils/response";
 import { getCurrentTimeStamp } from "../utils/datetime";
 import { processController, type ProcessController } from "./process.controller";
@@ -33,14 +33,17 @@ export class SystemController {
     };
   }
 
-  getSystemOverview = async (): Promise<ApiResponse<{ host: SystemOverview; processes: ProcessSummary[] }>> => {
-    const listResponse = await this.processController.listProcesses();
+  getHostOverview = (): ApiResponse<{ host: SystemOverview }> =>
+    respond("System overview retrieved successfully", { host: this.getHostMetrics() });
+
+  getProcessOverview = async (tail?: number): Promise<ApiResponse<SystemOverviewWithProcesses>> => {
+    const listResponse = await this.processController.listProcesses(tail);
     if (!listResponse.success || !listResponse.info) {
-      return listResponse as unknown as ApiResponse<{ host: SystemOverview; processes: ProcessSummary[] }>;
+      return listResponse as unknown as ApiResponse<SystemOverviewWithProcesses>;
     }
 
-    return respond("System overview retrieved successfully", {
-      host: this.getHostMetrics(),
+    return respond("PM2 process list retrieved successfully", {
+      overview: this.getHostMetrics(),
       processes: listResponse.info,
     });
   };
