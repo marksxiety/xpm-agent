@@ -1,4 +1,5 @@
 import { DeleteLogsQuery, FlushParams, ListQuery, LogsParams, LogsQuery, ProcessIdParams, StartPayload } from "../schemas/process";
+import { ProcessListResponse, ProcessOverviewResponse } from "./schemas";
 
 const routeMeta = {
   list: {
@@ -6,9 +7,88 @@ const routeMeta = {
     detail: {
       summary: "List all PM2 processes",
       description:
-        "Returns all PM2-managed processes with live CPU, memory, restart counts, and status. Use this first to discover the `pm_id` values required by other routes.\n\nPass `?logs=N` to also attach the trailing N lines of each process's `out` and `error` log files as a `logs` field on every item (default 50 lines per stream, max 500). Omit it for a lightweight list without logs.",
+        "Returns all PM2-managed processes with live CPU, memory, restart counts, and status. Use this first to discover the `pm_id` values required by other routes.\n\nPass `?logs=N` to also attach the trailing N lines of each process's `out` and `error` log files as a `logs` field on every item (default 50 lines per stream, max 500). Omit it for a lightweight list without logs.\n\nPass `?overview=true` to return an object with two keys: `overview` (host-level metrics: CPU cores, model, load average, memory) and `processes` (the same process summaries). The `logs` param, if provided, still applies to each process summary.",
       tags: ["Processes"],
       operationId: "listProcesses",
+      responses: {
+        200: {
+          description: "`ProcessSummary[]` by default; an object with `overview` and `processes` keys when `?overview=true`.",
+          content: {
+            "application/json": {
+              schema: { oneOf: [ProcessListResponse, ProcessOverviewResponse] },
+              examples: {
+                list: {
+                  summary: "Plain process list (GET /pm2/list)",
+                  value: {
+                    success: true,
+                    message: "PM2 process list retrieved successfully",
+                    info: [{
+                      pid: 30628,
+                      pm_id: 0,
+                      name: "example-app",
+                      namespace: "example",
+                      status: "online",
+                      uptime: 1786687862669,
+                      restarts: 3,
+                      unstable_restarts: 0,
+                      exec_mode: "fork_mode",
+                      instances: 1,
+                      interpreter: "C:\\Program Files\\nodejs\\node.exe",
+                      cpu: 1.5,
+                      memory: 9420800,
+                      cwd: "C:\\Example\\Application",
+                      ip_address: "192.168.1.10",
+                      watch: false,
+                      autorestart: true,
+                    }],
+                  },
+                },
+                overview: {
+                  summary: "With overview=true (GET /pm2/list?overview=true)",
+                  value: {
+                    success: true,
+                    message: "PM2 process list retrieved successfully",
+                    info: {
+                      overview: {
+                        cpu: {
+                          cores: 8,
+                          model: "Intel(R) Core(TM) i7-9700 CPU @ 3.00GHz",
+                          loadAvg: [0.42, 0.35, 0.29],
+                        },
+                        memory: {
+                          totalBytes: 17179869184,
+                          freeBytes: 6012954214,
+                          usedBytes: 11166914970,
+                          percentUsed: 65,
+                        },
+                      },
+                      processes: [{
+                        pid: 30628,
+                        pm_id: 0,
+                        name: "example-app",
+                        namespace: "example",
+                        status: "online",
+                        uptime: 1786687862669,
+                        restarts: 3,
+                        unstable_restarts: 0,
+                        exec_mode: "fork_mode",
+                        instances: 1,
+                        interpreter: "C:\\Program Files\\nodejs\\node.exe",
+                        cpu: 1.5,
+                        memory: 9420800,
+                        cwd: "C:\\Example\\Application",
+                        ip_address: "192.168.1.10",
+                        watch: false,
+                        autorestart: true,
+                      }],
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
     },
   },
   describe: {
