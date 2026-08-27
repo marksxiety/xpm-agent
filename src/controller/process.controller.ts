@@ -1,14 +1,17 @@
 import { promises as fs } from "node:fs";
+import os from "node:os";
 import pm2 from "pm2";
 import type { ProcessDescription, StartOptions } from "pm2";
-import type { ApiResponse, ProcessSummary, ProcessLogs, LogStreamType } from "../types";
+import type { ApiResponse, ProcessSummary, ProcessLogs, LogStreamType, SystemOverviewWithProcesses } from "../types";
 import { respond } from "../utils/response";
 import { classifyPm2Error } from "../utils/errors";
 import { summarizeProcess, toProcessDescriptions } from "../utils/process";
 import { resolveLogFiles, tailLines } from "../utils/log";
 import { inspect } from "../utils/inspect";
 import { StartIssue } from "../types/inspect";
+import { getHostMetrics, type OsModule } from "../utils/system";
 export class ProcessController {
+  constructor(private osModule: OsModule = os) {}
   private withPM2<T>(
     operation: (callback: (operationError: Error | null, result?: T) => void) => void,
   ): Promise<T> {
@@ -53,28 +56,37 @@ export class ProcessController {
     }
   }
 
-  listProcesses = async (tail?: number): Promise<ApiResponse<ProcessSummary[]>> => {
+  listProcesses(tail?: number): Promise<ApiResponse<ProcessSummary[]>>;
+  listProcesses(tail: number | undefined, includeOverview: true): Promise<ApiResponse<SystemOverviewWithProcesses>>;
+  listProcesses(tail?: number, includeOverview?: boolean): Promise<ApiResponse<ProcessSummary[] | SystemOverviewWithProcesses>>;
+  async listProcesses(tail?: number, includeOverview = false): Promise<ApiResponse<ProcessSummary[] | SystemOverviewWithProcesses>> {
     try {
       const processDescriptions = await this.withPM2<ProcessDescription[]>((callback) =>
         pm2.list((listError, list) => callback(listError, list ?? [])),
       );
       const processSummaries = processDescriptions.map(summarizeProcess);
-      if (tail === undefined) return respond("PM2 process list retrieved successfully", processSummaries);
-      const summariesWithLogs = await Promise.all(
-        processSummaries.map(async (summary, index) => {
-          const processEnvironment = processDescriptions[index].pm2_env;
-          const [out, error] = await Promise.all([
-            this.readLogFile(processEnvironment?.pm_out_log_path, tail),
-            this.readLogFile(processEnvironment?.pm_err_log_path, tail),
-          ]);
-          return { ...summary, logs: { out, error } };
-        }),
-      );
-      return respond("PM2 process list retrieved successfully", summariesWithLogs);
+      let info: ProcessSummary[] | SystemOverviewWithProcesses = processSummaries;
+      if (tail !== undefined) {
+        const summariesWithLogs = await Promise.all(
+          processSummaries.map(async (summary, index) => {
+            const processEnvironment = processDescriptions[index].pm2_env;
+            const [out, error] = await Promise.all([
+              this.readLogFile(processEnvironment?.pm_out_log_path, tail),
+              this.readLogFile(processEnvironment?.pm_err_log_path, tail),
+            ]);
+            return { ...summary, logs: { out, error } };
+          }),
+        );
+        info = summariesWithLogs;
+      }
+      if (includeOverview) {
+        info = { overview: getHostMetrics(this.osModule), processes: info as ProcessSummary[] };
+      }
+      return respond("PM2 process list retrieved successfully", info);
     } catch (error) {
       return this.handleError(error);
     }
-  };
+  }
 
   describeProcess = async (processId: number): Promise<ApiResponse<ProcessSummary[]>> => {
     try {
