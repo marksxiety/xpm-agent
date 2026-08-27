@@ -20,11 +20,7 @@ export const pm2Routes = new Elysia({ prefix: "/pm2" })
     }
   })
   .onError(({ code, error }) => formatElysiaErrorResponse(code, error))
-  .get("/list", ({ query }) =>
-    query.overview
-      ? systemController.getProcessOverview(query.logs)
-      : processController.listProcesses(query.logs),
-    getRouteMeta("list"))
+  .get("/list", ({ query }) => processController.listProcesses(query.logs, query.overview), getRouteMeta("list"))
   .get("/health", () => systemController.healthCheck(), getSystemRouteMeta("health"))
   .get("/system", () => systemController.getHostOverview(), getSystemRouteMeta("overview"))
   .get("/describe/:id", ({ params }) => processController.describeProcess(params.id), getRouteMeta("describe"))
