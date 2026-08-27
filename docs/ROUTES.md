@@ -34,9 +34,16 @@ Every response — success or error — uses the same shape:
 
 Returns all PM2-managed processes with live CPU, memory, restart counts, and status. Use this first to discover the `pm_id` values required by other routes.
 
-**Request:** optional query `?logs=N` (integer 1–500) — when present, attaches `logs: { out, error }` to each process summary with the trailing N lines of each stream (default 50, max 500). Omit for a lightweight list without logs.
+**Query params:**
 
-**Response `200`:**
+| Param | Type | Required | Description |
+|---|---|---|---|
+| `logs` | integer | no | When present, attaches `logs: { out, error }` to each process summary with the trailing N lines of each stream (1–500, default 50). Omit for a lightweight list without logs. |
+| `overview` | boolean | no | When `true`, returns an object with two keys: `overview` (host-level metrics: CPU cores, model, load average, memory) and `processes` (the process summaries). The `logs` param, if provided, still applies to each process summary. |
+
+**Request:** `GET /pm2/list`, `GET /pm2/list?logs=5`, or `GET /pm2/list?logs=5&overview=true`
+
+**Response `200`** (plain list — `info` is an array):
 
 ```json
 {
@@ -63,6 +70,83 @@ Returns all PM2-managed processes with live CPU, memory, restart counts, and sta
       "autorestart": true
     }
   ]
+}
+```
+
+**Response `200`** (`?overview=true` — `info` is an object with `overview` and `processes` keys; each process summary may carry a `logs` key when `?logs=N` is also passed):
+
+```json
+{
+  "success": true,
+  "message": "PM2 process list retrieved successfully",
+  "info": {
+    "overview": {
+      "cpu": {
+        "cores": 8,
+        "model": "Intel(R) Core(TM) i7-9700 CPU @ 3.00GHz",
+        "loadAvg": [0.42, 0.35, 0.29]
+      },
+      "memory": {
+        "totalBytes": 17179869184,
+        "freeBytes": 6012954214,
+        "usedBytes": 11166914970,
+        "percentUsed": 65
+      }
+    },
+    "processes": [
+      {
+        "pid": 30628,
+        "pm_id": 0,
+        "name": "example-app",
+        "namespace": "example",
+        "status": "online",
+        "uptime": 1786687862669,
+        "restarts": 3,
+        "unstable_restarts": 0,
+        "exec_mode": "fork_mode",
+        "instances": 1,
+        "interpreter": "C:\\Program Files\\nodejs\\node.exe",
+        "cpu": 1.5,
+        "memory": 9420800,
+        "cwd": "C:\\Example\\Application",
+        "ip_address": "192.168.1.10",
+        "watch": false,
+        "autorestart": true
+      }
+    ]
+  }
+}
+```
+
+---
+
+### GET /system
+
+Host-level metrics only (CPU cores, model, load average, memory usage). Does **not** include the process list — use `GET /list?overview=true` for a combined host + processes view. Works even when the PM2 daemon is unavailable.
+
+**Request:** no params, no body
+
+**Response `200`:**
+
+```json
+{
+  "success": true,
+  "message": "System overview retrieved successfully",
+  "info": {
+    "host": {
+      "cpu": {
+        "cores": 8,
+        "model": "Intel(R) Core(TM) i7-9700 CPU @ 3.00GHz",
+        "loadAvg": [0.42, 0.35, 0.29]
+      },
+      "memory": {
+        "totalBytes": 17179869184,
+        "freeBytes": 6012954214,
+        "usedBytes": 11166914970,
+        "percentUsed": 65
+      }
+    }
+  }
 }
 ```
 
