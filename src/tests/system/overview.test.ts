@@ -25,7 +25,7 @@ const mockOs = {
     loadavg: () => [1.5, 1.25, 1.0],
 };
 
-const { processController } = await import("../../controller/process.controller");
+const { ProcessController } = await import("../../controller/process.controller");
 const { SystemController } = await import("../../controller/system.controller");
 const { createApp } = await import("../../index");
 
@@ -38,7 +38,7 @@ function resetState() {
 describe("system host overview controller", () => {
     test("returns host metrics only", async () => {
         resetState();
-        const controller = new SystemController(processController, mockOs);
+        const controller = new SystemController(mockOs);
 
         const response = await controller.getHostOverview();
 
@@ -55,13 +55,13 @@ describe("system host overview controller", () => {
     });
 });
 
-describe("process overview controller", () => {
+describe("process list with overview", () => {
     test("returns host metrics and process summaries", async () => {
         resetState();
         state.listed = [{ pm_id: 3, name: "my-app", pm2_env: {} }];
-        const controller = new SystemController(processController, mockOs);
+        const controller = new ProcessController(mockOs);
 
-        const response = await controller.getProcessOverview();
+        const response = await controller.listProcesses(undefined, true);
 
         expect(response.success).toBe(true);
         expect(response.info?.overview.cpu.cores).toBe(1);
@@ -78,9 +78,9 @@ describe("process overview controller", () => {
     test("propagates the process list failure", async () => {
         resetState();
         state.listError = new Error("Process or namespace not found");
-        const controller = new SystemController(processController, mockOs);
+        const controller = new ProcessController(mockOs);
 
-        const response = await controller.getProcessOverview();
+        const response = await controller.listProcesses(undefined, true);
 
         expect(response.success).toBe(false);
         expect(response.status).toBe(404);
