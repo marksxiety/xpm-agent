@@ -35,13 +35,12 @@ function resetState() {
     state.connectError = null;
 }
 
-describe("system overview controller", () => {
-    test("returns host metrics and process summaries", async () => {
+describe("system host overview controller", () => {
+    test("returns host metrics only", async () => {
         resetState();
-        state.listed = [{ pm_id: 3, name: "my-app", pm2_env: {} }];
         const controller = new SystemController(processController, mockOs);
 
-        const response = await controller.getSystemOverview();
+        const response = await controller.getHostOverview();
 
         expect(response.success).toBe(true);
         expect(response.message).toBe("System overview retrieved successfully");
@@ -52,6 +51,26 @@ describe("system overview controller", () => {
         expect(response.info?.host.memory.freeBytes).toBe(400);
         expect(response.info?.host.memory.usedBytes).toBe(600);
         expect(response.info?.host.memory.percentUsed).toBe(60);
+        expect("processes" in (response.info as Record<string, unknown>)).toBe(false);
+    });
+});
+
+describe("process overview controller", () => {
+    test("returns host metrics and process summaries", async () => {
+        resetState();
+        state.listed = [{ pm_id: 3, name: "my-app", pm2_env: {} }];
+        const controller = new SystemController(processController, mockOs);
+
+        const response = await controller.getProcessOverview();
+
+        expect(response.success).toBe(true);
+        expect(response.info?.overview.cpu.cores).toBe(1);
+        expect(response.info?.overview.cpu.model).toBe("Test CPU");
+        expect(response.info?.overview.cpu.loadAvg).toEqual([1.5, 1.25, 1.0]);
+        expect(response.info?.overview.memory.totalBytes).toBe(1000);
+        expect(response.info?.overview.memory.freeBytes).toBe(400);
+        expect(response.info?.overview.memory.usedBytes).toBe(600);
+        expect(response.info?.overview.memory.percentUsed).toBe(60);
         expect(response.info?.processes).toHaveLength(1);
         expect(response.info?.processes[0].name).toBe("my-app");
     });
@@ -61,7 +80,7 @@ describe("system overview controller", () => {
         state.listError = new Error("Process or namespace not found");
         const controller = new SystemController(processController, mockOs);
 
-        const response = await controller.getSystemOverview();
+        const response = await controller.getProcessOverview();
 
         expect(response.success).toBe(false);
         expect(response.status).toBe(404);
@@ -70,17 +89,47 @@ describe("system overview controller", () => {
 });
 
 describe("system overview route", () => {
-    test("returns 200 with host and processes", async () => {
+    test("GET /system returns 200 with host metrics only", async () => {
         resetState();
         state.listed = [{ pm_id: 3, name: "my-app", pm2_env: {} }];
 
         const response = await createApp().handle(new Request("http://localhost/pm2/system", { method: "GET" }));
-        const body = (await response.json()) as ApiResponse & { info: { host: { cpu: { cores: number } }; processes: Array<{ name: string }> } };
+        const body = (await response.json()) as ApiResponse & { info: { host: { cpu: { cores: number } } } };
 
         expect(response.status).toBe(200);
         expect(body.success).toBe(true);
         expect(typeof body.info?.host.cpu.cores).toBe("number");
+        expect("processes" in (body.info as Record<string, unknown>)).toBe(false);
+    });
+
+    test("GET /list?overview=true returns 200 with overview and processes", async () => {
+        resetState();
+        state.listed = [{ pm_id: 3, name: "my-app", pm2_env: {} }];
+
+        const response = await createApp().handle(
+            new Request("http://localhost/pm2/list?overview=true", { method: "GET" }),
+        );
+        const body = (await response.json()) as ApiResponse & {
+            info: { overview: { cpu: { cores: number } }; processes: Array<{ name: string }> };
+        };
+
+        expect(response.status).toBe(200);
+        expect(body.success).toBe(true);
+        expect(typeof body.info?.overview.cpu.cores).toBe("number");
         expect(body.info?.processes).toHaveLength(1);
         expect(body.info?.processes[0].name).toBe("my-app");
+    });
+
+    test("GET /list without overview returns the plain process array", async () => {
+        resetState();
+        state.listed = [{ pm_id: 3, name: "my-app", pm2_env: {} }];
+
+        const response = await createApp().handle(new Request("http://localhost/pm2/list", { method: "GET" }));
+        const body = (await response.json()) as ApiResponse & { info: Array<{ name: string }> };
+
+        expect(response.status).toBe(200);
+        expect(Array.isArray(body.info)).toBe(true);
+        expect(body.info).toHaveLength(1);
+        expect(body.info[0].name).toBe("my-app");
     });
 });
