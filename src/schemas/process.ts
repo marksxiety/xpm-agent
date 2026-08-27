@@ -29,6 +29,11 @@ export const ListQuery = t.Object({
     maximum: 500,
     examples: [10],
   })),
+  overview: t.Optional(t.Boolean({
+    description:
+      "When `true`, returns an `overview` object with host-level metrics (CPU cores, model, load average, memory) alongside the `processes` array. The `logs` param (if provided) still applies to each process summary.",
+    examples: [true],
+  })),
 });
 
 export const DeleteLogsQuery = t.Object({
