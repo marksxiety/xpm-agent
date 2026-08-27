@@ -50,3 +50,8 @@ export interface SystemOverview {
         percentUsed: number;
     }
 }
+
+export interface SystemOverviewWithProcesses {
+    overview: SystemOverview;
+    processes: ProcessSummary[];
+}
