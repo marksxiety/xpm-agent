@@ -12,8 +12,10 @@ import { StartIssue } from "../types/inspect";
 import { getHostMetrics, type OsModule } from "../utils/system";
 export class ProcessController {
   constructor(private osModule: OsModule = os) {}
+  
   private withPM2<T>(
     operation: (callback: (operationError: Error | null, result?: T) => void) => void,
+    autoSave = false,
   ): Promise<T> {
     return new Promise((resolve, reject) => {
       pm2.connect((connectionError) => {
@@ -27,9 +29,26 @@ export class ProcessController {
         const settle = (operationError: Error | null, result?: T) => {
           if (alreadySettled) return;
           alreadySettled = true;
-          pm2.disconnect();
-          if (operationError) reject(operationError);
-          else resolve(result as T);
+
+          const finish = (finalError: Error | null) => {
+            pm2.disconnect();
+            if (finalError) reject(finalError);
+            else resolve(result as T);
+          };
+
+          // If the main command succeeded and autoSave is requested, dump before disconnecting
+          // autosave is saving the current snapshot of the services that was running
+          // from memory to persisted (even if the server restarts, it will be saved)
+          if (!operationError && autoSave) {
+            pm2.dump((dumpError) => {
+              if (dumpError) {
+                console.error("Failed to auto-save PM2 process list:", dumpError);
+              }
+              finish(operationError);
+            });
+          } else {
+            finish(operationError);
+          }
         };
 
         try {
@@ -119,10 +138,12 @@ export class ProcessController {
 
     try {
       const logOptions = resolveLogFiles({ name: payload.name || payload.script, namespace: payload.namespace });
+
       const launchedProcesses = await this.withPM2<ProcessDescription[]>((callback) =>
         pm2.start({ ...payload, ...logOptions, time: true }, (startError, processes) =>
           callback(startError, toProcessDescriptions(processes)),
         ),
+        true // auto-save when starting a process
       );
       const launchedProcessIds = launchedProcesses
         .map((process) => process.pm_id ?? (process.pm2_env as { pm_id?: number } | undefined)?.pm_id)
@@ -197,6 +218,7 @@ export class ProcessController {
         pm2.delete(processId, (deleteError, processes) =>
           callback(deleteError, toProcessDescriptions(processes)),
         ),
+        true // auto-save when deleting a process
       );
       if (logFilePaths.length > 0) {
         await Promise.all(
