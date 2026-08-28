@@ -1,7 +1,7 @@
 module.exports = {
     apps: [{
-        name: "api-agent",
-        namespace: 'xpm',
+        name: "xpm-api",
+        namespace: 'XPM',
         cwd: __dirname,
         script: "bun",
         args: "src/index.ts",
