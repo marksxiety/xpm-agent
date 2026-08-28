@@ -24,6 +24,7 @@ const state = {
     describeError: null as Error | null,
     deleteError: null as Error | null,
     connectError: null as Error | null,
+    dumpCalls: 0,
 };
 
 mock.module("pm2", () => ({
@@ -35,6 +36,10 @@ mock.module("pm2", () => ({
         },
         delete(_id: number, cb: (err?: Error | null, procs?: ProcessDescription[]) => void) {
             cb(state.deleteError, state.deleted);
+        },
+        dump(cb: (err?: Error | null) => void) {
+            state.dumpCalls += 1;
+            cb(null);
         },
     },
 }));
@@ -50,6 +55,7 @@ function resetState() {
     state.connectError = null;
     fsState.unlinkCalls = [];
     fsState.unlinkError = null;
+    state.dumpCalls = 0;
 }
 
 async function requestDelete(processId: number | string, deleteLogs = false): Promise<{ status: number; body: ApiResponse }> {
@@ -74,6 +80,15 @@ describe("pm2 delete service", () => {
         expect(response.message).toBe("PM2 process deleted successfully");
         expect(response.info).toHaveLength(1);
         expect((response.info as ProcessSummary[])?.[0].name).toBe("my-app");
+    });
+
+    test("auto-saves (dump) the process list after a successful delete", async () => {
+        resetState();
+        state.deleted = [{ pm_id: 3, name: "my-app" }];
+
+        await processController.deleteProcess(3);
+
+        expect(state.dumpCalls).toBe(1);
     });
 
     test("returns success when delete_logs is true even if log file removal fails", async () => {

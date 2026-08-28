@@ -10,6 +10,7 @@ const state = {
     listError: null as Error | null,
     connectError: null as Error | null,
     startOpts: null as StartOptions | null,
+    dumpCalls: 0,
 };
 
 mock.module("pm2", () => ({
@@ -22,6 +23,10 @@ mock.module("pm2", () => ({
         },
         list(cb: (err?: Error | null, list?: ProcessDescription[]) => void) {
             cb(state.listError, state.list);
+        },
+        dump(cb: (err?: Error | null) => void) {
+            state.dumpCalls += 1;
+            cb(null);
         },
     },
 }));
@@ -49,6 +54,7 @@ function resetState() {
     state.listError = null;
     state.connectError = null;
     state.startOpts = null;
+    state.dumpCalls = 0;
 }
 
 async function postStart(payload: object): Promise<{ status: number; body: ApiResponse }> {
@@ -70,6 +76,15 @@ describe("pm2 start service", () => {
         await processController.startProcess(VALID_PAYLOAD);
 
         expect(state.startOpts?.time).toBe(true);
+    });
+
+    test("auto-saves (dump) the process list after a successful start", async () => {
+        resetState();
+        state.started = [{ name: "my-app" }];
+
+        await processController.startProcess(VALID_PAYLOAD);
+
+        expect(state.dumpCalls).toBe(1);
     });
 
     test("forces time: true even when the payload sets time: false", async () => {
