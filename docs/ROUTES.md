@@ -4,6 +4,8 @@ Base URL: `http://localhost:4000/pm2` (override port via `SERVER_PORT` env)
 
 Interactive docs: [Swagger UI](http://localhost:4000/swagger)
 
+> **Authentication:** when the `AUTH_TOKEN` env var is set, every request must include `Authorization: Bearer <AUTH_TOKEN>`. Missing or invalid tokens are rejected with `401` (`UNAUTHORIZED`). When `AUTH_TOKEN` is empty/omitted, auth is disabled.
+
 ---
 
 ## Response Envelope
@@ -522,7 +524,7 @@ Zero-downtime reload — restarts instances one at a time. Only meaningful for *
 
 Stops the process **and removes it from PM2's registry entirely**. The `pm_id` is freed and may be recycled by PM2 for future processes. Unlike stop, this cannot be undone via restart.
 
-By default the process's log files (`-out.log` / `-error.log` in `~/.pm2/logs/`) are **left on disk** — PM2 never removes them. Pass `delete_logs: true` to also delete them.
+By default the process's log files (`-out.log` / `-error.log` in `~/.pm2/logs/`) are **left on disk** — PM2 never removes them. Pass `?delete_logs=true` to also delete them.
 
 **Path params:**
 
@@ -530,13 +532,13 @@ By default the process's log files (`-out.log` / `-error.log` in `~/.pm2/logs/`)
 |---|---|---|---|
 | `id` | number | yes | `pm_id` of the process (from `GET /list`) |
 
-**Body (optional):**
+**Query params:**
 
-| Field | Type | Required | Description |
+| Param | Type | Required | Description |
 |---|---|---|---|
 | `delete_logs` | boolean | no | When `true`, also deletes the process's `-out.log`/`-error.log` files from `~/.pm2/logs/`. Default `false`. |
 
-**Request:** `DELETE /pm2/delete/0` (keep logs) or `DELETE /pm2/delete/0` with body `{ "delete_logs": true }` (also remove log files)
+**Request:** `DELETE /pm2/delete/0` (keep logs) or `DELETE /pm2/delete/0?delete_logs=true` (also remove log files)
 
 **Response `200`** — `info` is an array of `ProcessSummary`:
 
@@ -570,24 +572,24 @@ By default the process's log files (`-out.log` / `-error.log` in `~/.pm2/logs/`)
 
 ---
 
-### POST /flush/:id?
+### POST /flush/:id
 
-Clears (empties) the log files for one process, or for **all** processes if the id is omitted. Does not affect running state.
+Clears (empties) the log files for one process. Does not affect running state.
 
 **Path params:**
 
 | Param | Type | Required | Description |
 |---|---|---|---|
-| `id` | number | no | `pm_id` of the process; omit to flush **all** processes |
+| `id` | number | yes | `pm_id` of the process (from `GET /list`) |
 
-**Request:** `POST /pm2/flush/0` (flush one) or `POST /pm2/flush` (flush all)
+**Request:** `POST /pm2/flush/0`
 
 **Response `200`:**
 
 ```json
 {
   "success": true,
-  "message": "PM2 logs flushed successfully",
+  "message": "Logs for process 0 flushed successfully",
   "info": null
 }
 ```
@@ -672,7 +674,8 @@ The `info` payload for `/list`, `/describe/:id`, `/start`, `/stop/:id`, `/restar
 ## Error Statuses
 
 | Status | When |
-|---|---|---|
+|---|---|
+| 401 | Missing or invalid `Authorization: Bearer <token>` header when `AUTH_TOKEN` is configured |
 | 422 | Schema validation failed (non-numeric `id`, missing `name`/`script` in body) **or** a `/start` configuration-guide violation (e.g. `.js` script with `php` interpreter) **or** invalid `tail`/`type` query on `/logs` |
 | 404 | Process with the given `pm_id` not found |
 | 403 | Origin not in `CORS_ORIGIN` allowlist (`CORS_ORIGIN_NOT_ALLOWED`) — browsers sending an `Origin` header without a configured allowlist are rejected |
