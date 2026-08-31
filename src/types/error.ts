@@ -6,6 +6,7 @@ export type ErrorCode =
   | "INVALID_PROCESS_ID"
   | "INVALID_PROCESS_CONFIGURATION"
   | "VALIDATION_FAILED"
+  | "UNAUTHORIZED"
   | "NOT_FOUND"
   | "PARSE"
   | "INVALID_COOKIE_SIGNATURE"
@@ -31,6 +32,7 @@ export const ERROR_CODES: Record<ErrorCode, ApiErrorDescriptor> = {
   INVALID_PROCESS_ID: { status: 400, message: "Invalid process id" },
   INVALID_PROCESS_CONFIGURATION: { status: 422, message: "Invalid process configuration" },
   VALIDATION_FAILED: { status: 422, message: "Validation failed" },
+  UNAUTHORIZED: { status: 401, message: "Unauthorized" },
   NOT_FOUND: { status: 404, message: "Route not found" },
   PARSE: { status: 400, message: "Malformed request body" },
   INVALID_COOKIE_SIGNATURE: { status: 401, message: "Invalid cookie signature" },
