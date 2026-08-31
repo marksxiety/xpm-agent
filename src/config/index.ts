@@ -13,4 +13,7 @@ export const config = {
     if (!raw) return [];
     return raw.split(",").map((origin) => origin.trim()).filter(Boolean);
   },
+  get AUTH_TOKEN(): string {
+    return String(process.env.AUTH_TOKEN ?? "");
+  },
 };
