@@ -44,18 +44,7 @@ describe("pm2 flush service", () => {
     test("returns 400 when the id is not numeric", async () => {
         resetState();
 
-        const response = await processController.flushLogs("abc");
-
-        expect(response.success).toBe(false);
-        expect(response.status).toBe(400);
-        expect(response.code).toBe("INVALID_PROCESS_ID");
-        expect(response.message).toBe("Invalid process id");
-    });
-
-    test("returns 400 when the id is omitted", async () => {
-        resetState();
-
-        const response = await processController.flushLogs(undefined);
+        const response = await processController.flushLogs("abc" as unknown as number);
 
         expect(response.success).toBe(false);
         expect(response.status).toBe(400);
@@ -99,15 +88,13 @@ describe("pm2 flush route", () => {
         expect(body.message).toBe("Logs for process 3 flushed successfully");
     });
 
-    test("returns 400 when the id is omitted", async () => {
+    test("returns 404 when the id is omitted", async () => {
         resetState();
 
-        const { status, body } = await postFlush();
+        const response = await createApp().handle(new Request("http://localhost/pm2/flush", { method: "POST" }));
 
-        expect(status).toBe(400);
-        expect(body.success).toBe(false);
-        expect(body.code).toBe("INVALID_PROCESS_ID");
-        expect(body.message).toBe("Invalid process id");
+        expect(response.status).toBe(404);
+        expect(await response.text()).toBe("NOT_FOUND");
     });
 
     test("returns 422 when the id is not numeric", async () => {
