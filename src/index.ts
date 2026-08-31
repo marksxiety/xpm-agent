@@ -5,6 +5,7 @@ import type { StartOptions } from "pm2";
 import type { ApiResponse } from "./types";
 import { respond } from "./utils/response";
 import { formatElysiaErrorResponse } from "./utils/errors";
+import { isValidBearerToken } from "./utils/auth";
 import { processController } from "./controller/process.controller";
 import { systemController } from "./controller/system.controller";
 import { getRouteMeta } from "./meta/process";
@@ -20,6 +21,16 @@ export const pm2Routes = new Elysia({ prefix: "/pm2" })
     }
   })
   .onError(({ code, error }) => formatElysiaErrorResponse(code, error))
+  .onRequest(({ request, set }) => {
+    if (config.AUTH_TOKEN && !isValidBearerToken(request.headers.get("Authorization"), config.AUTH_TOKEN)) {
+      set.status = 401;
+      return respond("Unauthorized: missing or invalid authentication token", null, {
+        success: false,
+        status: 401,
+        code: "UNAUTHORIZED",
+      });
+    }
+  })
   .get("/list", ({ query }) => processController.listProcesses(query.logs, query.overview), getRouteMeta("list"))
   .get("/health", () => systemController.healthCheck(), getSystemRouteMeta("health"))
   .get("/system", () => systemController.getHostOverview(), getSystemRouteMeta("overview"))
@@ -29,7 +40,7 @@ export const pm2Routes = new Elysia({ prefix: "/pm2" })
   .post("/restart/:id", ({ params }) => processController.restartProcess(params.id), getRouteMeta("restart"))
   .post("/reload/:id", ({ params }) => processController.reloadProcess(params.id), getRouteMeta("reload"))
   .delete("/delete/:id", ({ params, query }) => processController.deleteProcess(params.id, query.delete_logs ?? false), getRouteMeta("delete"))
-  .post("/flush/:id?", ({ params }) => processController.flushLogs(params.id), getRouteMeta("flush"))
+  .post("/flush/:id", ({ params }) => processController.flushLogs(params.id), getRouteMeta("flush"))
   .get("/logs/:id", ({ params, query }) => processController.getLogs(params.id, query.tail, query.type), getRouteMeta("logs"));
 
 export const createApp = () =>
