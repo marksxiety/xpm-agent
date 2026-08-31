@@ -45,5 +45,4 @@ package-lock.json
 /scripts
 dist/
 node_modules/
-.env
 .env.production
