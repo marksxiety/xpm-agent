@@ -2,9 +2,7 @@ import { t } from "elysia";
 
 export const ProcessIdParams = t.Object({ id: t.Number({ description: "pm_id of the process (see GET /list)" }) });
 
-export const FlushParams = t.Object({
-  id: t.Optional(t.Number({ description: "pm_id of the process; omit to flush ALL processes" })),
-});
+export const FlushParams = t.Object({ id: t.Number({ description: "pm_id of the process (see GET /list)" }) });
 
 export const LogsParams = t.Object({ id: t.Number({ description: "pm_id of the process (see GET /list)" }) });
 
