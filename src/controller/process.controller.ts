@@ -235,10 +235,10 @@ export class ProcessController {
     }
   };
 
-  flushLogs = async (processId?: number | string): Promise<ApiResponse<null>> => {
+  flushLogs = async (processId: number): Promise<ApiResponse<null>> => {
     try {
-      const parsedProcessId = typeof processId === "string" ? Number(processId) : processId;
-      if (parsedProcessId === undefined || Number.isNaN(parsedProcessId))
+      const parsedProcessId = Number(processId);
+      if (Number.isNaN(parsedProcessId))
         return respond("Invalid process id", null, { success: false, status: 400, code: "INVALID_PROCESS_ID" });
       await this.withPM2<void>((callback) => pm2.flush(parsedProcessId, callback));
       return respond(`Logs for process ${parsedProcessId} flushed successfully`, null);
