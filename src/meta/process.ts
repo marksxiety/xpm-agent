@@ -157,7 +157,7 @@ const routeMeta = {
     detail: {
       summary: "Flush (empty) log files",
       description:
-        "Clears (empties) the log files for one process, or for **all** processes if the id is omitted. Does not affect running state.",
+        "Clears (empties) the log files for one process. Does not affect running state.",
       tags: ["Processes"],
       operationId: "flushLogs",
     },
