@@ -43,3 +43,7 @@ package-lock.json
 
 .env
 /scripts
+dist/
+node_modules/
+.env
+.env.production
