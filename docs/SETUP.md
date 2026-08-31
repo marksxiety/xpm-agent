@@ -1,6 +1,6 @@
 # Setup
 
-Install, configure, and run **x-process-manager-api** under PM2.
+Install, configure, and run **xpm-agent** under PM2.
 
 ## 1. Copy the environment file
 
@@ -52,7 +52,7 @@ Verify it is running:
 pm2 list
 ```
 
-You should see `x-process-manager-api` with status `online`. Then hit the health check:
+You should see `xpm-agent` with status `online`. Then hit the health check:
 
 ```bash
 curl http://localhost:4000/pm2/health
