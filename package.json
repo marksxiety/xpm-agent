@@ -5,8 +5,9 @@
     "test": "bun test src/tests/",
     "dev": "bun run --watch src/index.ts",
     "typecheck": "tsc --noEmit",
-    "start": "pm2 startOrReload ecosystem.config.js && pm2 save",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "build": "bun build --target bun --minify-whitespace --minify-syntax --outdir ./dist src/index.ts",
+    "start": "bun run build && pm2 startOrReload ecosystem.config.js --env production && pm2 save"
   },
   "dependencies": {
     "@elysiajs/cors": "^1.4.2",
