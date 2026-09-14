@@ -70,7 +70,15 @@ export const createApp = () =>
     )
     .use(pm2Routes);
 
-if (import.meta.main) {
+const normalizePath = (filePath: string) => filePath.replaceAll("\\", "/").toLowerCase();
+
+// PM2 7.x launches Bun apps through its own wrapper (ProcessContainerForkBun.js),
+// which loads this file via require() instead of running it directly. That makes
+// import.meta.main false, so the server would never start. PM2 sets pm_exec_path
+// to the app's real path — matching it tells us PM2 intends this file to be the entry.
+const isPm2EntryPoint = process.env.pm_exec_path !== undefined && normalizePath(import.meta.path) === normalizePath(process.env.pm_exec_path);
+
+if (import.meta.main || isPm2EntryPoint) {
   const app = createApp().listen(config.SERVER_PORT);
   console.log(`PM2 API is running at ${app.server?.hostname}:${app.server?.port}`);
 }
