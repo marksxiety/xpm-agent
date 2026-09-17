@@ -1,25 +1,32 @@
-import os from "node:os";
+import { currentLoad, mem } from "systeminformation";
 import type { SystemOverview } from "../types";
 
-export type OsModule = Pick<typeof os, "totalmem" | "freemem" | "cpus" | "loadavg">;
+export interface HostMetricsSource {
+  currentLoad(): Promise<{ currentLoad: number }>;
+  mem(): Promise<{ total: number; used: number; free: number }>;
+}
 
-export function getHostMetrics(osModule: OsModule): SystemOverview {
-  const totalBytes = osModule.totalmem();
-  const freeBytes = osModule.freemem();
-  const usedBytes = totalBytes - freeBytes;
-  const cpus = osModule.cpus();
+export const systemInformationSource: HostMetricsSource = { currentLoad, mem };
+
+const clampPercent = (value: number): number => Number(Math.min(100, Math.max(0, value)).toFixed(2));
+
+export function toPercent(part: number, total: number): number {
+  if (total <= 0) return 0;
+  return clampPercent((part / total) * 100);
+}
+
+export async function getHostMetrics(source: HostMetricsSource = systemInformationSource): Promise<SystemOverview> {
+  const [load, memory] = await Promise.all([source.currentLoad(), source.mem()]);
 
   return {
     cpu: {
-      cores: cpus.length,
-      model: cpus[0]?.model ?? "Unknown",
-      loadAvg: osModule.loadavg(),
+      usagePercent: clampPercent(load.currentLoad),
     },
     memory: {
-      totalBytes,
-      freeBytes,
-      usedBytes,
-      percentUsed: Number(((usedBytes / totalBytes) * 100).toFixed(2)),
+      totalBytes: memory.total,
+      freeBytes: memory.free,
+      usedBytes: memory.used,
+      percentUsed: toPercent(memory.used, memory.total),
     },
   };
 }
