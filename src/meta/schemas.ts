@@ -7,11 +7,9 @@ export const HostMetrics: OpenAPIV3.SchemaObject = {
   properties: {
     cpu: {
       type: "object",
-      required: ["cores", "model", "loadAvg"],
+      required: ["usagePercent"],
       properties: {
-        cores: { type: "number", description: "Number of logical CPU cores" },
-        model: { type: "string", description: "CPU model name" },
-        loadAvg: { type: "array", items: { type: "number" }, description: "1, 5, and 15-minute load averages" },
+        usagePercent: { type: "number", description: "CPU utilization percentage (0-100, 2 decimal places)" },
       },
     },
     memory: {
@@ -20,7 +18,7 @@ export const HostMetrics: OpenAPIV3.SchemaObject = {
       properties: {
         totalBytes: { type: "number", description: "Total system memory in bytes" },
         freeBytes: { type: "number", description: "Free system memory in bytes" },
-        usedBytes: { type: "number", description: "Used system memory in bytes (total - free)" },
+        usedBytes: { type: "number", description: "Used system memory in bytes, including buffers/cache" },
         percentUsed: { type: "number", description: "Used memory as a percentage (0-100, 2 decimal places)" },
       },
     },
