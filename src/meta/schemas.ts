@@ -36,7 +36,7 @@ export const ProcessSummary: OpenAPIV3.SchemaObject = {
     name: { type: "string", description: "Process name" },
     namespace: { type: "string", description: "PM2 namespace (default: 'default')" },
     status: { type: "string", description: "online, stopped, stopping, launching, errored, ..." },
-    uptime: { type: "number", description: "Epoch timestamp (ms) of last start" },
+    uptime: { type: "number", description: "Elapsed time (ms) since the process last started; 0 when not online" },
     restarts: { type: "number", description: "Total restart count" },
     unstable_restarts: { type: "number", description: "Consecutive unstable restarts" },
     exec_mode: { type: "string", description: "fork_mode or cluster_mode" },

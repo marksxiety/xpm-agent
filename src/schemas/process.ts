@@ -22,7 +22,7 @@ export const LogsQuery = t.Object({
 export const ListQuery = t.Object({
   logs: t.Optional(t.Integer({
     description:
-      "Number of trailing log lines to attach to each process summary (last N lines of both the `out` and `error` streams). Omit for a list without logs. Default 50, max 500.",
+      "Number of trailing log lines to attach to each process summary (last N lines of both the `out` and `error` streams). Omit for a list without logs (no default line count). Max 500.",
     minimum: 1,
     maximum: 500,
     examples: [10],
@@ -48,7 +48,8 @@ export const DeleteLogsQuery = t.Object({
  * The payload mirrors pm2's own `StartOptions` (see node_modules/pm2/types/index.d.ts).
  * This API applies NOTHING: every field is passed to pm2 verbatim. The `default`
  * values below are pm2's own runtime defaults — pm2 applies them when the field
- * is omitted. Descriptions state the provenance for each default.
+ * is omitted (the one exception is `targetOs`, an API-level default used for
+ * interpreter path validation). Descriptions state the provenance for each default.
  *
  * Fields are grouped: identity → invocation → execution → restart behavior →
  * Windows → environment → watching → scheduling.
@@ -92,7 +93,7 @@ export const StartPayload = t.Object({
   }),
   interpreter_args: t.Optional(t.Union([t.String(), t.Array(t.String())], {
     description:
-      "Arguments passed to the interpreter process (e.g. Node/V8 flags like `--max-old-space-size=512` or `--env-file=.env`). Only applies when `interpreter` is node-family (`node`, `bun`, etc.). No pm2 default.",
+      "Arguments passed to the interpreter process (e.g. Node/V8 flags like `--max-old-space-size=512` or `--env-file=.env`). Only supported for interpreters that accept extra args (Node/Bun and Python); rejected for PHP, Go, and `'none'`. No pm2 default.",
     examples: ["--env-file=.env", ["--env-file=.env", "--max-old-space-size=512"]],
   })),
   exec_mode: t.Optional(t.Union([t.Literal("fork"), t.Literal("cluster")], {

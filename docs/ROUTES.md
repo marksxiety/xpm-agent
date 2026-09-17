@@ -24,9 +24,14 @@ Every response — success or error — uses the same shape:
 |---|---|---|
 | `success` | boolean | `true` on success, `false` on any error |
 | `message` | string | Human-readable result or error description |
+| `code` | string | Machine-readable error code — **present only on errors** (e.g. `PROCESS_NOT_FOUND`, `VALIDATION_FAILED`, `INVALID_PROCESS_CONFIGURATION`). Full mapping in [Error Statuses](#error-statuses). |
 | `info` | any | The actual payload on success; `null` on error |
 
-> **Exception:** the `/start` configuration-guide `422` returns the list of violations in `info` (an array of `{ field, message }`), not `null` — see [POST /start](#post-start).
+> The HTTP status carries the status code (e.g. `404`); the body does not include a separate `status` field.
+
+> **Exceptions:**
+> - The `/start` configuration-guide `422` returns the list of violations in `info` (an array of `{ field, message }`), not `null` — see [POST /start](#post-start).
+> - Unknown routes (e.g. `GET /pm2/nope`) fall through to Elysia's default 404 and return a plain-text `NOT_FOUND` body instead of the envelope.
 
 ---
 
@@ -40,7 +45,7 @@ Returns all PM2-managed processes with live CPU, memory, restart counts, and sta
 
 | Param | Type | Required | Description |
 |---|---|---|---|
-| `logs` | integer | no | When present, attaches `logs: { out, error }` to each process summary with the trailing N lines of each stream (1–500, default 50). Omit for a lightweight list without logs. |
+| `logs` | integer | no | When present, attaches `logs: { out, error }` to each process summary with the trailing N lines of each stream (1–500). Omit the param entirely for a lightweight list without logs — there is no default line count here (the 50-line default applies only to `GET /logs/:id`). |
 | `overview` | boolean | no | When `true`, returns an object with two keys: `overview` (host-level metrics: CPU cores, model, load average, memory) and `processes` (the process summaries). The `logs` param, if provided, still applies to each process summary. |
 
 **Request:** `GET /pm2/list`, `GET /pm2/list?logs=5`, or `GET /pm2/list?logs=5&overview=true`
@@ -58,7 +63,7 @@ Returns all PM2-managed processes with live CPU, memory, restart counts, and sta
       "name": "example-app",
       "namespace": "example",
       "status": "online",
-      "uptime": 1786687862669,
+      "uptime": 119676,
       "restarts": 3,
       "unstable_restarts": 0,
       "exec_mode": "fork_mode",
@@ -102,7 +107,7 @@ Returns all PM2-managed processes with live CPU, memory, restart counts, and sta
         "name": "example-app",
         "namespace": "example",
         "status": "online",
-        "uptime": 1786687862669,
+        "uptime": 119676,
         "restarts": 3,
         "unstable_restarts": 0,
         "exec_mode": "fork_mode",
@@ -169,7 +174,7 @@ Liveness check for this API server itself (not the PM2 processes). Useful for up
   "info": {
     "status": "ok",
     "uptime": 119.676,
-    "timestamp": "2026-08-17T02:08:12.991Z"
+    "timestamp": 1786687862669
   }
 }
 ```
@@ -201,7 +206,7 @@ Fetches detailed info for a single process by its `pm_id`. Unlike `/list`, retur
       "name": "example-app",
       "namespace": "example",
       "status": "online",
-      "uptime": 1786687862669,
+      "uptime": 119676,
       "restarts": 3,
       "unstable_restarts": 0,
       "exec_mode": "fork_mode",
@@ -221,8 +226,10 @@ Fetches detailed info for a single process by its `pm_id`. Unlike `/list`, retur
 **Error `404`** (unknown id):
 
 ```json
-{ "success": false, "message": "Process not found", "info": null }
+{ "success": false, "message": "Process 99 not found", "code": "PROCESS_NOT_FOUND", "info": null }
 ```
+
+> When PM2 itself reports the process as missing, the message is the generic `"Process not found"` instead of the id-interpolated form.
 
 **Error `422`** (non-numeric id, e.g. `/describe/server`):
 
@@ -230,6 +237,7 @@ Fetches detailed info for a single process by its `pm_id`. Unlike `/list`, retur
 {
   "success": false,
   "message": "Validation failed: Property 'id' should be one of: 'numeric', 'number'",
+  "code": "VALIDATION_FAILED",
   "info": null
 }
 ```
@@ -238,7 +246,7 @@ Fetches detailed info for a single process by its `pm_id`. Unlike `/list`, retur
 
 ### POST /start
 
-Registers and launches a new process under PM2. `name`, `script`, and `interpreter` are **required**; every other field is an optional PM2 start option and is passed through **verbatim** — this API applies no defaults. When a field is omitted, PM2 applies its own built-in default (see [Defaults & provenance](#defaults--provenance) below).
+Registers and launches a new process under PM2. `name`, `script`, and `interpreter` are **required**; every other field is an optional PM2 start option (plus the API-level `targetOs`) and is passed through **verbatim** — this API applies no PM2 defaults. When a field is omitted, PM2 applies its own built-in default (see [Defaults & provenance](#defaults--provenance) below).
 
 The body is validated **twice**:
 
@@ -247,7 +255,7 @@ The body is validated **twice**:
 
 **Language recipes:**
 
-`interpreter` must be an absolute path to the interpreter executable (or `"none"` for bare binaries) — bare names like `"node"`/`"php"` are rejected.
+`interpreter` must be an absolute path to the interpreter executable (or `"none"` for bare binaries) — bare names like `"node"`/`"php"` are rejected, and the path is validated against the declared `targetOs`.
 
 | Language | `interpreter` | `script` | `args` |
 |---|---|---|---|
@@ -265,6 +273,7 @@ The body is validated **twice**:
 {
   "name": "example-app",
   "namespace": "example",
+  "targetOs": "win32",
   "cwd": "C:\\Example\\Application",
   "script": ".output/server/index.mjs",
   "args": ["--port", "3000"],
@@ -283,12 +292,13 @@ The body is validated **twice**:
 |---|---|---|---|
 | `name` | string | **yes** | Process name shown in `pm2 list`. Used in log file names and lifecycle commands. |
 | `namespace` | string | no | PM2 namespace. Defaults to `"default"` (pm2 built-in). Use to isolate same-named processes. |
+| `targetOs` | `"win32"` \| `"linux"` | no | Target OS this process will run on — drives interpreter path validation. Defaults to `"win32"` (API-level default). On `win32`, both `C:\...` and `/...` absolute forms are accepted; on `linux` only POSIX absolute paths pass. |
 | `cwd` | string | no | Working directory the process is launched from. **No pm2 default** — almost always set this. |
 | `script` | string | **yes** | Path to the script to run. Resolved against the API server's cwd when `cwd` is omitted. |
 | `args` | string \| string[] | no | Arguments passed to the script itself. No pm2 default. |
-| `interpreter` | string | **yes** | Absolute path to the interpreter executable (e.g. `C:\Program Files\nodejs\node.exe`). **Required.** Use `"none"` when `script` is itself a binary. Bare names like `"node"`/`"php"` are rejected — only `"none"` is accepted as a bare value. |
-| `interpreter_args` | string \| string[] | no | Arguments passed to the interpreter process (e.g. `--env-file=.env`, `--max-old-space-size=512`). Node-family only. No pm2 default. |
-| `exec_mode` | `"fork"` \| `"cluster"` | no | Execution mode. Defaults to `"fork"` (pm2 built-in). `"cluster"` required for `instances > 1`; Node-only. |
+| `interpreter` | string | **yes** | Absolute path to the interpreter executable (e.g. `C:\Program Files\nodejs\node.exe`). **Required.** Use `"none"` when `script` is itself a binary. Bare names like `"node"`/`"php"` are rejected — only `"none"` is accepted as a bare value. Validated for the declared `targetOs`. |
+| `interpreter_args` | string \| string[] | no | Arguments passed to the interpreter process (e.g. `--env-file=.env`, `--max-old-space-size=512`). Only supported for interpreters that accept extra args — Node/Bun and Python; rejected for PHP, Go, and `"none"`. No pm2 default. |
+| `exec_mode` | `"fork"` \| `"cluster"` | no | Execution mode. Defaults to `"fork"` (pm2 built-in). `"cluster"` required for `instances > 1`; Node-family (Node/Bun) only. |
 | `instances` | number \| `"max"` | no | Number of instances. Defaults to `1` (pm2 built-in). `"max"` = one per CPU core. Requires `exec_mode: "cluster"`. |
 | `autorestart` | boolean | no | Restart automatically on crash. Defaults to `true` (pm2 built-in). Set `false` for one-shot jobs. |
 | `max_restarts` | number | no | Consecutive unstable-restart limit (a crash within `min_uptime` of launch counts as unstable). At the limit, PM2 marks the process `errored` and stops. `0` = never restart — prefer `autorestart: false` for that. Defaults to `16` (pm2 built-in). |
@@ -301,16 +311,19 @@ The body is validated **twice**:
 
 **Defaults & provenance:**
 
-Every default listed above is **PM2's own runtime default** — it is applied by PM2 when the field is omitted. This API passes your JSON through to PM2 unchanged and applies **no** defaults of its own. Provenance is stated per field: "(pm2 built-in)" = applied by PM2 if omitted; "No pm2 default" = nothing is applied and PM2 behaves as documented.
+Every default listed above is **PM2's own runtime default** — it is applied by PM2 when the field is omitted. This API passes your JSON through to PM2 unchanged and applies **no** PM2 defaults of its own. Provenance is stated per field: "(pm2 built-in)" = applied by PM2 if omitted; "No pm2 default" = nothing is applied and PM2 behaves as documented. The one API-level field is `targetOs`, whose default (`"win32"`) is applied by this API for validation.
+
+**Log timestamps:** this API always starts processes with PM2's `time: true`, so every log line is prefixed with `[YYYY-MM-DD HH:mm:ss]`. Any `time` value in the payload is ignored.
 
 **Configuration guide rules (each violation blocks with `422`):**
 
-- `interpreter` not an absolute path — bare names like `"node"`/`"php"` are rejected (only `"none"` is accepted as a bare value)
-- Node-extension script (`.js`, `.mjs`, `.cjs`, `.ts`, …) with a `php`/`python` interpreter
-- `artisan` or `.php` script without a PHP interpreter executable path
-- `artisan` script with no `args` (artisan needs a subcommand: `serve`, `schedule:work`, …)
-- `interpreter_args` with a non-node-family interpreter
-- `exec_mode: "cluster"` with a non-node-family interpreter
+- `name` and `script` must be non-empty (whitespace-only values are rejected)
+- `instances` must be a positive integer or `"max"`
+- `interpreter` must be an absolute path for the declared `targetOs` — bare names like `"node"`/`"py"` are rejected (only `"none"` is accepted as a bare value). On `win32`, both `C:\...` and `/...` absolute forms pass; on `linux` only POSIX absolute paths pass
+- Script extension must match the interpreter family — e.g. a Node-extension script (`.js`, `.mjs`, `.cjs`, `.ts`, …) with a `php`/`python`/`go` interpreter, or a `.php`/`.py`/`.go` script with a non-matching interpreter
+- `artisan` requires a PHP interpreter executable path and `args` (a subcommand: `serve`, `schedule:work`, …); `manage.py` requires a Python interpreter path and `args`
+- `interpreter_args` only with interpreters that support them (Node/Bun and Python) — rejected for PHP, Go, and `"none"`
+- `exec_mode: "cluster"` with a non-Node-family interpreter (or `"none"`)
 - `instances > 1` / `"max"` with `exec_mode: "fork"`
 
 **Response `200`** — `info` is an array of `ProcessSummary`, one per launched instance:
@@ -326,7 +339,7 @@ Every default listed above is **PM2's own runtime default** — it is applied by
       "name": "example-app",
       "namespace": "example",
       "status": "online",
-      "uptime": 1786687862669,
+      "uptime": 305,
       "restarts": 0,
       "unstable_restarts": 0,
       "exec_mode": "fork_mode",
@@ -351,6 +364,7 @@ Starting with `instances: 2` returns **2 rows** (one per cluster instance). To r
 {
   "success": false,
   "message": "Validation failed: Expected property 'name' to be string but found: undefined",
+  "code": "VALIDATION_FAILED",
   "info": null
 }
 ```
@@ -361,14 +375,17 @@ Starting with `instances: 2` returns **2 rows** (one per cluster instance). To r
 {
   "success": false,
   "message": "Invalid process configuration",
+  "code": "INVALID_PROCESS_CONFIGURATION",
   "info": [
     {
       "field": "interpreter",
-      "message": "interpreter must be an absolute path to the executable (e.g. 'C:\\Program Files\\nodejs\\node.exe'), not a bare name like 'node' — only 'none' is accepted as a bare value"
+      "message": "interpreter must be an absolute path to the executable (e.g. 'C:\\Program Files\\nodejs\\node.exe'), not a bare name like 'node' or 'py' — only 'none' is accepted as a bare value"
     }
   ]
 }
 ```
+
+On a `targetOs: "linux"` payload the same violation reads `(e.g. '/usr/bin/node')`.
 
 **Error `400`** (script path does not exist):
 
@@ -376,6 +393,7 @@ Starting with `instances: 2` returns **2 rows** (one per cluster instance). To r
 {
   "success": false,
   "message": "Script not found — check the 'script' path in your request",
+  "code": "SCRIPT_NOT_FOUND",
   "info": null
 }
 ```
@@ -407,7 +425,7 @@ Gracefully stops a running process. The process stays **registered** in PM2 (sta
       "name": "example-app",
       "namespace": "example",
       "status": "stopped",
-      "uptime": 1786687862669,
+      "uptime": 0,
       "restarts": 3,
       "unstable_restarts": 0,
       "exec_mode": "fork_mode",
@@ -427,7 +445,7 @@ Gracefully stops a running process. The process stays **registered** in PM2 (sta
 **Error `404`:**
 
 ```json
-{ "success": false, "message": "Process not found", "info": null }
+{ "success": false, "message": "Process not found", "code": "PROCESS_NOT_FOUND", "info": null }
 ```
 
 ---
@@ -457,7 +475,7 @@ Kills and re-launches a process. Also works on stopped processes (acts as start)
       "name": "example-app",
       "namespace": "example",
       "status": "online",
-      "uptime": 1786687862669,
+      "uptime": 305,
       "restarts": 4,
       "unstable_restarts": 0,
       "exec_mode": "fork_mode",
@@ -501,7 +519,7 @@ Zero-downtime reload — restarts instances one at a time. Only meaningful for *
       "name": "example-app",
       "namespace": "example",
       "status": "online",
-      "uptime": 1786687862669,
+      "uptime": 305,
       "restarts": 4,
       "unstable_restarts": 0,
       "exec_mode": "cluster_mode",
@@ -524,7 +542,7 @@ Zero-downtime reload — restarts instances one at a time. Only meaningful for *
 
 Stops the process **and removes it from PM2's registry entirely**. The `pm_id` is freed and may be recycled by PM2 for future processes. Unlike stop, this cannot be undone via restart.
 
-By default the process's log files (`-out.log` / `-error.log` in `~/.pm2/logs/`) are **left on disk** — PM2 never removes them. Pass `?delete_logs=true` to also delete them.
+By default the process's log files (`-out.log` / `-error.log` in `~/.pm2/logs/`, or `$PM2_HOME/logs/` when `PM2_HOME` is set) are **left on disk** — PM2 never removes them. Pass `?delete_logs=true` to also delete them.
 
 **Path params:**
 
@@ -536,7 +554,7 @@ By default the process's log files (`-out.log` / `-error.log` in `~/.pm2/logs/`)
 
 | Param | Type | Required | Description |
 |---|---|---|---|
-| `delete_logs` | boolean | no | When `true`, also deletes the process's `-out.log`/`-error.log` files from `~/.pm2/logs/`. Default `false`. |
+| `delete_logs` | boolean | no | When `true`, also deletes the process's `-out.log`/`-error.log` files from `~/.pm2/logs/` (or `$PM2_HOME/logs/`). Default `false`. |
 
 **Request:** `DELETE /pm2/delete/0` (keep logs) or `DELETE /pm2/delete/0?delete_logs=true` (also remove log files)
 
@@ -553,7 +571,7 @@ By default the process's log files (`-out.log` / `-error.log` in `~/.pm2/logs/`)
       "name": "example-app",
       "namespace": "example",
       "status": "stopped",
-      "uptime": 1786687862669,
+      "uptime": 0,
       "restarts": 4,
       "unstable_restarts": 0,
       "exec_mode": "fork_mode",
@@ -633,13 +651,20 @@ The `out` and `error` arrays contain the last N lines of each respective log fil
 **Error `404`** (unknown pm_id):
 
 ```json
-{ "success": false, "message": "Process not found", "info": null }
+{ "success": false, "message": "Process 99 not found", "code": "PROCESS_NOT_FOUND", "info": null }
 ```
+
+> When PM2 itself reports the process as missing, the message is the generic `"Process not found"` instead of the id-interpolated form.
 
 **Error `422`** (invalid `tail` or `type`):
 
 ```json
-{ "success": false, "message": "Validation failed: ..., "info": null }
+{
+  "success": false,
+  "message": "Validation failed: Expected integer to be greater or equal to 1",
+  "code": "VALIDATION_FAILED",
+  "info": null
+}
 ```
 
 ---
@@ -655,35 +680,38 @@ The `info` payload for `/list`, `/describe/:id`, `/start`, `/stop/:id`, `/restar
 | `name` | string | Process name |
 | `namespace` | string | PM2 namespace (default: `"default"`) |
 | `status` | string | `online`, `stopped`, `stopping`, `launching`, `errored`, ... |
-| `uptime` | number | Epoch timestamp (ms) of last start |
+| `uptime` | number | Elapsed time (ms) since the process last started; `0` when the process is not `online` |
 | `restarts` | number | Total restart count |
 | `unstable_restarts` | number | Consecutive unstable restarts |
-| `exec_mode` | string | `fork_mode` or `cluster_mode` |
-| `instances` | number | Instance count (cluster mode) |
+| `exec_mode` | string | `fork_mode` or `cluster_mode` (falls back to `"fork"` if PM2 omits it) |
+| `instances` | number \| undefined | Instance count (cluster mode); omitted when PM2 does not report it |
 | `interpreter` | string | Absolute interpreter path (e.g. `C:\Program Files\nodejs\node.exe`), or `none` |
 | `cpu` | number | Current CPU usage (%) — `0` on operation responses |
 | `memory` | number | Current memory usage (bytes) — `0` on operation responses |
-| `cwd` | string | Working directory |
+| `cwd` | string \| undefined | Working directory; omitted when PM2 does not report it |
 | `ip_address` | string | Server IPv4 address the process runs on (e.g. `192.168.1.10`; `127.0.0.1` when no external interface) — same value for every process on the server |
-| `logs` | object | `out` and `error` string arrays — only present when `?logs=N` is passed on `/list`; each stream capped at 500 lines (default 50). Omitted when no logs query |
+| `logs` | object | `out` and `error` string arrays — only present when `?logs=N` is passed on `/list`; each stream capped at 500 lines. Omitted when no logs query |
 | `watch` | boolean | File-watch enabled |
-| `autorestart` | boolean | Auto-restart on crash enabled |
+| `autorestart` | boolean \| undefined | Auto-restart on crash enabled; omitted when PM2 does not report it |
 
 > **Note:** on `/start`, `/stop`, `/restart`, `/reload`, `/delete` responses, PM2 returns metadata-only snapshots, so `pid`, `cpu`, and `memory` may be `0`. Poll `GET /list` for live metrics.
 
 ## Error Statuses
 
-| Status | When |
-|---|---|
-| 401 | Missing or invalid `Authorization: Bearer <token>` header when `AUTH_TOKEN` is configured |
-| 422 | Schema validation failed (non-numeric `id`, missing `name`/`script` in body) **or** a `/start` configuration-guide violation (e.g. `.js` script with `php` interpreter) **or** invalid `tail`/`type` query on `/logs` |
-| 404 | Process with the given `pm_id` not found |
-| 403 | Origin not in `CORS_ORIGIN` allowlist (`CORS_ORIGIN_NOT_ALLOWED`) — browsers sending an `Origin` header without a configured allowlist are rejected |
-| 400 | Script path in `/start` body not found |
-| 503 | Cannot connect to the PM2 daemon |
-| 500 | Unexpected PM2 failure |
+| Status | `code` | When |
+|---|---|---|
+| 400 | `SCRIPT_NOT_FOUND` | Script path in the `/start` body does not exist |
+| 400 | `PARSE` | Malformed JSON request body |
+| 401 | `UNAUTHORIZED` | Missing or invalid `Authorization: Bearer <token>` header when `AUTH_TOKEN` is configured |
+| 403 | `CORS_ORIGIN_NOT_ALLOWED` | Origin not in `CORS_ORIGIN` allowlist — browsers sending an `Origin` header without a configured allowlist are rejected |
+| 404 | `PROCESS_NOT_FOUND` | Process with the given `pm_id` not found |
+| 422 | `VALIDATION_FAILED` | Schema validation failed (non-numeric `id`, missing `name`/`script`/`interpreter` in the body) **or** an invalid `tail`/`type`/`logs` query |
+| 422 | `INVALID_PROCESS_CONFIGURATION` | `/start` configuration-guide violation (e.g. `.js` script with a `php` interpreter) — the violations are listed in `info`, not `null` |
+| 500 | `PM2_OPERATION_FAILED` | Unexpected PM2 failure — `message` is `"PM2 operation failed: <raw PM2 error>"` |
+| 500 | `INTERNAL_SERVER_ERROR` / `UNKNOWN` | Unhandled server error |
+| 503 | `PM2_DAEMON_UNAVAILABLE` | Cannot connect to the PM2 daemon |
 
-All errors use the envelope with `success: false`; `info` is `null` except for the `/start` configuration-guide `422`, where it contains the list of violations.
+All errors use the envelope with `success: false` and include a `code`; `info` is `null` except for the `/start` configuration-guide `422`, where it contains the list of violations. Unknown routes are the one exception — they return a plain-text `NOT_FOUND` 404 from Elysia's default handler.
 
 ## Lifecycle Notes
 
@@ -691,6 +719,6 @@ All errors use the envelope with `success: false`; `info` is `null` except for t
 - `:id` always means the numeric `pm_id` from `GET /list` — process **names are not accepted** (names can collide across namespaces).
 - `instances > 1` (with `exec_mode: "cluster"`) launches one Node process per CPU instance — the response then contains **one row per instance**.
 - `env` values injected via `/start` are applied to the spawned process only; they are **not echoed back** in responses (all responses are sanitized `ProcessSummary` snapshots).
-- `/start` passes every field through to PM2 verbatim — it applies no defaults and no environment variables of its own (see [Defaults & provenance](#defaults--provenance)).
+- `/start` passes every field through to PM2 verbatim — it applies no PM2 defaults and no environment variables of its own (see [Defaults & provenance](#defaults--provenance)). The only API-level field is `targetOs` (used for interpreter-path validation, default `"win32"`), and `time` is always forced to `true` so log lines carry timestamps.
 - `windowsHide` is **recommended `true` on Windows hosts** (pm2's own default is `false`) to avoid a spawned console window per process.
 - **Name/namespace are immutable after start** — PM2 has no rename. To rename, `delete` (optionally with `delete_logs: true`) and `start` under the new name. Logs are named after the name/namespace, so a rename starts new `-out.log`/`-error.log` files.
