@@ -44,13 +44,14 @@ See [SETUP.md](./docs/SETUP.md) for full configuration options.
 - **[pm2-windows-startup](https://www.npmjs.com/package/pm2-windows-startup)** — boots PM2 (and your processes) automatically when Windows starts.
 - **[ElysiaJS](https://elysiajs.com/)** — the HTTP framework powering the REST endpoints.
 - **[@elysiajs/swagger](https://github.com/elysiajs/documentation)** — interactive API docs at `/swagger`.
+- **[systeminformation](https://systeminformation.io/)** — cross-platform host metrics (CPU usage, memory) behind `/pm2/system` and `/pm2/list?overview=true`.
 
 ## Routes at a glance
 
 | Route | Method | Purpose |
 |---|---|---|
 | `/pm2/list` | GET | List all processes with live CPU/memory/restarts (optional `?overview=true`, `?logs=N`) |
-| `/pm2/system` | GET | Host-level metrics only (CPU cores, model, load, memory) |
+| `/pm2/system` | GET | Host-level metrics only (CPU usage, memory) |
 | `/pm2/health` | GET | API liveness check |
 | `/pm2/describe/:id` | GET | Details for one process |
 | `/pm2/start` | POST | Register and launch a new process |
