@@ -46,7 +46,7 @@ Returns all PM2-managed processes with live CPU, memory, restart counts, and sta
 | Param | Type | Required | Description |
 |---|---|---|---|
 | `logs` | integer | no | When present, attaches `logs: { out, error }` to each process summary with the trailing N lines of each stream (1–500). Omit the param entirely for a lightweight list without logs — there is no default line count here (the 50-line default applies only to `GET /logs/:id`). |
-| `overview` | boolean | no | When `true`, returns an object with two keys: `overview` (host-level metrics: CPU cores, model, load average, memory) and `processes` (the process summaries). The `logs` param, if provided, still applies to each process summary. |
+| `overview` | boolean | no | When `true`, returns an object with two keys: `overview` (host-level metrics: CPU utilization percentage and memory usage) and `processes` (the process summaries). The `logs` param, if provided, still applies to each process summary. |
 
 **Request:** `GET /pm2/list`, `GET /pm2/list?logs=5`, or `GET /pm2/list?logs=5&overview=true`
 
@@ -89,9 +89,7 @@ Returns all PM2-managed processes with live CPU, memory, restart counts, and sta
   "info": {
     "overview": {
       "cpu": {
-        "cores": 8,
-        "model": "Intel(R) Core(TM) i7-9700 CPU @ 3.00GHz",
-        "loadAvg": [0.42, 0.35, 0.29]
+        "usagePercent": 12.5
       },
       "memory": {
         "totalBytes": 17179869184,
@@ -129,7 +127,7 @@ Returns all PM2-managed processes with live CPU, memory, restart counts, and sta
 
 ### GET /system
 
-Host-level metrics only (CPU cores, model, load average, memory usage). Does **not** include the process list — use `GET /list?overview=true` for a combined host + processes view. Works even when the PM2 daemon is unavailable.
+Host-level metrics only (CPU utilization percentage and memory usage). Does **not** include the process list — use `GET /list?overview=true` for a combined host + processes view. Works even when the PM2 daemon is unavailable.
 
 **Request:** no params, no body
 
@@ -142,9 +140,7 @@ Host-level metrics only (CPU cores, model, load average, memory usage). Does **n
   "info": {
     "host": {
       "cpu": {
-        "cores": 8,
-        "model": "Intel(R) Core(TM) i7-9700 CPU @ 3.00GHz",
-        "loadAvg": [0.42, 0.35, 0.29]
+        "usagePercent": 12.5
       },
       "memory": {
         "totalBytes": 17179869184,
@@ -156,6 +152,8 @@ Host-level metrics only (CPU cores, model, load average, memory usage). Does **n
   }
 }
 ```
+
+> **Host metric notes:** `cpu.usagePercent` is measured between samples. The first sample after server start has no prior baseline, so systeminformation measures it over a short (~500 ms) window — that request may take slightly longer, and the server primes the baseline at startup. `memory.usedBytes` includes buffers/cache.
 
 ---
 
