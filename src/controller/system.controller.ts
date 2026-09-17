@@ -1,14 +1,13 @@
-import os from "node:os";
 import type { ApiResponse, SystemOverview } from "../types";
 import { respond } from "../utils/response";
 import { getCurrentTimeStamp } from "../utils/datetime";
-import { getHostMetrics, type OsModule } from "../utils/system";
+import { getHostMetrics, systemInformationSource, type HostMetricsSource } from "../utils/system";
 
 export class SystemController {
-  constructor(private osModule: OsModule = os) {}
+  constructor(private metricsSource: HostMetricsSource = systemInformationSource) {}
 
-  getHostOverview = (): ApiResponse<{ host: SystemOverview }> =>
-    respond("System overview retrieved successfully", { host: getHostMetrics(this.osModule) });
+  getHostOverview = async (): Promise<ApiResponse<{ host: SystemOverview }>> =>
+    respond("System overview retrieved successfully", { host: await getHostMetrics(this.metricsSource) });
 
   healthCheck = (): ApiResponse<{ status: string; uptime: number; timestamp: number }> =>
     respond("PM2 health check passed", {
