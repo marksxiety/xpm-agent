@@ -39,9 +39,7 @@ export interface ApiResponse<T = unknown> {
 
 export interface SystemOverview {
     cpu: {
-        cores: number;
-        model: string;
-        loadAvg: number[];
+        usagePercent: number;
     },
     memory: {
         totalBytes: number;
