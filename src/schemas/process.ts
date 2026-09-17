@@ -29,7 +29,7 @@ export const ListQuery = t.Object({
   })),
   overview: t.Optional(t.Boolean({
     description:
-      "When `true`, returns an `overview` object with host-level metrics (CPU cores, model, load average, memory) alongside the `processes` array. The `logs` param (if provided) still applies to each process summary.",
+      "When `true`, returns an `overview` object with host-level metrics (CPU utilization percentage and memory) alongside the `processes` array. The `logs` param (if provided) still applies to each process summary.",
     examples: [true],
   })),
 });
