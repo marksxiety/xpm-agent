@@ -14,7 +14,7 @@ const systemRouteMeta = {
     detail: {
       summary: "System overview",
       description:
-        "Host-level metrics only (CPU cores, model, load average, memory usage). Does not include the process list — use GET /list?overview=true for a combined host + processes view.",
+        "Host-level metrics only (CPU utilization percentage and memory usage). Does not include the process list — use GET /list?overview=true for a combined host + processes view.",
       tags: ["System"],
       operationId: "getHostOverview",
       responses: {
@@ -29,9 +29,7 @@ const systemRouteMeta = {
                 info: {
                   host: {
                     cpu: {
-                      cores: 8,
-                      model: "Intel(R) Core(TM) i7-9700 CPU @ 3.00GHz",
-                      loadAvg: [0.42, 0.35, 0.29],
+                      usagePercent: 12.5,
                     },
                     memory: {
                       totalBytes: 17179869184,
