@@ -1,5 +1,4 @@
 import { promises as fs } from "node:fs";
-import os from "node:os";
 import pm2 from "pm2";
 import type { ProcessDescription, StartOptions } from "pm2";
 import type { ApiResponse, ProcessSummary, ProcessLogs, LogStreamType, SystemOverviewWithProcesses } from "../types";
@@ -9,9 +8,9 @@ import { summarizeProcess, toProcessDescriptions } from "../utils/process";
 import { resolveLogFiles, tailLines } from "../utils/log";
 import { inspect } from "../utils/inspect";
 import { StartIssue } from "../types/inspect";
-import { getHostMetrics, type OsModule } from "../utils/system";
+import { getHostMetrics, systemInformationSource, type HostMetricsSource } from "../utils/system";
 export class ProcessController {
-  constructor(private osModule: OsModule = os) {}
+  constructor(private metricsSource: HostMetricsSource = systemInformationSource) {}
   
   private withPM2<T>(
     operation: (callback: (operationError: Error | null, result?: T) => void) => void,
@@ -99,7 +98,7 @@ export class ProcessController {
         info = summariesWithLogs;
       }
       if (includeOverview) {
-        info = { overview: getHostMetrics(this.osModule), processes: info as ProcessSummary[] };
+        info = { overview: await getHostMetrics(this.metricsSource), processes: info as ProcessSummary[] };
       }
       return respond("PM2 process list retrieved successfully", info);
     } catch (error) {
