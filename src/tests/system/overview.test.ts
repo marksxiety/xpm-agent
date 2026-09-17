@@ -18,16 +18,14 @@ mock.module("pm2", () => ({
     },
 }));
 
-const mockOs = {
-    totalmem: () => 1000,
-    freemem: () => 400,
-    cpus: () => [{ model: "Test CPU", speed: 1000, times: { user: 0, nice: 0, sys: 0, idle: 0, irq: 0 } }],
-    loadavg: () => [1.5, 1.25, 1.0],
-};
-
 const { ProcessController } = await import("../../controller/process.controller");
 const { SystemController } = await import("../../controller/system.controller");
 const { createApp } = await import("../../index");
+
+const stubSource = {
+    currentLoad: async () => ({ currentLoad: 12.5 }),
+    mem: async () => ({ total: 1000, used: 600, free: 400 }),
+};
 
 function resetState() {
     state.listed = [];
@@ -36,17 +34,15 @@ function resetState() {
 }
 
 describe("system host overview controller", () => {
-    test("returns host metrics only", async () => {
+    test("returns host cpu usage and memory metrics only", async () => {
         resetState();
-        const controller = new SystemController(mockOs);
+        const controller = new SystemController(stubSource);
 
         const response = await controller.getHostOverview();
 
         expect(response.success).toBe(true);
         expect(response.message).toBe("System overview retrieved successfully");
-        expect(response.info?.host.cpu.cores).toBe(1);
-        expect(response.info?.host.cpu.model).toBe("Test CPU");
-        expect(response.info?.host.cpu.loadAvg).toEqual([1.5, 1.25, 1.0]);
+        expect(response.info?.host.cpu.usagePercent).toBe(12.5);
         expect(response.info?.host.memory.totalBytes).toBe(1000);
         expect(response.info?.host.memory.freeBytes).toBe(400);
         expect(response.info?.host.memory.usedBytes).toBe(600);
@@ -59,14 +55,12 @@ describe("process list with overview", () => {
     test("returns host metrics and process summaries", async () => {
         resetState();
         state.listed = [{ pm_id: 3, name: "my-app", pm2_env: {} }];
-        const controller = new ProcessController(mockOs);
+        const controller = new ProcessController(stubSource);
 
         const response = await controller.listProcesses(undefined, true);
 
         expect(response.success).toBe(true);
-        expect(response.info?.overview.cpu.cores).toBe(1);
-        expect(response.info?.overview.cpu.model).toBe("Test CPU");
-        expect(response.info?.overview.cpu.loadAvg).toEqual([1.5, 1.25, 1.0]);
+        expect(response.info?.overview.cpu.usagePercent).toBe(12.5);
         expect(response.info?.overview.memory.totalBytes).toBe(1000);
         expect(response.info?.overview.memory.freeBytes).toBe(400);
         expect(response.info?.overview.memory.usedBytes).toBe(600);
@@ -78,7 +72,7 @@ describe("process list with overview", () => {
     test("propagates the process list failure", async () => {
         resetState();
         state.listError = new Error("Process or namespace not found");
-        const controller = new ProcessController(mockOs);
+        const controller = new ProcessController(stubSource);
 
         const response = await controller.listProcesses(undefined, true);
 
@@ -94,11 +88,11 @@ describe("system overview route", () => {
         state.listed = [{ pm_id: 3, name: "my-app", pm2_env: {} }];
 
         const response = await createApp().handle(new Request("http://localhost/pm2/system", { method: "GET" }));
-        const body = (await response.json()) as ApiResponse & { info: { host: { cpu: { cores: number } } } };
+        const body = (await response.json()) as ApiResponse & { info: { host: { cpu: { usagePercent: number } } } };
 
         expect(response.status).toBe(200);
         expect(body.success).toBe(true);
-        expect(typeof body.info?.host.cpu.cores).toBe("number");
+        expect(body.info?.host.cpu.usagePercent).toBe(12.5);
         expect("processes" in (body.info as Record<string, unknown>)).toBe(false);
     });
 
@@ -110,12 +104,12 @@ describe("system overview route", () => {
             new Request("http://localhost/pm2/list?overview=true", { method: "GET" }),
         );
         const body = (await response.json()) as ApiResponse & {
-            info: { overview: { cpu: { cores: number } }; processes: Array<{ name: string }> };
+            info: { overview: { cpu: { usagePercent: number } }; processes: Array<{ name: string }> };
         };
 
         expect(response.status).toBe(200);
         expect(body.success).toBe(true);
-        expect(typeof body.info?.overview.cpu.cores).toBe("number");
+        expect(body.info?.overview.cpu.usagePercent).toBe(12.5);
         expect(body.info?.processes).toHaveLength(1);
         expect(body.info?.processes[0].name).toBe("my-app");
     });
