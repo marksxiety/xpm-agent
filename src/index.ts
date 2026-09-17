@@ -11,6 +11,7 @@ import { systemController } from "./controller/system.controller";
 import { getRouteMeta } from "./meta/process";
 import { getSystemRouteMeta } from "./meta/system";
 import { config } from "./config";
+import { systemInformationSource } from "./utils/system";
 import PackageJson from "../package.json";
 
 export const pm2Routes = new Elysia({ prefix: "/pm2" })
@@ -79,6 +80,9 @@ const normalizePath = (filePath: string) => filePath.replaceAll("\\", "/").toLow
 const isPm2EntryPoint = process.env.pm_exec_path !== undefined && normalizePath(import.meta.path) === normalizePath(process.env.pm_exec_path);
 
 if (import.meta.main || isPm2EntryPoint) {
+  // Prime the CPU baseline at startup so the first /system call does not pay
+  // systeminformation's ~500 ms baseline window.
+  void systemInformationSource.currentLoad();
   const app = createApp().listen(config.SERVER_PORT);
   console.log(`PM2 API is running at ${app.server?.hostname}:${app.server?.port}`);
 }
