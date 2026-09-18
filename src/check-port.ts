@@ -1,5 +1,6 @@
 import pm2 from "pm2";
-import { formatPortError, resolveServerPort, STARTUP_ERROR_EXIT_CODE } from "./utils/port";
+import { formatPortError, formatPortInUseError, resolveServerPort, STARTUP_ERROR_EXIT_CODE } from "./utils/port";
+import { findListeningPidsOnHost, findProcessName } from "./utils/port-usage";
 
 const AGENT_NAME = "xpm-agent";
 const AGENT_NAMESPACE = "XPM";
@@ -55,16 +56,30 @@ try {
 if (agentRunning) {
   console.log("xpm-agent is already running under PM2 — skipping port check (startOrReload will restart it).");
 } else {
-  try {
-    const probe = Bun.serve({
-      port: resolution.port,
-      reusePort: false,
-      fetch: () => new Response(null, { status: 204 }),
-    });
-    probe.stop(true);
-    console.log(`Port ${resolution.port} is available.`);
-  } catch (error) {
-    console.error(`xpm-agent preflight failed: ${formatPortError(resolution.port, error)}`);
+  const listeningPids = findListeningPidsOnHost(resolution.port);
+  if (listeningPids && listeningPids.length > 0) {
+    const [pid] = listeningPids;
+    const processName = pid === undefined ? undefined : findProcessName(pid);
+    console.error(`xpm-agent preflight failed: ${formatPortInUseError(resolution.port, pid, processName)}`);
     process.exit(STARTUP_ERROR_EXIT_CODE);
+  }
+
+  if (listeningPids !== undefined) {
+    console.log(`Port ${resolution.port} is available.`);
+  } else {
+    // OS listener table unavailable (non-Windows or command failure): fall back
+    // to a bind probe, which at least catches exact-address conflicts.
+    try {
+      const probe = Bun.serve({
+        port: resolution.port,
+        reusePort: false,
+        fetch: () => new Response(null, { status: 204 }),
+      });
+      probe.stop(true);
+      console.log(`Port ${resolution.port} is available.`);
+    } catch (error) {
+      console.error(`xpm-agent preflight failed: ${formatPortError(resolution.port, error)}`);
+      process.exit(STARTUP_ERROR_EXIT_CODE);
+    }
   }
 }
