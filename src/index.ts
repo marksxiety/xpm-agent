@@ -11,6 +11,7 @@ import { systemController } from "./controller/system.controller";
 import { getRouteMeta } from "./meta/process";
 import { getSystemRouteMeta } from "./meta/system";
 import { config } from "./config";
+import { formatPortError, resolveServerPort, STARTUP_ERROR_EXIT_CODE } from "./utils/port";
 import { systemInformationSource } from "./utils/system";
 import PackageJson from "../package.json";
 
@@ -80,9 +81,22 @@ const normalizePath = (filePath: string) => filePath.replaceAll("\\", "/").toLow
 const isPm2EntryPoint = process.env.pm_exec_path !== undefined && normalizePath(import.meta.path) === normalizePath(process.env.pm_exec_path);
 
 if (import.meta.main || isPm2EntryPoint) {
+  const resolution = resolveServerPort(process.env.SERVER_PORT);
+  if (!resolution.ok) {
+    console.error(`xpm-agent failed to start: ${resolution.message}`);
+    process.exit(STARTUP_ERROR_EXIT_CODE);
+  }
+
   // Prime the CPU baseline at startup so the first /system call does not pay
   // systeminformation's ~500 ms baseline window.
   void systemInformationSource.currentLoad();
-  const app = createApp().listen(config.SERVER_PORT);
-  console.log(`PM2 API is running at ${app.server?.hostname}:${app.server?.port}`);
+  try {
+    // reusePort must stay false: Elysia defaults it to true, which on Windows
+    // silently hijacks ports that are already in use instead of failing.
+    const app = createApp().listen({ port: resolution.port, reusePort: false });
+    console.log(`PM2 API is running at ${app.server?.hostname}:${app.server?.port}`);
+  } catch (error) {
+    console.error(`xpm-agent failed to start: ${formatPortError(resolution.port, error)}`);
+    process.exit(STARTUP_ERROR_EXIT_CODE);
+  }
 }
