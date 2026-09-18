@@ -10,6 +10,7 @@ module.exports = {
       instances: 1,
       autorestart: true,
       max_restarts: 10,
+      stop_exit_codes: [2],
       time: true,
       env: {
         NODE_ENV: "development",
