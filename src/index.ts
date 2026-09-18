@@ -11,7 +11,8 @@ import { systemController } from "./controller/system.controller";
 import { getRouteMeta } from "./meta/process";
 import { getSystemRouteMeta } from "./meta/system";
 import { config } from "./config";
-import { formatPortError, resolveServerPort, STARTUP_ERROR_EXIT_CODE } from "./utils/port";
+import { formatPortError, formatPortInUseError, resolveServerPort, STARTUP_ERROR_EXIT_CODE } from "./utils/port";
+import { findListeningPidsOnHost, findProcessName } from "./utils/port-usage";
 import { systemInformationSource } from "./utils/system";
 import PackageJson from "../package.json";
 
@@ -87,12 +88,21 @@ if (import.meta.main || isPm2EntryPoint) {
     process.exit(STARTUP_ERROR_EXIT_CODE);
   }
 
+  const listeningPids = findListeningPidsOnHost(resolution.port) ?? [];
+  if (listeningPids.length > 0) {
+    const [pid] = listeningPids;
+    const processName = pid === undefined ? undefined : findProcessName(pid);
+    console.error(`xpm-agent failed to start: ${formatPortInUseError(resolution.port, pid, processName)}`);
+    process.exit(STARTUP_ERROR_EXIT_CODE);
+  }
+
   // Prime the CPU baseline at startup so the first /system call does not pay
   // systeminformation's ~500 ms baseline window.
   void systemInformationSource.currentLoad();
   try {
-    // reusePort must stay false: Elysia defaults it to true, which on Windows
-    // silently hijacks ports that are already in use instead of failing.
+    // reusePort stays false (Elysia defaults it to true), but Windows can still
+    // let Bun bind over a listener that did not set SO_EXCLUSIVEADDRUSE, so the
+    // OS listener check above — not this bind — is the reliable port guard.
     const app = createApp().listen({ port: resolution.port, reusePort: false });
     console.log(`PM2 API is running at ${app.server?.hostname}:${app.server?.port}`);
   } catch (error) {
