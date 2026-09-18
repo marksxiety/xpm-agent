@@ -16,8 +16,8 @@ Open `.env` and `.env.production` and set:
 
 | Variable | Description | Example |
 |---|---|---|
-| `SERVER_PORT` | Port the API listens on | `4000` |
-| `CORS_ORIGIN` | Comma-separated allowed browser origins (e.g. `http://localhost:3000,http://localhost:5173`). Omit or leave empty to **deny all browser origins** with 403 (`CORS_ORIGIN_NOT_ALLOWED`). Only non-browser clients (curl, Postman) are unaffected. | `http://localhost:3000,http://localhost:5173` |
+| `SERVER_PORT` | **Required.** Port the API listens on. Startup fails with a clear command-line error when it is missing, not a whole number, outside 1–65535, or already in use by another process. | `4000` |
+| `CORS_ORIGIN` | **Required for browser-facing deployments.** Comma-separated allowed browser origins (e.g. `http://localhost:3000,http://localhost:5173`). Omit or leave empty to **deny all browser origins** with 403 (`CORS_ORIGIN_NOT_ALLOWED`) — non-browser clients (curl, Postman, other services) are unaffected. | `http://localhost:3000,http://localhost:5173` |
 | `AUTH_TOKEN` | Optional bearer token. When set, every `/pm2/*` request must include `Authorization: Bearer <AUTH_TOKEN>` or it is rejected with 401 (`UNAUTHORIZED`). Leave empty to disable auth. No database needed — this is a single shared secret. | `a-secret-string` |
 
 **Which file wins?** `.env` is the base config, always loaded. When the service runs in production (`npm run start` → `--env production` → `NODE_ENV=production`), Bun also loads `.env.production` and its values **override** `.env`. So put generic defaults in `.env` and production-specific values (real `AUTH_TOKEN`, server port, CORS origins) in `.env.production`. Both files are gitignored.
@@ -41,12 +41,15 @@ npm run start
 This is a shortcut for the underlying command:
 
 ```bash
-bun run build && pm2 startOrReload ecosystem.config.js --env production && pm2 save
+bun --env-file=.env --env-file=.env.production src/check-port.ts && bun run build && pm2 startOrReload ecosystem.config.js --env production && pm2 save
 ```
 
+- `bun --env-file=... src/check-port.ts` — preflight that resolves `SERVER_PORT` from the same env files the app uses and fails fast with a clear command-line error when the port is missing, invalid, or already in use. It skips the free-port check when `xpm-agent` is already online under PM2 (the reload path).
 - `bun run build` — bundles `src/index.ts` into `dist/index.js` (Bun target, minified). Production runs the compiled bundle, not the TypeScript source.
 - `pm2 startOrReload ecosystem.config.js --env production` — starts (or reloads) the API under PM2 with the `bun` interpreter from `ecosystem.config.js`. `--env production` applies the `env_production` block, setting `NODE_ENV=production`, which also makes Bun load `.env.production` on top of `.env` (see step 2). Fork mode, autorestart, max 10 restarts.
 - `pm2 save` — persists the current process list so it is restored on reboot.
+
+The API always binds `SERVER_PORT` exclusively (port sharing is disabled), so a busy port is a hard startup error — the same behavior as Uvicorn. Startup and configuration failures exit with code 2, which `stop_exit_codes` in `ecosystem.config.js` tells PM2 not to retry; check the message in the terminal or in `pm2 logs xpm-agent`.
 
 **Deploying an update:** just re-run `npm run start` — it rebuilds `dist/` and reloads the process in one step.
 
