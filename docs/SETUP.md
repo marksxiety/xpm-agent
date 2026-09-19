@@ -2,7 +2,25 @@
 
 Install, configure, and run **xpm-agent** under PM2.
 
-## 1. Copy the environment files
+> **Platform support: Windows only.** Setup, PM2 integration, and boot-startup are supported on Windows only — Linux/macOS are not supported yet.
+
+## 1. Install dependencies
+
+```bash
+bun install
+```
+
+> `npm install` also works, but this project is Bun-first — `bun.lock` is the authoritative lockfile, so `bun install` is recommended.
+
+Then install PM2 globally so the `pm2` CLI is available for manual commands and boot registration:
+
+```bash
+bun install -g pm2
+```
+
+> PM2 stays a project dependency too — `npm run start` invokes the local binary. The global install only puts `pm2` and `bunx pm2` on your `PATH`.
+
+## 2. Copy the environment files
 
 Copy the example into two files — one for the base config, one for production (single command, Command Prompt):
 
@@ -10,7 +28,7 @@ Copy the example into two files — one for the base config, one for production 
 copy .env.example .env & copy .env.example .env.production
 ```
 
-## 2. Configure the server
+## 3. Configure the server
 
 Open `.env` and `.env.production` and set:
 
@@ -23,14 +41,6 @@ Open `.env` and `.env.production` and set:
 **Which file wins?** `.env` is the base config, always loaded. When the service runs in production (`npm run start` → `--env production` → `NODE_ENV=production`), Bun also loads `.env.production` and its values **override** `.env`. So put generic defaults in `.env` and production-specific values (real `AUTH_TOKEN`, server port, CORS origins) in `.env.production`. Both files are gitignored.
 
 > **Authentication (optional):** set `AUTH_TOKEN` when the agent runs on a network that isn't strictly localhost. CORS only blocks browsers — curl, scripts, and other servers bypass it entirely. The token gates those. When unset, all `/pm2/*` routes are open to any client that can reach the port.
-
-## 3. Install dependencies
-
-```bash
-bun install
-```
-
-> `npm install` also works, but this project is Bun-first — `bun.lock` is the authoritative lockfile, so `bun install` is recommended.
 
 ## 4. Run the service (production)
 
@@ -46,7 +56,7 @@ bun --env-file=.env --env-file=.env.production src/check-port.ts && bun run buil
 
 - `bun --env-file=... src/check-port.ts` — preflight that resolves `SERVER_PORT` from the same env files the app uses and fails fast with a clear command-line error when the port is missing, invalid, or already in use. It inspects the OS TCP listener table (`netstat -ano`), so listeners on any interface or address family are detected and reported with their PID and process name. It skips the free-port check when `xpm-agent` is already online under PM2 (the reload path).
 - `bun run build` — bundles `src/index.ts` into `dist/index.js` (Bun target, minified). Production runs the compiled bundle, not the TypeScript source.
-- `pm2 startOrReload ecosystem.config.js --env production` — starts (or reloads) the API under PM2 with the `bun` interpreter from `ecosystem.config.js`. `--env production` applies the `env_production` block, setting `NODE_ENV=production`, which also makes Bun load `.env.production` on top of `.env` (see step 2). Fork mode, autorestart, max 10 restarts.
+- `pm2 startOrReload ecosystem.config.js --env production` — starts (or reloads) the API under PM2 with the `bun` interpreter from `ecosystem.config.js`. `--env production` applies the `env_production` block, setting `NODE_ENV=production`, which also makes Bun load `.env.production` on top of `.env` (see step 3). Fork mode, autorestart, max 10 restarts.
 - `pm2 save` — persists the current process list so it is restored on reboot.
 
 At startup the API checks the OS listener table for `SERVER_PORT` before binding — on Windows this is the only reliable guard, because Bun can still bind over a listener that does not set `SO_EXCLUSIVEADDRUSE`, even with port sharing disabled. Startup and configuration failures exit with code 2, which `stop_exit_codes` in `ecosystem.config.js` tells PM2 not to retry; check the message in the terminal or in `pm2 logs xpm-agent`.
@@ -80,7 +90,7 @@ bun run build      # produce dist/index.js, as CI and `npm run start` do
 
 Run `bun test`, `bun run typecheck`, and `bun run build` before deploying.
 
-## 6. Auto-start on Windows boot (optional)
+## 6. Auto-start on boot (optional)
 
 PM2 is restored automatically on reboot thanks to `pm2-windows-startup` (already a project dependency). Register it once:
 
@@ -88,4 +98,4 @@ PM2 is restored automatically on reboot thanks to `pm2-windows-startup` (already
 bunx pm2-startup install
 ```
 
-Only needed on Windows. After running, `pm2 save` (from step 4) ensures the process list is restored at boot.
+After running, `pm2 save` (from step 4) ensures the process list is restored at boot.
