@@ -29,6 +29,30 @@ export interface ProcessLogs {
     error?: string[];
 }
 
+export type ProcessMetrics = Record<string, unknown>;
+
+export interface ProcessDescribeDetails {
+    version: string | null;
+    script_path: string | null;
+    script_args: string | string[] | null;
+    error_log_path: string | null;
+    out_log_path: string | null;
+    pid_path: string | null;
+    interpreter_args: string[] | null;
+    node_version: string | null;
+    node_env: string | null;
+    created_at: string | null;
+    entire_log_path?: string;
+    cron_restart?: string;
+    max_memory_restart?: number | string;
+}
+
+export interface ProcessDescriptionDetails {
+    summary: ProcessSummary;
+    describe: ProcessDescribeDetails;
+    metrics: ProcessMetrics;
+}
+
 export interface ApiResponse<T = unknown> {
     success: boolean;
     message: string;
