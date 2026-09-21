@@ -1,7 +1,7 @@
 import { describe, expect, test, setSystemTime } from "bun:test";
 import type { ProcessDescription, Proc } from "pm2";
 
-import { summarizeProcess, toProcessDescriptions } from "../../utils/process";
+import { summarizeProcess, describeProcessDetails, toProcessDescriptions } from "../../utils/process";
 
 const FIXED_NOW = new Date("2023-07-22T04:26:40.000Z").getTime();
 
@@ -115,5 +115,103 @@ describe("toProcessDescriptions", () => {
         const process = onlineProcess();
         const input = [process, null, undefined] as unknown as Proc[];
         expect(toProcessDescriptions(input)).toEqual([process]);
+    });
+});
+
+const FIXED_CREATED_AT = 1758246546651;
+
+describe("describeProcessDetails", () => {
+    test("returns summary, describe, and raw metrics for a fully-populated process", () => {
+        setSystemTime(FIXED_NOW);
+
+        const process = onlineProcess({
+            pm2_env: {
+                status: "online",
+                pm_uptime: FIXED_NOW - 60000,
+                restart_time: 2,
+                unstable_restarts: 0,
+                exec_mode: "fork_mode",
+                instances: 1,
+                exec_interpreter: "bun",
+                pm_cwd: "C:\\Apps\\client",
+                namespace: "DPR",
+                watch: false,
+                autorestart: true,
+                version: "1.2.3",
+                args: ["--port", "3000"],
+                pm_exec_path: "C:\\Apps\\client\\index.js",
+                pm_out_log_path: "C:\\logs\\client-out.log",
+                pm_err_log_path: "C:\\logs\\client-error.log",
+                pm_pid_path: "C:\\pids\\client.pid",
+                pm_log_path: "C:\\logs\\client-combined.log",
+                node_args: ["--max-old-space-size=512"],
+                node_version: "20.11.0",
+                env: { NODE_ENV: "production" },
+                created_at: FIXED_CREATED_AT,
+                cron_restart: "0 2 * * *",
+                max_memory_restart: "500M",
+                axm_monitor: { "Heap Size": { value: "3.92", unit: "MiB" } },
+            } as ProcessDescription["pm2_env"],
+        });
+
+        const details = describeProcessDetails(process);
+
+        expect(details.summary).toEqual(summarizeProcess(process));
+        expect(details.summary.name).toBe("client");
+        expect(details.describe).toEqual({
+            version: "1.2.3",
+            script_path: "C:\\Apps\\client\\index.js",
+            script_args: ["--port", "3000"],
+            error_log_path: "C:\\logs\\client-error.log",
+            out_log_path: "C:\\logs\\client-out.log",
+            pid_path: "C:\\pids\\client.pid",
+            interpreter_args: ["--max-old-space-size=512"],
+            node_version: "20.11.0",
+            node_env: "production",
+            created_at: new Date(FIXED_CREATED_AT).toISOString(),
+            entire_log_path: "C:\\logs\\client-combined.log",
+            cron_restart: "0 2 * * *",
+            max_memory_restart: "500M",
+        });
+        expect(details.metrics).toEqual({ "Heap Size": { value: "3.92", unit: "MiB" } });
+    });
+
+    test("nulls absent non-conditional fields and omits conditional ones", () => {
+        const details = describeProcessDetails({ pm_id: 2 });
+
+        expect(details.describe).toEqual({
+            version: null,
+            script_path: null,
+            script_args: null,
+            error_log_path: null,
+            out_log_path: null,
+            pid_path: null,
+            interpreter_args: null,
+            node_version: null,
+            node_env: null,
+            created_at: null,
+        });
+        expect(details.metrics).toEqual({});
+    });
+
+    test("treats empty node_args and invalid created_at as null", () => {
+        const details = describeProcessDetails(onlineProcess({
+            pm2_env: {
+                status: "online",
+                node_args: [],
+                created_at: Number.NaN,
+            } as ProcessDescription["pm2_env"],
+        }));
+
+        expect(details.describe.interpreter_args).toBeNull();
+        expect(details.describe.created_at).toBeNull();
+    });
+
+    test("omits max_memory_restart when falsy", () => {
+        const details = describeProcessDetails(onlineProcess({
+            pm2_env: { status: "online", max_memory_restart: "" } as ProcessDescription["pm2_env"],
+        }));
+
+        expect(details.describe.max_memory_restart).toBeUndefined();
     });
 });
