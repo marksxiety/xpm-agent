@@ -1,10 +1,10 @@
 import { promises as fs } from "node:fs";
 import pm2 from "pm2";
 import type { ProcessDescription, StartOptions } from "pm2";
-import type { ApiResponse, ProcessSummary, ProcessLogs, LogStreamType, SystemOverviewWithProcesses } from "../types";
+import type { ApiResponse, ProcessDescriptionDetails, ProcessSummary, ProcessLogs, LogStreamType, SystemOverviewWithProcesses } from "../types";
 import { respond } from "../utils/response";
 import { classifyPm2Error } from "../utils/errors";
-import { summarizeProcess, toProcessDescriptions } from "../utils/process";
+import { describeProcessDetails, summarizeProcess, toProcessDescriptions } from "../utils/process";
 import { resolveLogFiles, tailLines } from "../utils/log";
 import { inspect } from "../utils/inspect";
 import { StartIssue } from "../types/inspect";
@@ -106,7 +106,7 @@ export class ProcessController {
     }
   }
 
-  describeProcess = async (processId: number): Promise<ApiResponse<ProcessSummary[]>> => {
+  describeProcess = async (processId: number): Promise<ApiResponse<ProcessDescriptionDetails>> => {
     try {
       const processDescriptions = await this.withPM2<ProcessDescription[]>((callback) =>
         pm2.describe(processId, (describeError, descriptions) =>
@@ -114,12 +114,12 @@ export class ProcessController {
         ),
       );
       if (processDescriptions.length === 0)
-        return respond<ProcessSummary[]>(`Process ${processId} not found`, null, {
+        return respond<ProcessDescriptionDetails>(`Process ${processId} not found`, null, {
           success: false,
           status: 404,
           code: "PROCESS_NOT_FOUND",
         });
-      return respond("PM2 process described successfully", processDescriptions.map(summarizeProcess));
+      return respond("PM2 process described successfully", describeProcessDetails(processDescriptions[0]));
     } catch (error) {
       return this.handleError(error);
     }
