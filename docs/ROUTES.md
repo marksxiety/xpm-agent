@@ -181,7 +181,7 @@ Liveness check for this API server itself (not the PM2 processes). Useful for up
 
 ### GET /describe/:id
 
-Fetches detailed info for a single process by its `pm_id`. Unlike `/list`, returns 404 if the id does not exist.
+Fetches detailed info for a single process by its `pm_id`. Returns a **single object** (not an array) with three keys: `summary`, `describe`, and `metrics`. Unlike `/list`, returns 404 if the id does not exist.
 
 **Path params:**
 
@@ -197,29 +197,74 @@ Fetches detailed info for a single process by its `pm_id`. Unlike `/list`, retur
 {
   "success": true,
   "message": "PM2 process described successfully",
-  "info": [
-    {
+  "info": {
+    "summary": {
       "pid": 30628,
       "pm_id": 0,
-      "name": "example-app",
-      "namespace": "example",
+      "name": "xpm-agent",
+      "namespace": "XPM",
       "status": "online",
-      "uptime": 119676,
-      "restarts": 3,
+      "uptime": 660000,
+      "restarts": 0,
       "unstable_restarts": 0,
       "exec_mode": "fork_mode",
       "instances": 1,
-      "interpreter": "C:\\Program Files\\nodejs\\node.exe",
-      "cpu": 1.5,
-      "memory": 9420800,
-      "cwd": "C:\\Example\\Application",
+      "interpreter": "bun",
+      "cpu": 0.3,
+      "memory": 51380224,
+      "cwd": "C:\\Users\\markc\\Desktop\\DEVELOPMENT\\xpm-agent",
       "ip_address": "192.168.1.10",
       "watch": false,
       "autorestart": true
+    },
+    "describe": {
+      "version": "1.1.2",
+      "script_path": "C:\\Users\\markc\\Desktop\\DEVELOPMENT\\xpm-agent\\dist\\index.js",
+      "script_args": null,
+      "error_log_path": "C:\\Users\\markc\\.pm2\\logs\\xpm-agent-error-0.log",
+      "out_log_path": "C:\\Users\\markc\\.pm2\\logs\\xpm-agent-out-0.log",
+      "pid_path": "C:\\Users\\markc\\.pm2\\pids\\xpm-agent-0.pid",
+      "interpreter_args": null,
+      "node_version": "26.3.0",
+      "node_env": "production",
+      "created_at": "2026-09-19T02:29:06.651Z"
+    },
+    "metrics": {
+      "Heap Size": { "value": "3.92", "unit": "MiB" },
+      "Heap Usage": { "value": "100", "unit": "%" },
+      "Used Heap Size": { "value": "3.92", "unit": "MiB" },
+      "Active requests": { "value": "0", "unit": "" },
+      "Active handles": { "value": "0", "unit": "" },
+      "Event Loop Latency": { "value": "1.07", "unit": "ms" },
+      "Event Loop Latency p95": { "value": "1.98", "unit": "ms" }
     }
-  ]
+  }
 }
 ```
+
+**`summary`** uses the same shape as every other route — see [ProcessSummary Fields](#processsummary-fields).
+
+**`describe` fields:**
+
+| Field | Type | Description |
+|---|---|---|
+| `version` | string \| null | App version as recorded by PM2 |
+| `script_path` | string \| null | Resolved path of the launched script (`pm_exec_path`) |
+| `script_args` | string \| string[] \| null | Raw arguments passed to the script (`args`) |
+| `error_log_path` | string \| null | stderr log file path |
+| `out_log_path` | string \| null | stdout log file path |
+| `pid_path` | string \| null | PID file path |
+| `interpreter_args` | string[] \| null | Interpreter arguments (`node_args`); `null` when empty |
+| `node_version` | string \| null | Runtime version reported by the process — `null` for non-Node/Bun interpreters (e.g. Python, `none`) |
+| `node_env` | string \| null | `NODE_ENV` from the process environment; `null` when unset |
+| `created_at` | string \| null | Process creation time (ISO 8601); `null` when unavailable |
+| `entire_log_path` | string | Combined log path — **only present when configured** |
+| `cron_restart` | string | Cron restart expression — **only present when configured** |
+| `max_memory_restart` | number \| string | Max-memory restart threshold — **only present when configured** |
+
+> Non-conditional `describe` keys are always present and are `null` when PM2 reports no value. `entire_log_path`, `cron_restart`, and `max_memory_restart` are omitted entirely unless configured.
+
+**`metrics`** is the raw `pm2_env.axm_monitor` map passed through verbatim (keys are metric names such as `Heap Size`; values are whatever pmx reports, typically `{ value, unit }`). It is `{}` for processes without pmx instrumentation (e.g. Python, Go, binaries).
 
 **Error `404`** (unknown id):
 
@@ -669,7 +714,7 @@ The `out` and `error` arrays contain the last N lines of each respective log fil
 
 ## ProcessSummary Fields
 
-The `info` payload for `/list`, `/describe/:id`, `/start`, `/stop/:id`, `/restart/:id`, `/reload/:id`, and `/delete/:id` — always an array of summaries.
+The `info` payload for `/list`, `/start`, `/stop/:id`, `/restart/:id`, `/reload/:id`, and `/delete/:id` — always an array of summaries. `GET /describe/:id` returns a **single object** with `summary` (this shape), `describe`, and `metrics` — see [GET /describe/:id](#get-describeid).
 
 | Field | Type | Description |
 |---|---|---|
@@ -716,7 +761,7 @@ All errors use the envelope with `success: false` and include a `code`; `info` i
 - `stop` keeps the process registered and restartable; `delete` removes it permanently and frees the `pm_id` (which PM2 may recycle).
 - `:id` always means the numeric `pm_id` from `GET /list` — process **names are not accepted** (names can collide across namespaces).
 - `instances > 1` (with `exec_mode: "cluster"`) launches one Node process per CPU instance — the response then contains **one row per instance**.
-- `env` values injected via `/start` are applied to the spawned process only; they are **not echoed back** in responses (all responses are sanitized `ProcessSummary` snapshots).
+- `env` values injected via `/start` are applied to the spawned process only; they are **not echoed back** in responses (all responses are sanitized `ProcessSummary` snapshots). The one exception is `GET /describe/:id`, whose `describe`/`metrics` keys additionally expose `pm_exec_path`, the log/pid paths, `NODE_ENV`, and raw code metrics — but no other env values.
 - `/start` passes every field through to PM2 verbatim — it applies no PM2 defaults and no environment variables of its own (see [Defaults & provenance](#defaults--provenance)). The only API-level field is `targetOs` (used for interpreter-path validation, default `"win32"`), and `time` is always forced to `true` so log lines carry timestamps.
 - `windowsHide` is **recommended `true` on Windows hosts** (pm2's own default is `false`) to avoid a spawned console window per process.
 - **Name/namespace are immutable after start** — PM2 has no rename. To rename, `delete` (optionally with `delete_logs: true`) and `start` under the new name. Logs are named after the name/namespace, so a rename starts new `-out.log`/`-error.log` files.
