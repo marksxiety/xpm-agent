@@ -53,7 +53,7 @@ See [SETUP.md](./docs/SETUP.md) for full configuration options.
 | `/pm2/list` | GET | List all processes with live CPU/memory/restarts (optional `?overview=true`, `?logs=N`) |
 | `/pm2/system` | GET | Host-level metrics only (CPU usage, memory) |
 | `/pm2/health` | GET | API liveness check |
-| `/pm2/describe/:id` | GET | Details for one process |
+| `/pm2/describe/:id` | GET | Details + code metrics for one process (`summary`, `describe`, `metrics`) |
 | `/pm2/start` | POST | Register and launch a new process |
 | `/pm2/stop/:id` | POST | Stop (keep registered) |
 | `/pm2/restart/:id` | POST | Kill and relaunch |
