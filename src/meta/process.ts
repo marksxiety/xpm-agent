@@ -1,5 +1,5 @@
 import { DeleteLogsQuery, FlushParams, ListQuery, LogsParams, LogsQuery, ProcessIdParams, StartPayload } from "../schemas/process";
-import { ProcessListResponse, ProcessOverviewResponse } from "./schemas";
+import { DescribeResponse, ProcessListResponse, ProcessOverviewResponse } from "./schemas";
 
 const routeMeta = {
   list: {
@@ -94,9 +94,70 @@ const routeMeta = {
     detail: {
       summary: "Get details of one process",
       description:
-        "Fetches detailed info for a single process by its `pm_id`. Unlike `/list`, returns 404 if the id does not exist.",
+        "Fetches detailed info for a single process by its `pm_id`. Returns a single object (not an array) with three keys: `summary` (the same shape used across all routes), `describe` (snake_case process-table fields mirroring `pm2 describe`; non-conditional keys are `null` when PM2 reports no value, and `entire_log_path`/`cron_restart`/`max_memory_restart` are included only when configured), and `metrics` (raw `pm2_env.axm_monitor` code metrics; `{}` for non-Node/Bun interpreters). Returns 404 if the id does not exist.",
       tags: ["Processes"],
       operationId: "describeProcess",
+      responses: {
+        200: {
+          description: "A single object with `summary`, `describe`, and `metrics` keys.",
+          content: {
+            "application/json": {
+              schema: DescribeResponse,
+              examples: {
+                describe: {
+                  summary: "GET /pm2/describe/0",
+                  value: {
+                    success: true,
+                    message: "PM2 process described successfully",
+                    info: {
+                      summary: {
+                        pid: 30628,
+                        pm_id: 0,
+                        name: "xpm-agent",
+                        namespace: "XPM",
+                        status: "online",
+                        uptime: 660000,
+                        restarts: 0,
+                        unstable_restarts: 0,
+                        exec_mode: "fork_mode",
+                        instances: 1,
+                        interpreter: "bun",
+                        cpu: 0.3,
+                        memory: 51380224,
+                        cwd: "C:\\Users\\markc\\Desktop\\DEVELOPMENT\\xpm-agent",
+                        ip_address: "192.168.1.10",
+                        watch: false,
+                        autorestart: true,
+                      },
+                      describe: {
+                        version: "1.1.2",
+                        script_path: "C:\\Users\\markc\\Desktop\\DEVELOPMENT\\xpm-agent\\dist\\index.js",
+                        script_args: null,
+                        error_log_path: "C:\\Users\\markc\\.pm2\\logs\\xpm-agent-error-0.log",
+                        out_log_path: "C:\\Users\\markc\\.pm2\\logs\\xpm-agent-out-0.log",
+                        pid_path: "C:\\Users\\markc\\.pm2\\pids\\xpm-agent-0.pid",
+                        interpreter_args: null,
+                        node_version: "26.3.0",
+                        node_env: "production",
+                        created_at: "2026-09-19T02:29:06.651Z",
+                      },
+                      metrics: {
+                        "Heap Size": { value: "3.92", unit: "MiB" },
+                        "Heap Usage": { value: "100", unit: "%" },
+                        "Used Heap Size": { value: "3.92", unit: "MiB" },
+                        "Active requests": { value: "0", unit: "" },
+                        "Active handles": { value: "0", unit: "" },
+                        "Event Loop Latency": { value: "1.07", unit: "ms" },
+                        "Event Loop Latency p95": { value: "1.98", unit: "ms" },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
     },
   },
   start: {
