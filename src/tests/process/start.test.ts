@@ -96,6 +96,49 @@ describe("pm2 start service", () => {
         expect(state.startOpts?.time).toBe(true);
     });
 
+    test("passes the payload namespace through to pm2.start", async () => {
+        resetState();
+        state.started = [{ name: "my-app" }];
+
+        await processController.startProcess(VALID_PAYLOAD);
+
+        expect(state.startOpts?.namespace).toBe("example");
+    });
+
+    test("mirrors the namespace into env.namespace so PM2 does not overwrite it with the agent's inherited namespace", async () => {
+        // PM2 copies the agent's own process env into the new app and God.executeApp
+        // extends pm2_env with that env last (God.js: Utility.extend(env_copy, env_copy.env)),
+        // so a namespace leaked from the agent's PM2 environment (e.g. XPM) would replace
+        // the payload's namespace without this mirror.
+        resetState();
+        state.started = [{ name: "my-app" }];
+
+        await processController.startProcess(VALID_PAYLOAD);
+
+        expect(state.startOpts?.env?.namespace).toBe("example");
+    });
+
+    test("defaults namespace to 'default' when the payload omits it", async () => {
+        resetState();
+        state.started = [{ name: "my-app" }];
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { namespace: _namespace, ...withoutNamespace } = VALID_PAYLOAD;
+
+        await processController.startProcess(withoutNamespace);
+
+        expect(state.startOpts?.namespace).toBe("default");
+        expect(state.startOpts?.env?.namespace).toBe("default");
+    });
+
+    test("preserves other env entries when mirroring the namespace", async () => {
+        resetState();
+        state.started = [{ name: "my-app" }];
+
+        await processController.startProcess({ ...VALID_PAYLOAD, env: { FOO: "bar" } });
+
+        expect(state.startOpts?.env).toEqual({ FOO: "bar", namespace: "example" });
+    });
+
     test("returns the launched process when pm2 does not report a pm_id", async () => {
         resetState();
         state.started = [{ name: "my-app" }];
