@@ -136,11 +136,13 @@ export class ProcessController {
     }
 
     try {
-      const logOptions = resolveLogFiles({ name: payload.name || payload.script, namespace: payload.namespace });
+      const namespace = payload.namespace ?? "default";
+      const logOptions = resolveLogFiles({ name: payload.name || payload.script, namespace });
 
       const launchedProcesses = await this.withPM2<ProcessDescription[]>((callback) =>
-        pm2.start({ ...payload, ...logOptions, time: true }, (startError, processes) =>
-          callback(startError, toProcessDescriptions(processes)),
+        pm2.start(
+          { ...payload, ...logOptions, namespace, env: { ...payload.env, namespace }, time: true },
+          (startError, processes) => callback(startError, toProcessDescriptions(processes)),
         ),
         true // auto-save when starting a process
       );
