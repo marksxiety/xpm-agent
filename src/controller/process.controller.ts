@@ -9,54 +9,28 @@ import { resolveLogFiles, tailLines } from "../utils/log";
 import { inspect } from "../utils/inspect";
 import { StartIssue } from "../types/inspect";
 import { getHostMetrics, systemInformationSource, type HostMetricsSource } from "../utils/system";
+import { pm2Connection, type Pm2Connection } from "../pm2/client";
 export class ProcessController {
-  constructor(private metricsSource: HostMetricsSource = systemInformationSource) {}
-  
-  private withPM2<T>(
+  constructor(
+    private metricsSource: HostMetricsSource = systemInformationSource,
+    private connection: Pm2Connection = pm2Connection,
+  ) {}
+
+  private async withPM2<T>(
     operation: (callback: (operationError: Error | null, result?: T) => void) => void,
     autoSave = false,
   ): Promise<T> {
-    return new Promise((resolve, reject) => {
-      pm2.connect((connectionError) => {
-        if (connectionError) {
-          reject(connectionError);
-          return;
-        }
+    const result = await this.connection.execute(operation);
 
-        let alreadySettled = false;
+    if (autoSave) {
+      try {
+        await this.connection.execute<void>((callback) => pm2.dump((dumpError) => callback(dumpError)));
+      } catch (dumpError) {
+        console.error("Failed to auto-save PM2 process list:", dumpError);
+      }
+    }
 
-        const settle = (operationError: Error | null, result?: T) => {
-          if (alreadySettled) return;
-          alreadySettled = true;
-
-          const finish = (finalError: Error | null) => {
-            pm2.disconnect();
-            if (finalError) reject(finalError);
-            else resolve(result as T);
-          };
-
-          // If the main command succeeded and autoSave is requested, dump before disconnecting
-          // autosave is saving the current snapshot of the services that was running
-          // from memory to persisted (even if the server restarts, it will be saved)
-          if (!operationError && autoSave) {
-            pm2.dump((dumpError) => {
-              if (dumpError) {
-                console.error("Failed to auto-save PM2 process list:", dumpError);
-              }
-              finish(operationError);
-            });
-          } else {
-            finish(operationError);
-          }
-        };
-
-        try {
-          operation(settle);
-        } catch (thrownError) {
-          settle(thrownError instanceof Error ? thrownError : new Error(String(thrownError)));
-        }
-      });
-    });
+    return result;
   }
 
   private handleError<T>(error: unknown): ApiResponse<T> {
