@@ -2,10 +2,14 @@ import type { ApiResponse } from "../types";
 import { ERROR_CODES, ELYSIA_CODE_MAP, type ClassifiedError, type ErrorCode } from "../types/error";
 import { respond } from "./response";
 
+const PM2_TIMEOUT_ERROR_NAME = "Pm2RpcTimeoutError";
+
 export function classifyPm2Error(error: unknown): ClassifiedError {
   const rawMessage = error instanceof Error ? error.message : String((error as { msg?: string })?.msg ?? error);
   const lowercasedMessage = rawMessage.toLowerCase();
 
+  if (error instanceof Error && error.name === PM2_TIMEOUT_ERROR_NAME)
+    return { code: "PM2_RPC_TIMEOUT", ...ERROR_CODES.PM2_RPC_TIMEOUT };
   if (/process.*not found|process or namespace not found|app not found|no process found/.test(lowercasedMessage))
     return { code: "PROCESS_NOT_FOUND", ...ERROR_CODES.PROCESS_NOT_FOUND };
   if (/script not found/.test(lowercasedMessage))
