@@ -45,6 +45,7 @@ mock.module("pm2", () => ({
 }));
 
 const { processController } = await import("../../controller/process.controller");
+const { pm2Connection } = await import("../../pm2/client");
 const { createApp } = await import("../../index");
 
 function resetState() {
@@ -56,6 +57,7 @@ function resetState() {
     fsState.unlinkCalls = [];
     fsState.unlinkError = null;
     state.dumpCalls = 0;
+    pm2Connection.reset();
 }
 
 async function requestDelete(processId: number | string, deleteLogs = false): Promise<{ status: number; body: ApiResponse }> {
