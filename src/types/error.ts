@@ -2,6 +2,7 @@ export type ErrorCode =
   | "PROCESS_NOT_FOUND"
   | "SCRIPT_NOT_FOUND"
   | "PM2_DAEMON_UNAVAILABLE"
+  | "PM2_RPC_TIMEOUT"
   | "PM2_OPERATION_FAILED"
   | "INVALID_PROCESS_ID"
   | "INVALID_PROCESS_CONFIGURATION"
@@ -28,6 +29,7 @@ export const ERROR_CODES: Record<ErrorCode, ApiErrorDescriptor> = {
   PROCESS_NOT_FOUND: { status: 404, message: "Process not found" },
   SCRIPT_NOT_FOUND: { status: 400, message: "Script not found — check the 'script' path in your request" },
   PM2_DAEMON_UNAVAILABLE: { status: 503, message: "Cannot connect to PM2 daemon" },
+  PM2_RPC_TIMEOUT: { status: 504, message: "PM2 did not respond in time" },
   PM2_OPERATION_FAILED: { status: 500, message: "PM2 operation failed" },
   INVALID_PROCESS_ID: { status: 400, message: "Invalid process id" },
   INVALID_PROCESS_CONFIGURATION: { status: 422, message: "Invalid process configuration" },
