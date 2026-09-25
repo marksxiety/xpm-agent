@@ -32,6 +32,7 @@ mock.module("pm2", () => ({
 }));
 
 const { processController } = await import("../../controller/process.controller");
+const { pm2Connection } = await import("../../pm2/client");
 const { createApp } = await import("../../index");
 
 const VALID_PAYLOAD: StartOptions = {
@@ -55,6 +56,7 @@ function resetState() {
     state.connectError = null;
     state.startOpts = null;
     state.dumpCalls = 0;
+    pm2Connection.reset();
 }
 
 async function postStart(payload: object): Promise<{ status: number; body: ApiResponse }> {
