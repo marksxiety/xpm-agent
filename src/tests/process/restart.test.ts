@@ -19,12 +19,14 @@ mock.module("pm2", () => ({
 }));
 
 const { processController } = await import("../../controller/process.controller");
+const { pm2Connection } = await import("../../pm2/client");
 const { createApp } = await import("../../index");
 
 function resetState() {
     state.restarted = [];
     state.restartError = null;
     state.connectError = null;
+    pm2Connection.reset();
 }
 
 async function postRestart(processId: number | string): Promise<{ status: number; body: ApiResponse }> {
