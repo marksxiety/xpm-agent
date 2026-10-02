@@ -6,8 +6,12 @@ import { StartIssue } from "../../types/inspect";
 const state = {
     started: [] as ProcessDescription[],
     list: [] as ProcessDescription[],
+    listAfterStart: null as ProcessDescription[] | null,
     startError: null as Error | null,
     listError: null as Error | null,
+    listErrorOnCall: null as number | null,
+    listCalls: 0,
+    startCalls: 0,
     connectError: null as Error | null,
     startOpts: null as StartOptions | null,
     dumpCalls: 0,
@@ -18,11 +22,16 @@ mock.module("pm2", () => ({
         connect(cb: (err?: Error | null) => void) { cb(state.connectError); },
         disconnect() { },
         start(opts: StartOptions, cb: (err?: Error | null, procs?: Proc | Proc[]) => void) {
+            state.startCalls += 1;
             state.startOpts = opts;
             cb(state.startError, state.started);
         },
         list(cb: (err?: Error | null, list?: ProcessDescription[]) => void) {
-            cb(state.listError, state.list);
+            state.listCalls += 1;
+            const shouldFail = state.listError !== null
+                && (state.listErrorOnCall === null || state.listCalls >= state.listErrorOnCall);
+            const currentList = state.startCalls > 0 && state.listAfterStart !== null ? state.listAfterStart : state.list;
+            cb(shouldFail ? state.listError : null, currentList);
         },
         dump(cb: (err?: Error | null) => void) {
             state.dumpCalls += 1;
@@ -51,8 +60,12 @@ const VALID_PAYLOAD: StartOptions = {
 function resetState() {
     state.started = [];
     state.list = [];
+    state.listAfterStart = null;
     state.startError = null;
     state.listError = null;
+    state.listErrorOnCall = null;
+    state.listCalls = 0;
+    state.startCalls = 0;
     state.connectError = null;
     state.startOpts = null;
     state.dumpCalls = 0;
@@ -165,6 +178,57 @@ describe("pm2 start service", () => {
         expect(response.message).toBe("Script not found — check the 'script' path in your request");
     });
 
+    test("returns 409 and does not start when the name already exists", async () => {
+        resetState();
+        state.list = [{ pm_id: 7, name: "my-app", pm2_env: { namespace: "example" } as ProcessDescription["pm2_env"] }];
+
+        const response = await processController.startProcess(VALID_PAYLOAD);
+
+        expect(response.success).toBe(false);
+        expect(response.status).toBe(409);
+        expect(response.code).toBe("PROCESS_NAME_CONFLICT");
+        expect(response.message).toBe("Process name 'my-app' already exists in namespace 'example' (pm_id 7)");
+        expect(response.info).toEqual({ pm_id: 7, name: "my-app", namespace: "example" });
+        expect(state.startOpts).toBeNull();
+        expect(state.dumpCalls).toBe(0);
+    });
+
+    test("rejects a same-name process in a different namespace because PM2 matches names across namespaces", async () => {
+        resetState();
+        state.list = [{ pm_id: 9, name: "my-app", pm2_env: { namespace: "other" } as ProcessDescription["pm2_env"] }];
+
+        const response = await processController.startProcess(VALID_PAYLOAD);
+
+        expect(response.success).toBe(false);
+        expect(response.status).toBe(409);
+        expect(response.code).toBe("PROCESS_NAME_CONFLICT");
+        expect(response.info).toEqual({ pm_id: 9, name: "my-app", namespace: "other" });
+        expect(state.startOpts).toBeNull();
+    });
+
+    test("returns 503 and does not start when the conflict pre-check cannot reach the daemon", async () => {
+        resetState();
+        state.listError = new Error("PM2 daemon not running");
+
+        const response = await processController.startProcess(VALID_PAYLOAD);
+
+        expect(response.success).toBe(false);
+        expect(response.status).toBe(503);
+        expect(response.code).toBe("PM2_DAEMON_UNAVAILABLE");
+        expect(state.startOpts).toBeNull();
+    });
+
+    test("allows the start when no process with the requested name exists", async () => {
+        resetState();
+        state.list = [{ pm_id: 7, name: "other-app", pm2_env: { namespace: "example" } as ProcessDescription["pm2_env"] }];
+        state.started = [{ pm_id: 3, name: "my-app" }];
+
+        const response = await processController.startProcess(VALID_PAYLOAD);
+
+        expect(response.success).toBe(true);
+        expect(state.startOpts?.name).toBe("my-app");
+    });
+
     test("returns 422 with the issue list when name is empty", async () => {
         resetState();
 
@@ -238,7 +302,7 @@ describe("pm2 start service", () => {
     test("returns only the launched processes filtered from the list call when pm_id is present", async () => {
         resetState();
         state.started = [{ pm_id: 3, name: "my-app" }];
-        state.list = [{ pm_id: 3, name: "my-app" }];
+        state.listAfterStart = [{ pm_id: 3, name: "my-app" }];
 
         const response = await processController.startProcess(VALID_PAYLOAD);
 
@@ -252,7 +316,7 @@ describe("pm2 start service", () => {
     test("returns the launched process when pm_id is only present in pm2_env", async () => {
         resetState();
         state.started = [{ name: "my-app", pm2_env: { pm_id: 3 } as ProcessDescription["pm2_env"] }];
-        state.list = [{ pm_id: 3, name: "my-app" }];
+        state.listAfterStart = [{ pm_id: 3, name: "my-app" }];
 
         const response = await processController.startProcess(VALID_PAYLOAD);
 
@@ -265,6 +329,7 @@ describe("pm2 start service", () => {
         resetState();
         state.started = [{ pm_id: 3, name: "my-app" }];
         state.listError = new Error("PM2 daemon not running");
+        state.listErrorOnCall = 2;
 
         const response = await processController.startProcess(VALID_PAYLOAD);
 
@@ -303,7 +368,7 @@ describe("pm2 start route", () => {
     test("returns 200 with the launched process when the payload is valid", async () => {
         resetState();
         state.started = [{ pm_id: 3, name: "my-app" }];
-        state.list = [{ pm_id: 3, name: "my-app" }];
+        state.listAfterStart = [{ pm_id: 3, name: "my-app" }];
 
         const { status, body } = await postStart(VALID_PAYLOAD);
 
@@ -317,7 +382,7 @@ describe("pm2 start route", () => {
     test("returns 200 with a posix interpreter on a linux target", async () => {
         resetState();
         state.started = [{ pm_id: 3, name: "my-app" }];
-        state.list = [{ pm_id: 3, name: "my-app" }];
+        state.listAfterStart = [{ pm_id: 3, name: "my-app" }];
 
         const { status, body } = await postStart({ ...VALID_PAYLOAD, targetOs: "linux", interpreter: "/usr/bin/node" });
 
@@ -372,6 +437,18 @@ describe("pm2 start route", () => {
         expect(body.success).toBe(false);
         expect(body.code).toBe("SCRIPT_NOT_FOUND");
         expect(body.message).toBe("Script not found — check the 'script' path in your request");
+    });
+
+    test("returns 409 when the process name already exists", async () => {
+        resetState();
+        state.list = [{ pm_id: 7, name: "my-app", pm2_env: { namespace: "example" } as ProcessDescription["pm2_env"] }];
+
+        const { status, body } = await postStart(VALID_PAYLOAD);
+
+        expect(status).toBe(409);
+        expect(body.success).toBe(false);
+        expect(body.code).toBe("PROCESS_NAME_CONFLICT");
+        expect(body.info).toEqual({ pm_id: 7, name: "my-app", namespace: "example" });
     });
 
     test("returns 503 when the PM2 daemon is unreachable", async () => {
