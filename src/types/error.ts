@@ -1,5 +1,6 @@
 export type ErrorCode =
   | "PROCESS_NOT_FOUND"
+  | "PROCESS_NAME_CONFLICT"
   | "SCRIPT_NOT_FOUND"
   | "PM2_DAEMON_UNAVAILABLE"
   | "PM2_RPC_TIMEOUT"
@@ -27,6 +28,7 @@ export interface ClassifiedError extends ApiErrorDescriptor {
 
 export const ERROR_CODES: Record<ErrorCode, ApiErrorDescriptor> = {
   PROCESS_NOT_FOUND: { status: 404, message: "Process not found" },
+  PROCESS_NAME_CONFLICT: { status: 409, message: "Process name already in use" },
   SCRIPT_NOT_FOUND: { status: 400, message: "Script not found — check the 'script' path in your request" },
   PM2_DAEMON_UNAVAILABLE: { status: 503, message: "Cannot connect to PM2 daemon" },
   PM2_RPC_TIMEOUT: { status: 504, message: "PM2 did not respond in time" },
