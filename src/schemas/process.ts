@@ -67,7 +67,7 @@ export const StartPayload = t.Object({
   })),
   namespace: t.Optional(t.String({
     description:
-      "PM2 namespace for the process. Defaults to `'default'` (pm2 built-in). Use to isolate same-named processes.",
+      "PM2 namespace for the process. Defaults to `'default'` (pm2 built-in). Grouping label only — a `name` already registered in PM2 (in any namespace) is rejected with `409`.",
     examples: ["DPR", "default"],
     default: "default",
   })),
