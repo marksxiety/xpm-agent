@@ -24,6 +24,12 @@ export interface ProcessSummary {
 
 export type LogStreamType = "both" | "output" | "error";
 
+export interface ProcessNameConflict {
+    pm_id: number;
+    name: string;
+    namespace: string;
+}
+
 export interface ProcessLogs {
     out?: string[];
     error?: string[];
