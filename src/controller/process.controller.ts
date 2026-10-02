@@ -1,7 +1,7 @@
 import { promises as fs } from "node:fs";
 import pm2 from "pm2";
 import type { ProcessDescription, StartOptions } from "pm2";
-import type { ApiResponse, ProcessDescriptionDetails, ProcessSummary, ProcessLogs, LogStreamType, SystemOverviewWithProcesses } from "../types";
+import type { ApiResponse, ProcessDescriptionDetails, ProcessNameConflict, ProcessSummary, ProcessLogs, LogStreamType, SystemOverviewWithProcesses } from "../types";
 import { respond } from "../utils/response";
 import { classifyPm2Error } from "../utils/errors";
 import { describeProcessDetails, summarizeProcess, toProcessDescriptions } from "../utils/process";
@@ -11,10 +11,21 @@ import { StartIssue } from "../types/inspect";
 import { getHostMetrics, systemInformationSource, type HostMetricsSource } from "../utils/system";
 import { pm2Connection, type Pm2Connection } from "../pm2/client";
 export class ProcessController {
+  private startChain: Promise<void> = Promise.resolve();
+
   constructor(
     private metricsSource: HostMetricsSource = systemInformationSource,
     private connection: Pm2Connection = pm2Connection,
   ) {}
+
+  private runExclusive<T>(operation: () => Promise<T>): Promise<T> {
+    const result = this.startChain.then(operation);
+    this.startChain = result.then(
+      () => undefined,
+      () => undefined,
+    );
+    return result;
+  }
 
   private async withPM2<T>(
     operation: (callback: (operationError: Error | null, result?: T) => void) => void,
@@ -99,7 +110,17 @@ export class ProcessController {
     }
   };
 
-  startProcess = async (payload: StartOptions): Promise<ApiResponse<ProcessSummary[] | StartIssue[]>> => {
+  private async findProcessByName(name: string): Promise<ProcessNameConflict | null> {
+    const processDescriptions = await this.withPM2<ProcessDescription[]>((callback) =>
+      pm2.list((listError, list) => callback(listError, list ?? [])),
+    );
+    const existingProcess = processDescriptions.find((process) => process.name === name);
+    if (!existingProcess) return null;
+    const summary = summarizeProcess(existingProcess);
+    return { pm_id: summary.pm_id, name: summary.name, namespace: summary.namespace };
+  }
+
+  startProcess = async (payload: StartOptions): Promise<ApiResponse<ProcessSummary[] | StartIssue[] | ProcessNameConflict>> => {
     const issues = inspect("start", payload);
     if (issues.length > 0) {
       return respond("Invalid process configuration", issues, {
@@ -109,32 +130,43 @@ export class ProcessController {
       });
     }
 
-    try {
-      const namespace = payload.namespace ?? "default";
-      const logOptions = resolveLogFiles({ name: payload.name || payload.script, namespace });
+    return this.runExclusive(async () => {
+      try {
+        const conflict = await this.findProcessByName(payload.name ?? "");
+        if (conflict) {
+          return respond(
+            `Process name '${conflict.name}' already exists in namespace '${conflict.namespace}' (pm_id ${conflict.pm_id})`,
+            conflict,
+            { success: false, status: 409, code: "PROCESS_NAME_CONFLICT" },
+          );
+        }
 
-      const launchedProcesses = await this.withPM2<ProcessDescription[]>((callback) =>
-        pm2.start(
-          { ...payload, ...logOptions, namespace, env: { ...payload.env, namespace }, time: true },
-          (startError, processes) => callback(startError, toProcessDescriptions(processes)),
-        ),
-        true // auto-save when starting a process
-      );
-      const launchedProcessIds = launchedProcesses
-        .map((process) => process.pm_id ?? (process.pm2_env as { pm_id?: number } | undefined)?.pm_id)
-        .filter((processId): processId is number => typeof processId === "number" && processId >= 0);
-      if (launchedProcessIds.length === 0)
-        return respond("PM2 process started successfully", launchedProcesses.map(summarizeProcess));
-      const listResponse = await this.listProcesses();
-      if (!listResponse.success) return listResponse;
-      const allProcesses = listResponse.info ?? [];
-      return respond(
-        "PM2 process started successfully",
-        allProcesses.filter((process) => launchedProcessIds.includes(process.pm_id)),
-      );
-    } catch (error) {
-      return this.handleError(error);
-    }
+        const namespace = payload.namespace ?? "default";
+        const logOptions = resolveLogFiles({ name: payload.name || payload.script, namespace });
+
+        const launchedProcesses = await this.withPM2<ProcessDescription[]>((callback) =>
+          pm2.start(
+            { ...payload, ...logOptions, namespace, env: { ...payload.env, namespace }, time: true },
+            (startError, processes) => callback(startError, toProcessDescriptions(processes)),
+          ),
+          true // auto-save when starting a process
+        );
+        const launchedProcessIds = launchedProcesses
+          .map((process) => process.pm_id ?? (process.pm2_env as { pm_id?: number } | undefined)?.pm_id)
+          .filter((processId): processId is number => typeof processId === "number" && processId >= 0);
+        if (launchedProcessIds.length === 0)
+          return respond("PM2 process started successfully", launchedProcesses.map(summarizeProcess));
+        const listResponse = await this.listProcesses();
+        if (!listResponse.success) return listResponse;
+        const allProcesses = listResponse.info ?? [];
+        return respond(
+          "PM2 process started successfully",
+          allProcesses.filter((process) => launchedProcessIds.includes(process.pm_id)),
+        );
+      } catch (error) {
+        return this.handleError(error);
+      }
+    });
   };
 
   stopProcess = async (processId: number): Promise<ApiResponse<ProcessSummary[]>> => {
