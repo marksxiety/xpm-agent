@@ -296,6 +296,8 @@ The body is validated **twice**:
 1. **Schema validation** — wrong types or missing required fields → `422` (handled by the API validation layer).
 2. **Configuration guide** — cross-field checks that catch impossible or misleading combos (e.g. a `.js` script with `interpreter: "php"`) → `422` with the list of issues in `info`.
 
+A `name` that is already registered in PM2 is rejected with `409` — this API never silently restarts/overrides an existing process. The conflict is matched on `name` alone (PM2 cannot host two same-name processes in different namespaces), and the existing process's `pm_id`/`namespace` are returned in `info`.
+
 **Language recipes:**
 
 `interpreter` must be an absolute path to the interpreter executable (or `"none"` for bare binaries) — bare names like `"node"`/`"php"` are rejected, and the path is validated against the declared `targetOs`.
@@ -334,7 +336,7 @@ The body is validated **twice**:
 | Field | Type | Required | Description / default |
 |---|---|---|---|
 | `name` | string | **yes** | Process name shown in `pm2 list`. Used in log file names and lifecycle commands. |
-| `namespace` | string | no | PM2 namespace. Defaults to `"default"` (pm2 built-in). Use to isolate same-named processes. |
+| `namespace` | string | no | PM2 namespace. Defaults to `"default"` (pm2 built-in). Grouping label only — PM2 cannot host two processes with the same `name` in different namespaces, so a duplicate `name` is rejected with `409`. |
 | `targetOs` | `"win32"` \| `"linux"` | no | Target OS this process will run on — drives interpreter path validation. Defaults to `"win32"` (API-level default). On `win32`, both `C:\...` and `/...` absolute forms are accepted; on `linux` only POSIX absolute paths pass. |
 | `cwd` | string | no | Working directory the process is launched from. **No pm2 default** — almost always set this. |
 | `script` | string | **yes** | Path to the script to run. Resolved against the API server's cwd when `cwd` is omitted. |
@@ -440,6 +442,23 @@ On a `targetOs: "linux"` payload the same violation reads `(e.g. '/usr/bin/node'
   "info": null
 }
 ```
+
+**Error `409`** (a process with this `name` is already registered — note `info` identifies it):
+
+```json
+{
+  "success": false,
+  "message": "Process name 'example-app' already exists in namespace 'example' (pm_id 2)",
+  "code": "PROCESS_NAME_CONFLICT",
+  "info": {
+    "pm_id": 2,
+    "name": "example-app",
+    "namespace": "example"
+  }
+}
+```
+
+Delete or rename the existing process before starting a new one with the same `name`.
 
 ---
 
@@ -748,21 +767,22 @@ The `info` payload for `/list`, `/start`, `/stop/:id`, `/restart/:id`, `/reload/
 | 401 | `UNAUTHORIZED` | Missing or invalid `Authorization: Bearer <token>` header when `AUTH_TOKEN` is configured |
 | 403 | `CORS_ORIGIN_NOT_ALLOWED` | Origin not in `CORS_ORIGIN` allowlist — browsers sending an `Origin` header without a configured allowlist are rejected |
 | 404 | `PROCESS_NOT_FOUND` | Process with the given `pm_id` not found |
+| 409 | `PROCESS_NAME_CONFLICT` | `/start` body `name` is already registered in PM2 (matched across namespaces) — the existing process is identified in `info` |
 | 422 | `VALIDATION_FAILED` | Schema validation failed (non-numeric `id`, missing `name`/`script`/`interpreter` in the body) **or** an invalid `tail`/`type`/`logs` query |
 | 422 | `INVALID_PROCESS_CONFIGURATION` | `/start` configuration-guide violation (e.g. `.js` script with a `php` interpreter) — the violations are listed in `info`, not `null` |
 | 500 | `PM2_OPERATION_FAILED` | Unexpected PM2 failure — `message` is `"PM2 operation failed: <raw PM2 error>"` |
 | 500 | `INTERNAL_SERVER_ERROR` / `UNKNOWN` | Unhandled server error |
 | 503 | `PM2_DAEMON_UNAVAILABLE` | Cannot connect to the PM2 daemon |
 
-All errors use the envelope with `success: false` and include a `code`; `info` is `null` except for the `/start` configuration-guide `422`, where it contains the list of violations. Unknown routes are the one exception — they return a plain-text `NOT_FOUND` 404 from Elysia's default handler.
+All errors use the envelope with `success: false` and include a `code`; `info` is `null` except for the `/start` configuration-guide `422` (list of violations) and the `/start` `409` (the conflicting process's `pm_id`, `name`, `namespace`). Unknown routes are the one exception — they return a plain-text `NOT_FOUND` 404 from Elysia's default handler.
 
 ## Lifecycle Notes
 
 - `stop` keeps the process registered and restartable; `delete` removes it permanently and frees the `pm_id` (which PM2 may recycle).
-- `:id` always means the numeric `pm_id` from `GET /list` — process **names are not accepted** (names can collide across namespaces).
+- `:id` always means the numeric `pm_id` from `GET /list` — process **names are not accepted** (a duplicate `name` is rejected at `/start`, but processes created outside this API via the PM2 CLI with `-f` may still share one).
 - `instances > 1` (with `exec_mode: "cluster"`) launches one Node process per CPU instance — the response then contains **one row per instance**.
 - `env` values injected via `/start` are applied to the spawned process only; they are **not echoed back** in responses (all responses are sanitized `ProcessSummary` snapshots). The one exception is `GET /describe/:id`, whose `describe`/`metrics` keys additionally expose `pm_exec_path`, the log/pid paths, `NODE_ENV`, and raw code metrics — but no other env values.
-- `namespace` is normalized and enforced by the API: when omitted it is sent to PM2 as `"default"`, and the resolved value is also mirrored into the process `env` so the payload's `namespace` always wins over the namespace inherited from the agent's own PM2 environment.
+- `namespace` is normalized and enforced by the API: when omitted it is sent to PM2 as `"default"`, and the resolved value is also mirrored into the process `env` so the payload's `namespace` always wins over the namespace inherited from the agent's own PM2 environment. Namespace is a grouping label, **not** an isolation mechanism for duplicate names: PM2's own start matches processes by `name` only, so `/start` rejects any existing `name` regardless of namespace with `409 PROCESS_NAME_CONFLICT`.
 - `/start` passes every field through to PM2 verbatim — it applies no PM2 defaults of its own (see [Defaults & provenance](#defaults--provenance)), with `namespace` as the one exception (normalized to `"default"` when omitted). The only API-level field is `targetOs` (used for interpreter-path validation, default `"win32"`), and `time` is always forced to `true` so log lines carry timestamps.
 - `windowsHide` is **recommended `true` on Windows hosts** (pm2's own default is `false`) to avoid a spawned console window per process.
 - **Name/namespace are immutable after start** — PM2 has no rename. To rename, `delete` (optionally with `delete_logs: true`) and `start` under the new name. Logs are named after the name/namespace, so a rename starts new `-out.log`/`-error.log` files.
