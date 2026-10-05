@@ -328,6 +328,10 @@ A `name` that is already registered in PM2 is rejected with `409` — this API n
   "instances": 1,
   "autorestart": true,
   "max_restarts": 10,
+  "min_uptime": "10s",
+  "restart_delay": 4000,
+  "max_memory_restart": "500M",
+  "kill_timeout": 5000,
   "windowsHide": true,
   "watch": false
 }
@@ -347,6 +351,11 @@ A `name` that is already registered in PM2 is rejected with `409` — this API n
 | `instances` | number \| `"max"` | no | Number of instances. Defaults to `1` (pm2 built-in). `"max"` = one per CPU core. Requires `exec_mode: "cluster"`. |
 | `autorestart` | boolean | no | Restart automatically on crash. Defaults to `true` (pm2 built-in). Set `false` for one-shot jobs. |
 | `max_restarts` | number | no | Consecutive unstable-restart limit (a crash within `min_uptime` of launch counts as unstable). At the limit, PM2 marks the process `errored` and stops. `0` = never restart — prefer `autorestart: false` for that. Defaults to `16` (pm2 built-in). |
+| `min_uptime` | number \| string | no | Time the app must stay up before its start counts as stable (resets the unstable-restart counter). A number is milliseconds; strings accept `"10s"`, `"500ms"`, `"2m"`, `"1h"`, or a bare number string. Defaults to `1000` (pm2 built-in). Normalized to milliseconds by this API before `pm2.start` — PM2 does numeric math on it, so a raw string would silently disable unstable-restart counting. |
+| `restart_delay` | number | no | Delay (ms) before restarting a crashed app, preventing rapid crash loops from spiking CPU. **No pm2 default** — restarts fire immediately. |
+| `max_memory_restart` | number \| string | no | Restart the app when its memory usage exceeds this threshold. A number is bytes; strings accept K/M/G units (`"500M"`, `"1G"`). No pm2 default. |
+| `increment_var` | string | no | Environment variable auto-incremented per forked instance (e.g. `"PORT"` with `env.PORT` set assigns 8000, 8001, …). No pm2 default. |
+| `kill_timeout` | number | no | Time (ms) PM2 waits after the stop signal for the app to exit gracefully before force-killing it. Defaults to `1600` (pm2 built-in). |
 | `windowsHide` | boolean | no | Hide the process console window on Windows. Defaults to `false` (pm2 built-in). **Recommended `true` on Windows hosts.** |
 | `env` | object\<string, string\> | no | Environment variables injected into the spawned process. Defaults to `{}` (pm2 passes only this object, not the shell env). |
 | `watch` | boolean \| string[] | no | Restart on file changes. `true` watches the whole tree; an array watches only those paths. Defaults to `false` (pm2 built-in). |
@@ -364,6 +373,7 @@ Every default listed above is **PM2's own runtime default** — it is applied by
 
 - `name` and `script` must be non-empty (whitespace-only values are rejected)
 - `instances` must be a positive integer or `"max"`
+- `min_uptime` must be milliseconds (number) or a duration string (`"10s"`, `"500ms"`, `"2m"`)
 - `interpreter` must be an absolute path for the declared `targetOs` — bare names like `"node"`/`"py"` are rejected (only `"none"` is accepted as a bare value). On `win32`, both `C:\...` and `/...` absolute forms pass; on `linux` only POSIX absolute paths pass
 - Script extension must match the interpreter family — e.g. a Node-extension script (`.js`, `.mjs`, `.cjs`, `.ts`, …) with a `php`/`python`/`go` interpreter, or a `.php`/`.py`/`.go` script with a non-matching interpreter
 - `artisan` requires a PHP interpreter executable path and `args` (a subcommand: `serve`, `schedule:work`, …); `manage.py` requires a Python interpreter path and `args`
