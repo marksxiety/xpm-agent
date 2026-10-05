@@ -1,6 +1,7 @@
 import { win32, posix } from "node:path";
 import type { Static } from "elysia";
 import { StartPayload } from "../schemas/process";
+import { parseDurationMs } from "./duration";
 import type { StartIssue, RuntimeProfile, EntrypointConvention, InspectCommand } from "../types/inspect"
 
 function isAbsoluteForTarget(p: string, targetOs: "win32" | "linux"): boolean {
@@ -96,6 +97,14 @@ export function inspectStart(options: StartPayloadType): StartIssue[] {
     issues.push({
       field: "instances",
       message: "instances must be a positive integer or 'max'",
+    });
+  }
+
+  if (options.min_uptime !== undefined && parseDurationMs(options.min_uptime) === undefined) {
+    issues.push({
+      field: "min_uptime",
+      message:
+        "min_uptime must be a number of milliseconds or a duration string like '10s', '500ms', '2m'",
     });
   }
 
