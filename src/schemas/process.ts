@@ -120,6 +120,31 @@ export const StartPayload = t.Object({
     examples: [10, 16],
     default: 16,
   })),
+  min_uptime: t.Optional(t.Union([t.Number(), t.String()], {
+    description:
+      "Time the app must stay up before its start counts as stable (resetting the unstable-restart counter). A number is milliseconds; strings accept durations like `'10s'`, `'500ms'`, `'2m'`, `'1h'`, or a bare number string. Defaults to `1000` (pm2 built-in). The agent normalizes strings to milliseconds before `pm2.start` because PM2 does numeric math on this value — a raw string would silently disable unstable-restart counting.",
+    examples: ["10s", 10000],
+  })),
+  restart_delay: t.Optional(t.Number({
+    description:
+      "Delay in milliseconds before restarting a crashed app, so rapid crash loops don't spike CPU. No pm2 default (restarts immediately).",
+    examples: [4000],
+  })),
+  max_memory_restart: t.Optional(t.Union([t.String(), t.Number()], {
+    description:
+      "Restart the app when its memory usage exceeds this threshold. A number is bytes; strings accept K/M/G units (`'500M'`, `'1G'`). No pm2 default.",
+    examples: ["500M", "1G"],
+  })),
+  increment_var: t.Optional(t.String({
+    description:
+      "Environment variable auto-incremented per forked instance (e.g. `PORT` with `env.PORT` set assigns 8000, 8001, … so ports don't collide). No pm2 default.",
+    examples: ["PORT"],
+  })),
+  kill_timeout: t.Optional(t.Number({
+    description:
+      "Time in milliseconds PM2 waits after sending the stop signal for the app to exit gracefully before force-killing it. Defaults to `1600` (pm2 built-in).",
+    examples: [5000],
+  })),
   windowsHide: t.Optional(t.Boolean({
     description:
       "Hide the process console window on Windows. Defaults to `false` (pm2 built-in). Recommended `true` on Windows hosts to avoid a console window per spawned process.",
