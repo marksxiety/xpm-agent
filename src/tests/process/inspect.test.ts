@@ -138,6 +138,25 @@ describe("start inspection", () => {
     expect(issues(payload)).toEqual(["instances"]);
   });
 
+  test("accepts duration strings and milliseconds for min_uptime", () => {
+    expect(
+      issues({ name: "api", script: "server.js", interpreter: NODE, min_uptime: "10s" }),
+    ).toEqual([]);
+    expect(
+      issues({ name: "api", script: "server.js", interpreter: NODE, min_uptime: 10000 }),
+    ).toEqual([]);
+  });
+
+  test("flags a malformed min_uptime", () => {
+    const payload: Payload = {
+      name: "api",
+      script: "server.js",
+      interpreter: NODE,
+      min_uptime: "soon",
+    };
+    expect(issues(payload)).toEqual(["min_uptime"]);
+  });
+
   test("flags negative instances", () => {
     const payload: Payload = {
       name: "api",
