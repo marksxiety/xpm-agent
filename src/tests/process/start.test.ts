@@ -391,6 +391,44 @@ describe("pm2 start route", () => {
         expect((body.info as { pm_id: number; name: string }[])[0].pm_id).toBe(3);
     });
 
+    test("normalizes min_uptime and passes the advanced restart fields through to pm2", async () => {
+        resetState();
+        state.started = [{ pm_id: 3, name: "my-app" }];
+
+        const { status } = await postStart({
+            ...VALID_PAYLOAD,
+            min_uptime: "10s",
+            restart_delay: 4000,
+            max_memory_restart: "500M",
+            increment_var: "PORT",
+            kill_timeout: 5000,
+        });
+
+        expect(status).toBe(200);
+        expect(state.startOpts?.min_uptime).toBe(10000);
+        expect(state.startOpts?.restart_delay).toBe(4000);
+        expect(state.startOpts?.max_memory_restart).toBe("500M");
+        expect(state.startOpts?.increment_var).toBe("PORT");
+        expect(state.startOpts?.kill_timeout).toBe(5000);
+    });
+
+    test("returns 422 when min_uptime is not a duration", async () => {
+        resetState();
+
+        const { status, body } = await postStart({ ...VALID_PAYLOAD, min_uptime: "soon" });
+
+        expect(status).toBe(422);
+        expect(body.success).toBe(false);
+        expect(body.code).toBe("INVALID_PROCESS_CONFIGURATION");
+        expect(body.info).toEqual([
+            {
+                field: "min_uptime",
+                message:
+                    "min_uptime must be a number of milliseconds or a duration string like '10s', '500ms', '2m'",
+            },
+        ]);
+    });
+
     test("returns 422 when a required field (script) is missing", async () => {
         resetState();
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
