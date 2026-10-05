@@ -6,6 +6,7 @@ import { respond } from "../utils/response";
 import { classifyPm2Error } from "../utils/errors";
 import { describeProcessDetails, summarizeProcess, toProcessDescriptions } from "../utils/process";
 import { resolveLogFiles, tailLines } from "../utils/log";
+import { parseDurationMs } from "../utils/duration";
 import { inspect } from "../utils/inspect";
 import { StartIssue } from "../types/inspect";
 import { getHostMetrics, systemInformationSource, type HostMetricsSource } from "../utils/system";
@@ -130,6 +131,11 @@ export class ProcessController {
       });
     }
 
+    // PM2 does numeric math on min_uptime, so duration strings must become
+    // milliseconds before pm2.start. inspect() already rejected invalid values.
+    const minUptime =
+      payload.min_uptime === undefined ? undefined : parseDurationMs(payload.min_uptime);
+
     return this.runExclusive(async () => {
       try {
         const conflict = await this.findProcessByName(payload.name ?? "");
@@ -146,7 +152,14 @@ export class ProcessController {
 
         const launchedProcesses = await this.withPM2<ProcessDescription[]>((callback) =>
           pm2.start(
-            { ...payload, ...logOptions, namespace, env: { ...payload.env, namespace }, time: true },
+            {
+              ...payload,
+              ...(minUptime === undefined ? {} : { min_uptime: minUptime }),
+              ...logOptions,
+              namespace,
+              env: { ...payload.env, namespace },
+              time: true,
+            },
             (startError, processes) => callback(startError, toProcessDescriptions(processes)),
           ),
           true // auto-save when starting a process
