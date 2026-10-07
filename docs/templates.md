@@ -210,7 +210,7 @@ Run a compiled Go binary.
   "args": ["--port", "5000"],
   "interpreter": "none",
   "autorestart": true,
-  "windowsHide": true
+  "windowsHide": false
 }
 ```
 
@@ -220,6 +220,7 @@ Run a compiled Go binary.
 - Never use a `.go` source file as `script` with the `go` interpreter: PM2 would invoke `go.exe <main.go path> ...`, which is invalid. `interpreter: "none"` + the compiled binary is the supported path.
 - Dev-only alternative (`go run`): `"script": "C:\\Go\\bin\\go.exe"`, `"interpreter": "none"`, `"args": ["run", "."]` with `cwd` on the module. PM2 supervises the `go` process, not the compiled child — use it for local work only.
 - Linux target: drop the `.exe`, e.g. `"script": "my-go-app"` with `"targetOs": "linux"`.
+- `windowsHide: false` keeps a GUI binary's window visible; use `true` only for console-style binaries where the spawned console window should be suppressed.
 
 ---
 
