@@ -22,13 +22,33 @@
 
 ## Quickstart
 
+One-time setup (skip a step if it is already done):
+
+- **Install Bun** — skip if `bun --version` works. Do not re-run while Bun processes are running: the installer replaces `bun.exe` and fails if it is locked (e.g. the agent is live under PM2).
+
+  ```powershell
+  powershell -c "irm bun.sh/install.ps1 | iex"
+  ```
+
+- **Install PM2 globally** — skip if `pm2 -v` works. The boot task registered below runs a bare `pm2 resurrect`, so `pm2` must be on `PATH`.
+
+  ```cmd
+  bun install -g pm2
+  ```
+
+Then clone and start:
+
 ```cmd
 git clone https://github.com/marksxiety/xpm-agent.git
 cd xpm-agent
 bun install
-copy .env.example .env
+bunx pm2-startup install
+if not exist .env copy .env.example .env
+if not exist .env.production copy .env.example .env.production
 bun run start
 ```
+
+> `bunx pm2-startup install` registers boot auto-start. It must run **after** `bun install` — the `pm2-startup` binary ships with the `pm2-windows-startup` dependency, not npm. Re-running it is safe; undo with `bunx pm2-startup uninstall`.
 
 Then verify it's up:
 
