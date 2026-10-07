@@ -2,17 +2,19 @@
 
 Reference for a PM2 ecosystem-style process payload. **Every field is optional except `script`** — the entry file is required; everything else falls back to PM2 defaults.
 
+> **Sanitized before dispatch (`POST /pm2/start`).** Empty/whitespace `namespace` becomes `default`; `cwd` must be absolute (relative paths are rejected with `422`); `max_restarts: 0` becomes `autorestart: false`; `exec_mode: "cluster"` is Node-only (Bun/Python/PHP/Go/`interpreter: "none"` must use `fork`); reserved PM2 keys are stripped from `env` and the agent's own environment is filtered out so only the explicit `env` pairs reach the child.
+
 ## Identity & script
 
 Identifies the process and defines how its entry script is invoked: the file path, display name, working directory, arguments, and interpreter.
 
 - `script` — **required** — entry file to run.
 - `name` — process name shown in `pm2 list`.
-- `cwd` — working directory for the process.
+- `cwd` — working directory for the process. **Must be an absolute path** matching `targetOs` — PM2 resolves relative paths against the agent's directory.
 - `args` — arguments passed to the script (array or string).
 - `interpreter` — `"node"`, `"python3"`, `"php"`, `"none"`, or a full exe path. **This API requires the absolute path** (e.g. `C:\Program Files\nodejs\node.exe`) or `"none"` — bare names like `"node"` are rejected by `/start`.
 - `interpreter_args` — arguments passed to the interpreter itself.
-- `namespace` — logical grouping (`pm2 list` can show/filter by this).
+- `namespace` — logical grouping (`pm2 list` can show/filter by this). Empty/whitespace falls back to `default`.
 
 ```json
 {
@@ -30,7 +32,7 @@ Identifies the process and defines how its entry script is invoked: the file pat
 
 Controls how the process runs: execution mode, instance count, auto-restart on crash, and file watching for hot reloads.
 
-- `exec_mode` — `"fork"` | `"cluster"` (real values are `"fork"`/`"cluster"`, not `"fork_mode"`).
+- `exec_mode` — `"fork"` | `"cluster"` (real values are `"fork"`/`"cluster"`, not `"fork_mode"`). Cluster mode is **Node-only** — non-Node interpreters are rejected with `422`.
 - `instances` — number of instances, or `"max"`/`-1` for all CPU cores (cluster only).
 - `autorestart` — restart automatically on crash/exit.
 - `watch` — `true`, or an array of paths to watch for changes.
@@ -54,7 +56,7 @@ Controls how the process runs: execution mode, instance count, auto-restart on c
 
 Tuning for how PM2 retries and restarts a failing process: backoff, stability threshold, memory caps, and graceful shutdown behavior.
 
-- `max_restarts` — stop retrying after N unstable restarts.
+- `max_restarts` — stop retrying after N unstable restarts. `0` is normalized to `autorestart: false` (`/start` rejects PM2's zero-limit errored-state behavior).
 - `min_uptime` — min time running before considered "stable".
 - `restart_delay` — ms delay between automatic restarts.
 - `exp_backoff_restart_delay` — ms exponential backoff base for restart delay.
@@ -85,6 +87,8 @@ Tuning for how PM2 retries and restarts a failing process: backoff, stability th
 ## Environment
 
 Environment variables injected into the process — default values plus named profiles merged in when using `--env <name>`.
+
+> **Isolation on `/start`:** only the explicit `env` pairs are sent. The agent's own environment (`AUTH_TOKEN`, `SERVER_PORT`, `CORS_ORIGIN`, `PM2_*`/`pm_*` internals) is filtered out before the child is spawned, and reserved PM2 keys (`pm_id`, `name`, `namespace`, `exec_mode`, `NODE_APP_INSTANCE`, `pm_*`, `PM2_*`, `axm_*`, …) are stripped from `env`. The canonical `namespace` is added back automatically. PM2 still injects its own `PM2_HOME` and per-process metadata into every child.
 
 - `env` — default env vars.
 - `env_production` — extra env, merged in when using `--env production`.
