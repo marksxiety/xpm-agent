@@ -1,5 +1,5 @@
-const AGENT_NAME = "xpm-agent";
-const AGENT_NAMESPACE = "XPM";
+export const AGENT_NAME = "xpm-agent";
+export const AGENT_NAMESPACE = "XPM";
 const INACTIVE_STATUSES = new Set(["stopped", "errored"]);
 const DEFAULT_STDIO = { stdin: "ignore", stdout: "pipe", stderr: "ignore" } as const;
 
