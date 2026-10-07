@@ -212,22 +212,22 @@ Fetches detailed info for a single process by its `pm_id`. Returns a **single ob
       "interpreter": "bun",
       "cpu": 0.3,
       "memory": 51380224,
-      "cwd": "C:\\Users\\markc\\Desktop\\DEVELOPMENT\\xpm-agent",
+      "cwd": "C:\\Users\\<user>\\xpm-agent",
       "ip_address": "192.168.1.10",
       "watch": false,
       "autorestart": true
     },
     "describe": {
-      "version": "1.1.2",
-      "script_path": "C:\\Users\\markc\\Desktop\\DEVELOPMENT\\xpm-agent\\dist\\index.js",
+      "version": "1.2.0",
+      "script_path": "C:\\Users\\<user>\\xpm-agent\\dist\\index.js",
       "script_args": null,
-      "error_log_path": "C:\\Users\\markc\\.pm2\\logs\\xpm-agent-error-0.log",
-      "out_log_path": "C:\\Users\\markc\\.pm2\\logs\\xpm-agent-out-0.log",
-      "pid_path": "C:\\Users\\markc\\.pm2\\pids\\xpm-agent-0.pid",
+      "error_log_path": "C:\\Users\\<user>\\.pm2\\logs\\xpm-agent-error-0.log",
+      "out_log_path": "C:\\Users\\<user>\\.pm2\\logs\\xpm-agent-out-0.log",
+      "pid_path": "C:\\Users\\<user>\\.pm2\\pids\\xpm-agent-0.pid",
       "interpreter_args": null,
-      "node_version": "26.3.0",
+      "node_version": "1.0.0",
       "node_env": "production",
-      "created_at": "2026-09-19T02:29:06.651Z"
+      "created_at": "2026-01-01T00:00:00.000Z"
     },
     "metrics": {
       "Heap Size": { "value": "3.92", "unit": "MiB" },
@@ -289,7 +289,7 @@ Fetches detailed info for a single process by its `pm_id`. Returns a **single ob
 
 ### POST /start
 
-Registers and launches a new process under PM2. `name`, `script`, and `interpreter` are **required**; every other field is an optional PM2 start option (plus the API-level `targetOs`) and is passed through **verbatim** — this API applies no PM2 defaults. When a field is omitted, PM2 applies its own built-in default (see [Defaults & provenance](#defaults--provenance) below).
+Registers and launches a new process under PM2. `name`, `script`, and `interpreter` are **required**; every other field is an optional PM2 start option (plus the API-level `targetOs`). The payload is **sanitized before dispatch** (see [Sanitization](#sanitization)) — this API applies no PM2 defaults of its own. When a field is omitted, PM2 applies its own built-in default (see [Defaults & provenance](#defaults--provenance) below).
 
 The body is validated **twice**:
 
@@ -340,24 +340,24 @@ A `name` that is already registered in PM2 is rejected with `409` — this API n
 | Field | Type | Required | Description / default |
 |---|---|---|---|
 | `name` | string | **yes** | Process name shown in `pm2 list`. Used in log file names and lifecycle commands. |
-| `namespace` | string | no | PM2 namespace. Defaults to `"default"` (pm2 built-in). Grouping label only — PM2 cannot host two processes with the same `name` in different namespaces, so a duplicate `name` is rejected with `409`. |
+| `namespace` | string | no | PM2 namespace. The value is trimmed and defaults to `"default"` when omitted or empty/whitespace-only. Grouping label only — PM2 cannot host two processes with the same `name` in different namespaces, so a duplicate `name` is rejected with `409`. |
 | `targetOs` | `"win32"` \| `"linux"` | no | Target OS this process will run on — drives interpreter path validation. Defaults to `"win32"` (API-level default). On `win32`, both `C:\...` and `/...` absolute forms are accepted; on `linux` only POSIX absolute paths pass. |
-| `cwd` | string | no | Working directory the process is launched from. **No pm2 default** — almost always set this. |
+| `cwd` | string | no | Working directory the process is launched from. Must be an **absolute** path for the declared `targetOs` — relative paths are rejected with `422` because PM2 would resolve them against the agent's directory, not the target app's. No pm2 default when provided — almost always set this; PM2 falls back to the agent's working directory when omitted. |
 | `script` | string | **yes** | Path to the script to run. Resolved against the API server's cwd when `cwd` is omitted. |
 | `args` | string \| string[] | no | Arguments passed to the script itself. No pm2 default. |
 | `interpreter` | string | **yes** | Absolute path to the interpreter executable (e.g. `C:\Program Files\nodejs\node.exe`). **Required.** Use `"none"` when `script` is itself a binary. Bare names like `"node"`/`"php"` are rejected — only `"none"` is accepted as a bare value. Validated for the declared `targetOs`. |
 | `interpreter_args` | string \| string[] | no | Arguments passed to the interpreter process (e.g. `--env-file=.env`, `--max-old-space-size=512`). Only supported for interpreters that accept extra args — Node/Bun and Python; rejected for PHP, Go, and `"none"`. No pm2 default. |
-| `exec_mode` | `"fork"` \| `"cluster"` | no | Execution mode. Defaults to `"fork"` (pm2 built-in). `"cluster"` required for `instances > 1`; Node-family (Node/Bun) only. |
+| `exec_mode` | `"fork"` \| `"cluster"` | no | Execution mode. Defaults to `"fork"` (pm2 built-in). `"cluster"` required for `instances > 1` and is **Node-only** — rejected with `422` for Bun, Python, PHP, Go, and `interpreter: "none"`. |
 | `instances` | number \| `"max"` | no | Number of instances. Defaults to `1` (pm2 built-in). `"max"` = one per CPU core. Requires `exec_mode: "cluster"`. |
 | `autorestart` | boolean | no | Restart automatically on crash. Defaults to `true` (pm2 built-in). Set `false` for one-shot jobs. |
-| `max_restarts` | number | no | Consecutive unstable-restart limit (a crash within `min_uptime` of launch counts as unstable). At the limit, PM2 marks the process `errored` and stops. `0` = never restart — prefer `autorestart: false` for that. Defaults to `16` (pm2 built-in). |
+| `max_restarts` | number | no | Consecutive unstable-restart limit (a crash within `min_uptime` of launch counts as unstable). At the limit, PM2 marks the process `errored` and stops. `0` is normalized by this API to `autorestart: false` (PM2's zero-limit check would otherwise mark the app errored on its first exit, including a manual stop). Defaults to `16` (pm2 built-in). |
 | `min_uptime` | number \| string | no | Time the app must stay up before its start counts as stable (resets the unstable-restart counter). A number is milliseconds; strings accept `"10s"`, `"500ms"`, `"2m"`, `"1h"`, or a bare number string. Defaults to `1000` (pm2 built-in). Normalized to milliseconds by this API before `pm2.start` — PM2 does numeric math on it, so a raw string would silently disable unstable-restart counting. |
 | `restart_delay` | number | no | Delay (ms) before restarting a crashed app, preventing rapid crash loops from spiking CPU. **No pm2 default** — restarts fire immediately. |
 | `max_memory_restart` | number \| string | no | Restart the app when its memory usage exceeds this threshold. A number is bytes; strings accept K/M/G units (`"500M"`, `"1G"`). No pm2 default. |
 | `increment_var` | string | no | Environment variable auto-incremented per forked instance (e.g. `"PORT"` with `env.PORT` set assigns 8000, 8001, …). No pm2 default. |
 | `kill_timeout` | number | no | Time (ms) PM2 waits after the stop signal for the app to exit gracefully before force-killing it. Defaults to `1600` (pm2 built-in). |
-| `windowsHide` | boolean | no | Hide the process console window on Windows. Defaults to `false` (pm2 built-in). **Recommended `true` on Windows hosts.** |
-| `env` | object\<string, string\> | no | Environment variables injected into the spawned process. Defaults to `{}` (pm2 passes only this object, not the shell env). |
+| `windowsHide` | boolean | no | Hide the process console window on Windows. Defaults to `false` (pm2 built-in). **Recommended `true` for console-style apps**; use `false` for GUI binaries that need a visible window. |
+| `env` | object\<string, string\> | no | Environment variables injected into the spawned process. Only these explicit pairs are applied — the agent's own environment (`.env` secrets, `PM2_*`/`pm_*` internals) is filtered out via `filter_env` before the child is spawned, and reserved PM2 keys are stripped (see [Sanitization](#sanitization)). Defaults to `{}`. |
 | `watch` | boolean \| string[] | no | Restart on file changes. `true` watches the whole tree; an array watches only those paths. Defaults to `false` (pm2 built-in). |
 | `ignore_watch` | string[] | no | Paths/glob patterns excluded from `watch`. No pm2 default. Recommended `["node_modules", "logs", "*.log"]` when `watch` is on — otherwise pm2 restarts on its own log writes. |
 | `watch_delay` | number | no | Delay (ms) before restarting a watched process after a change. **No pm2 default** — restarts fire immediately. |
@@ -365,20 +365,32 @@ A `name` that is already registered in PM2 is rejected with `409` — this API n
 
 **Defaults & provenance:**
 
-Every default listed above is **PM2's own runtime default** — it is applied by PM2 when the field is omitted. This API passes your JSON through to PM2 unchanged and applies **no** PM2 defaults of its own. Provenance is stated per field: "(pm2 built-in)" = applied by PM2 if omitted; "No pm2 default" = nothing is applied and PM2 behaves as documented. The one API-level field is `targetOs`, whose default (`"win32"`) is applied by this API for validation.
+Every default listed above is **PM2's own runtime default** — it is applied by PM2 when the field is omitted. This API applies **no** PM2 defaults of its own, but it does sanitize the payload before dispatch (see [Sanitization](#sanitization)). Provenance is stated per field: "(pm2 built-in)" = applied by PM2 if omitted; "No pm2 default" = nothing is applied and PM2 behaves as documented. The one API-level field is `targetOs`, whose default (`"win32"`) is applied by this API for validation.
 
 **Log timestamps:** this API always starts processes with PM2's `time: true`, so every log line is prefixed with `[YYYY-MM-DD HH:mm:ss]`. Any `time` value in the payload is ignored.
+
+#### Sanitization
+
+`/start` normalizes the payload before calling `pm2.start` (none of these are PM2 defaults):
+
+- `namespace` is trimmed; empty/whitespace-only values fall back to `"default"`; the resolved value is mirrored into `env.namespace` so the payload's `namespace` always wins.
+- Reserved PM2 keys are stripped from `env` (`pm_id`, `name`, `namespace`, `exec_mode`, `NODE_APP_INSTANCE`, `pm_*`, `PM2_*`, `axm_*`, …) — only explicit key-value pairs reach the child.
+- `filter_env` is set to the agent's denylist (`AUTH_TOKEN`, `SERVER_PORT`, `CORS_ORIGIN`, PM2 internals, …) so the agent's own environment is never inherited by the child.
+- `max_restarts: 0` becomes `autorestart: false` (`max_restarts` is dropped).
+- `time` is always forced to `true` (see Log timestamps above).
+- `targetOs` is dropped before dispatch — validation only, never sent to PM2.
 
 **Configuration guide rules (each violation blocks with `422`):**
 
 - `name` and `script` must be non-empty (whitespace-only values are rejected)
+- `cwd`, when provided, must be an absolute path for the declared `targetOs` — relative paths are rejected
 - `instances` must be a positive integer or `"max"`
 - `min_uptime` must be milliseconds (number) or a duration string (`"10s"`, `"500ms"`, `"2m"`)
 - `interpreter` must be an absolute path for the declared `targetOs` — bare names like `"node"`/`"py"` are rejected (only `"none"` is accepted as a bare value). On `win32`, both `C:\...` and `/...` absolute forms pass; on `linux` only POSIX absolute paths pass
-- Script extension must match the interpreter family — e.g. a Node-extension script (`.js`, `.mjs`, `.cjs`, `.ts`, …) with a `php`/`python`/`go` interpreter, or a `.php`/`.py`/`.go` script with a non-matching interpreter
+- Script extension must match the interpreter's runtime family — Node and Bun share one family, so `.js`/`.ts` scripts are accepted with either; e.g. a Node-extension script (`.js`, `.mjs`, `.cjs`, `.ts`, …) with a `php`/`python`/`go` interpreter, or a `.php`/`.py`/`.go` script with a non-matching interpreter
 - `artisan` requires a PHP interpreter executable path and `args` (a subcommand: `serve`, `schedule:work`, …); `manage.py` requires a Python interpreter path and `args`
 - `interpreter_args` only with interpreters that support them (Node/Bun and Python) — rejected for PHP, Go, and `"none"`
-- `exec_mode: "cluster"` with a non-Node-family interpreter (or `"none"`)
+- `exec_mode: "cluster"` with anything other than a Node interpreter — rejected for Bun, Python, PHP, Go, and `"none"` (PM2 cluster mode is Node-only)
 - `instances > 1` / `"max"` with `exec_mode: "fork"`
 
 **Response `200`** — `info` is an array of `ProcessSummary`, one per launched instance:
@@ -474,7 +486,7 @@ Delete or rename the existing process before starting a new one with the same `n
 
 ### POST /stop/:id
 
-Gracefully stops a running process. The process stays **registered** in PM2 (status `"stopped"`) and can be started again via `POST /restart/:id`. To remove it entirely, use `DELETE /delete/:id`.
+Gracefully stops a running process. The process stays **registered** in PM2 (status `"stopped"`) and can be started again via `POST /restart/:id`. The stopped state is auto-saved (`pm2 dump`), so it survives a reboot. Targeting the agent process itself (`xpm-agent` in namespace `XPM`) is rejected with `409 AGENT_SELF_MANAGEMENT_FORBIDDEN`. To remove it entirely, use `DELETE /delete/:id`.
 
 **Path params:**
 
@@ -520,11 +532,17 @@ Gracefully stops a running process. The process stays **registered** in PM2 (sta
 { "success": false, "message": "Process not found", "code": "PROCESS_NOT_FOUND", "info": null }
 ```
 
+**Error `409`** (target is the agent itself):
+
+```json
+{ "success": false, "message": "Refusing to manage the xpm-agent process itself", "code": "AGENT_SELF_MANAGEMENT_FORBIDDEN", "info": null }
+```
+
 ---
 
 ### POST /restart/:id
 
-Kills and re-launches a process. Also works on stopped processes (acts as start). Use after code or environment changes.
+Kills and re-launches a process. Also works on stopped processes (acts as start). Use after code or environment changes. Targeting the agent process itself (`xpm-agent` in namespace `XPM`) is rejected with `409 AGENT_SELF_MANAGEMENT_FORBIDDEN`.
 
 **Path params:**
 
@@ -564,11 +582,17 @@ Kills and re-launches a process. Also works on stopped processes (acts as start)
 }
 ```
 
+**Error `409`** (target is the agent itself):
+
+```json
+{ "success": false, "message": "Refusing to manage the xpm-agent process itself", "code": "AGENT_SELF_MANAGEMENT_FORBIDDEN", "info": null }
+```
+
 ---
 
 ### POST /reload/:id
 
-Zero-downtime reload — restarts instances one at a time. Only meaningful for **cluster mode** processes with multiple instances; falls back to a normal restart in fork mode.
+Zero-downtime reload — restarts instances one at a time. Only meaningful for **cluster mode** processes with multiple instances; falls back to a normal restart in fork mode. Targeting the agent process itself (`xpm-agent` in namespace `XPM`) is rejected with `409 AGENT_SELF_MANAGEMENT_FORBIDDEN`.
 
 **Path params:**
 
@@ -608,11 +632,17 @@ Zero-downtime reload — restarts instances one at a time. Only meaningful for *
 }
 ```
 
+**Error `409`** (target is the agent itself):
+
+```json
+{ "success": false, "message": "Refusing to manage the xpm-agent process itself", "code": "AGENT_SELF_MANAGEMENT_FORBIDDEN", "info": null }
+```
+
 ---
 
 ### DELETE /delete/:id
 
-Stops the process **and removes it from PM2's registry entirely**. The `pm_id` is freed and may be recycled by PM2 for future processes. Unlike stop, this cannot be undone via restart.
+Stops the process **and removes it from PM2's registry entirely**. The `pm_id` is freed and may be recycled by PM2 for future processes. Unlike stop, this cannot be undone via restart. Targeting the agent process itself (`xpm-agent` in namespace `XPM`) is rejected with `409 AGENT_SELF_MANAGEMENT_FORBIDDEN`.
 
 By default the process's log files (`-out.log` / `-error.log` in `~/.pm2/logs/`, or `$PM2_HOME/logs/` when `PM2_HOME` is set) are **left on disk** — PM2 never removes them. Pass `?delete_logs=true` to also delete them.
 
@@ -658,6 +688,12 @@ By default the process's log files (`-out.log` / `-error.log` in `~/.pm2/logs/`,
     }
   ]
 }
+```
+
+**Error `409`** (target is the agent itself):
+
+```json
+{ "success": false, "message": "Refusing to manage the xpm-agent process itself", "code": "AGENT_SELF_MANAGEMENT_FORBIDDEN", "info": null }
 ```
 
 ---
@@ -778,6 +814,7 @@ The `info` payload for `/list`, `/start`, `/stop/:id`, `/restart/:id`, `/reload/
 | 403 | `CORS_ORIGIN_NOT_ALLOWED` | Origin not in `CORS_ORIGIN` allowlist — browsers sending an `Origin` header without a configured allowlist are rejected |
 | 404 | `PROCESS_NOT_FOUND` | Process with the given `pm_id` not found |
 | 409 | `PROCESS_NAME_CONFLICT` | `/start` body `name` is already registered in PM2 (matched across namespaces) — the existing process is identified in `info` |
+| 409 | `AGENT_SELF_MANAGEMENT_FORBIDDEN` | `stop`/`restart`/`reload`/`delete` targeting the `xpm-agent` process itself (namespace `XPM`) — refused before any PM2 operation runs |
 | 422 | `VALIDATION_FAILED` | Schema validation failed (non-numeric `id`, missing `name`/`script`/`interpreter` in the body) **or** an invalid `tail`/`type`/`logs` query |
 | 422 | `INVALID_PROCESS_CONFIGURATION` | `/start` configuration-guide violation (e.g. `.js` script with a `php` interpreter) — the violations are listed in `info`, not `null` |
 | 500 | `PM2_OPERATION_FAILED` | Unexpected PM2 failure — `message` is `"PM2 operation failed: <raw PM2 error>"` |
@@ -788,11 +825,12 @@ All errors use the envelope with `success: false` and include a `code`; `info` i
 
 ## Lifecycle Notes
 
-- `stop` keeps the process registered and restartable; `delete` removes it permanently and frees the `pm_id` (which PM2 may recycle).
+- `stop` keeps the process registered and restartable and auto-saves the process list (`pm2 dump`), so the stopped state survives a reboot; `delete` removes it permanently and frees the `pm_id` (which PM2 may recycle).
+- The agent refuses to manage itself: `stop`/`restart`/`reload`/`delete` targeting `xpm-agent` (namespace `XPM`) are rejected with `409 AGENT_SELF_MANAGEMENT_FORBIDDEN` before any PM2 operation runs.
 - `:id` always means the numeric `pm_id` from `GET /list` — process **names are not accepted** (a duplicate `name` is rejected at `/start`, but processes created outside this API via the PM2 CLI with `-f` may still share one).
 - `instances > 1` (with `exec_mode: "cluster"`) launches one Node process per CPU instance — the response then contains **one row per instance**.
-- `env` values injected via `/start` are applied to the spawned process only; they are **not echoed back** in responses (all responses are sanitized `ProcessSummary` snapshots). The one exception is `GET /describe/:id`, whose `describe`/`metrics` keys additionally expose `pm_exec_path`, the log/pid paths, `NODE_ENV`, and raw code metrics — but no other env values.
-- `namespace` is normalized and enforced by the API: when omitted it is sent to PM2 as `"default"`, and the resolved value is also mirrored into the process `env` so the payload's `namespace` always wins over the namespace inherited from the agent's own PM2 environment. Namespace is a grouping label, **not** an isolation mechanism for duplicate names: PM2's own start matches processes by `name` only, so `/start` rejects any existing `name` regardless of namespace with `409 PROCESS_NAME_CONFLICT`.
-- `/start` passes every field through to PM2 verbatim — it applies no PM2 defaults of its own (see [Defaults & provenance](#defaults--provenance)), with `namespace` as the one exception (normalized to `"default"` when omitted). The only API-level field is `targetOs` (used for interpreter-path validation, default `"win32"`), and `time` is always forced to `true` so log lines carry timestamps.
-- `windowsHide` is **recommended `true` on Windows hosts** (pm2's own default is `false`) to avoid a spawned console window per process.
+- `env` values injected via `/start` are applied to the spawned process only, and only the explicit pairs reach the child (the agent's own environment is filtered out via `filter_env`); they are **not echoed back** in responses (all responses are sanitized `ProcessSummary` snapshots). The one exception is `GET /describe/:id`, whose `describe`/`metrics` keys additionally expose `pm_exec_path`, the log/pid paths, `NODE_ENV`, and raw code metrics — but no other env values.
+- `namespace` is normalized and enforced by the API: when omitted or empty/whitespace-only it is sent to PM2 as `"default"` (trimmed), and the resolved value is also mirrored into the process `env` so the payload's `namespace` always wins over the namespace inherited from the agent's own PM2 environment. Namespace is a grouping label, **not** an isolation mechanism for duplicate names: PM2's own start matches processes by `name` only, so `/start` rejects any existing `name` regardless of namespace with `409 PROCESS_NAME_CONFLICT`.
+- `/start` applies no PM2 *defaults* of its own (every default in the table is PM2's), but it does sanitize the payload before dispatch — namespace normalization, reserved `env`-key stripping, `filter_env`, `max_restarts: 0` → `autorestart: false`, forced `time: true`, and `targetOs` removal (see [Sanitization](#sanitization)). The only API-level field is `targetOs` (used for path validation, default `"win32"`), and `time` is always forced to `true` so log lines carry timestamps.
+- `windowsHide` is **recommended `true` for console-style apps** on Windows hosts (pm2's own default is `false`) to avoid a spawned console window per process; use `false` for GUI binaries that need a visible window.
 - **Name/namespace are immutable after start** — PM2 has no rename. To rename, `delete` (optionally with `delete_logs: true`) and `start` under the new name. Logs are named after the name/namespace, so a rename starts new `-out.log`/`-error.log` files.
