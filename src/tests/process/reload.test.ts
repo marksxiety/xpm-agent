@@ -4,7 +4,9 @@ import type { ApiResponse, ProcessSummary } from "../../types";
 
 const state = {
     reloaded: [] as ProcessDescription[],
+    described: [] as ProcessDescription[],
     reloadError: null as Error | null,
+    describeError: null as Error | null,
     connectError: null as Error | null,
 };
 
@@ -12,6 +14,9 @@ mock.module("pm2", () => ({
     default: {
         connect(cb: (err?: Error | null) => void) { cb(state.connectError); },
         disconnect() { },
+        describe(_id: number, cb: (err?: Error | null, procs?: ProcessDescription[]) => void) {
+            cb(state.describeError, state.described);
+        },
         reload(_id: number, cb: (err?: Error | null, procs?: ProcessDescription[]) => void) {
             cb(state.reloadError, state.reloaded);
         },
@@ -24,7 +29,9 @@ const { createApp } = await import("../../index");
 
 function resetState() {
     state.reloaded = [];
+    state.described = [];
     state.reloadError = null;
+    state.describeError = null;
     state.connectError = null;
     pm2Connection.reset();
 }
@@ -47,6 +54,18 @@ describe("pm2 reload service", () => {
         expect(response.message).toBe("PM2 process reloaded successfully");
         expect(response.info).toHaveLength(1);
         expect((response.info as ProcessSummary[])?.[0].name).toBe("my-app");
+    });
+
+    test("returns 409 and does not reload when the target is the xpm-agent", async () => {
+        resetState();
+        state.described = [{ pm_id: 0, name: "xpm-agent", pm2_env: { namespace: "XPM" } as ProcessDescription["pm2_env"] }];
+
+        const response = await processController.reloadProcess(0);
+
+        expect(response.success).toBe(false);
+        expect(response.status).toBe(409);
+        expect(response.code).toBe("AGENT_SELF_MANAGEMENT_FORBIDDEN");
+        expect(response.message).toBe("Refusing to manage the xpm-agent process itself");
     });
 
     test("returns 404 when the process is not found", async () => {
