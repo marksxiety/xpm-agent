@@ -93,6 +93,19 @@ describe("pm2 delete service", () => {
         expect(state.dumpCalls).toBe(1);
     });
 
+    test("returns 409, does not delete, and does not dump when the target is the xpm-agent", async () => {
+        resetState();
+        state.described = [{ pm_id: 0, name: "xpm-agent", pm2_env: { namespace: "XPM" } as ProcessDescription["pm2_env"] }];
+
+        const response = await processController.deleteProcess(0);
+
+        expect(response.success).toBe(false);
+        expect(response.status).toBe(409);
+        expect(response.code).toBe("AGENT_SELF_MANAGEMENT_FORBIDDEN");
+        expect(response.message).toBe("Refusing to manage the xpm-agent process itself");
+        expect(state.dumpCalls).toBe(0);
+    });
+
     test("returns success when delete_logs is true even if log file removal fails", async () => {
         resetState();
         state.described = [{
