@@ -6,11 +6,11 @@ import { respond } from "../utils/response";
 import { classifyPm2Error } from "../utils/errors";
 import { describeProcessDetails, summarizeProcess, toProcessDescriptions } from "../utils/process";
 import { resolveLogFiles, tailLines } from "../utils/log";
-import { parseDurationMs } from "../utils/duration";
-import { inspect } from "../utils/inspect";
+import { sanitizeProcessConfig, type SanitizeInput } from "../utils/sanitize";
 import { StartIssue } from "../types/inspect";
 import { getHostMetrics, systemInformationSource, type HostMetricsSource } from "../utils/system";
 import { pm2Connection, type Pm2Connection } from "../pm2/client";
+import { AGENT_NAME, AGENT_NAMESPACE } from "../pm2/cli";
 export class ProcessController {
   private startChain: Promise<void> = Promise.resolve();
 
@@ -121,9 +121,30 @@ export class ProcessController {
     return { pm_id: summary.pm_id, name: summary.name, namespace: summary.namespace };
   }
 
+  private async rejectAgentTarget<T>(processId: number): Promise<ApiResponse<T> | null> {
+    try {
+      const processDescriptions = await this.withPM2<ProcessDescription[]>((callback) =>
+        pm2.describe(processId, (describeError, descriptions) => callback(describeError, descriptions ?? [])),
+      );
+      const target = processDescriptions[0];
+      const targetNamespace = (target?.pm2_env as { namespace?: string } | undefined)?.namespace;
+      if (target?.name === AGENT_NAME && targetNamespace === AGENT_NAMESPACE) {
+        return respond("Refusing to manage the xpm-agent process itself", null, {
+          success: false,
+          status: 409,
+          code: "AGENT_SELF_MANAGEMENT_FORBIDDEN",
+        }) as ApiResponse<T>;
+      }
+    } catch {
+      // Describing can fail when the daemon is unavailable or the id is unknown;
+      // let the requested operation surface the canonical error instead.
+    }
+    return null;
+  }
+
   startProcess = async (payload: StartOptions): Promise<ApiResponse<ProcessSummary[] | StartIssue[] | ProcessNameConflict>> => {
-    const issues = inspect("start", payload);
-    if (issues.length > 0) {
+    const { options, issues } = sanitizeProcessConfig(payload as unknown as SanitizeInput);
+    if (options === null) {
       return respond("Invalid process configuration", issues, {
         success: false,
         status: 422,
@@ -131,14 +152,9 @@ export class ProcessController {
       });
     }
 
-    // PM2 does numeric math on min_uptime, so duration strings must become
-    // milliseconds before pm2.start. inspect() already rejected invalid values.
-    const minUptime =
-      payload.min_uptime === undefined ? undefined : parseDurationMs(payload.min_uptime);
-
     return this.runExclusive(async () => {
       try {
-        const conflict = await this.findProcessByName(payload.name ?? "");
+        const conflict = await this.findProcessByName(options.name ?? "");
         if (conflict) {
           return respond(
             `Process name '${conflict.name}' already exists in namespace '${conflict.namespace}' (pm_id ${conflict.pm_id})`,
@@ -147,19 +163,12 @@ export class ProcessController {
           );
         }
 
-        const namespace = payload.namespace ?? "default";
-        const logOptions = resolveLogFiles({ name: payload.name || payload.script, namespace });
+        const namespace = options.namespace ?? "default";
+        const logOptions = resolveLogFiles({ name: options.name || options.script || "", namespace });
 
         const launchedProcesses = await this.withPM2<ProcessDescription[]>((callback) =>
           pm2.start(
-            {
-              ...payload,
-              ...(minUptime === undefined ? {} : { min_uptime: minUptime }),
-              ...logOptions,
-              namespace,
-              env: { ...payload.env, namespace },
-              time: true,
-            },
+            { ...options, ...logOptions },
             (startError, processes) => callback(startError, toProcessDescriptions(processes)),
           ),
           true // auto-save when starting a process
@@ -184,10 +193,14 @@ export class ProcessController {
 
   stopProcess = async (processId: number): Promise<ApiResponse<ProcessSummary[]>> => {
     try {
+      const blocked = await this.rejectAgentTarget<ProcessSummary[]>(processId);
+      if (blocked) return blocked;
+
       const processDescriptions = await this.withPM2<ProcessDescription[]>((callback) =>
         pm2.stop(processId, (stopError, processes) =>
           callback(stopError, toProcessDescriptions(processes)),
         ),
+        true // auto-save so a reboot restores the stopped state
       );
       return respond("PM2 process stopped successfully", processDescriptions.map(summarizeProcess));
     } catch (error) {
@@ -197,6 +210,9 @@ export class ProcessController {
 
   restartProcess = async (processId: number): Promise<ApiResponse<ProcessSummary[]>> => {
     try {
+      const blocked = await this.rejectAgentTarget<ProcessSummary[]>(processId);
+      if (blocked) return blocked;
+
       const processDescriptions = await this.withPM2<ProcessDescription[]>((callback) =>
         pm2.restart(processId, (restartError, processes) =>
           callback(restartError, toProcessDescriptions(processes)),
@@ -210,6 +226,9 @@ export class ProcessController {
 
   reloadProcess = async (processId: number): Promise<ApiResponse<ProcessSummary[]>> => {
     try {
+      const blocked = await this.rejectAgentTarget<ProcessSummary[]>(processId);
+      if (blocked) return blocked;
+
       const processDescriptions = await this.withPM2<ProcessDescription[]>((callback) =>
         pm2.reload(processId, (reloadError, processes) =>
           callback(reloadError, toProcessDescriptions(processes)),
@@ -223,6 +242,9 @@ export class ProcessController {
 
   deleteProcess = async (processId: number, deleteLogs = false): Promise<ApiResponse<ProcessSummary[]>> => {
     try {
+      const blocked = await this.rejectAgentTarget<ProcessSummary[]>(processId);
+      if (blocked) return blocked;
+
       let logFilePaths: string[] = [];
       if (deleteLogs) {
         const processDescriptions = await this.withPM2<ProcessDescription[]>((callback) =>
