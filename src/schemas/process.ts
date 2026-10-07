@@ -67,14 +67,14 @@ export const StartPayload = t.Object({
   })),
   namespace: t.Optional(t.String({
     description:
-      "PM2 namespace for the process. Defaults to `'default'` (pm2 built-in). Grouping label only — a `name` already registered in PM2 (in any namespace) is rejected with `409`.",
+      "PM2 namespace for the process. Empty or whitespace-only values fall back to `'default'`. Grouping label only — a `name` already registered in PM2 (in any namespace) is rejected with `409`.",
     examples: ["DPR", "default"],
     default: "default",
   })),
   cwd: t.Optional(t.String({
     description:
-      "Working directory the process is launched from. PM2 has no default — `script` is resolved against the API server's cwd when omitted. Almost always set this.",
-    examples: ["C:\\apps\\my-service"],
+      "Working directory the process is launched from. Must be an **absolute** path for the declared `targetOs` — relative paths are rejected with `422` because PM2 would resolve them against the agent's own directory, not the target app root. When omitted, PM2 falls back to the agent's working directory.",
+    examples: ["C:\\apps\\my-service", "/srv/apps/my-service"],
   })),
   script: t.String({
     description:
@@ -98,7 +98,7 @@ export const StartPayload = t.Object({
   })),
   exec_mode: t.Optional(t.Union([t.Literal("fork"), t.Literal("cluster")], {
     description:
-      "Execution mode. Defaults to `'fork'` (pm2 built-in). `'cluster'` is required for `instances > 1` and is Node-only.",
+      "Execution mode. Defaults to `'fork'` (pm2 built-in). `'cluster'` is required for `instances > 1` and is Node-only — requests are rejected with `422` for Bun, Python, PHP, Go, and `interpreter: 'none'`.",
     examples: ["fork", "cluster"],
     default: "fork",
   })),
@@ -116,7 +116,7 @@ export const StartPayload = t.Object({
   })),
   max_restarts: t.Optional(t.Number({
     description:
-      "Consecutive unstable-restart limit — an unstable restart is a crash within `min_uptime` (default 1s) of launch. At the limit PM2 marks the process `errored` and stops restarting it; `0` means never restart (use `autorestart: false` for the cleaner 'no restart' behavior). Defaults to `16` (pm2 built-in).",
+      "Consecutive unstable-restart limit — an unstable restart is a crash within `min_uptime` (default 1s) of launch. At the limit PM2 marks the process `errored` and stops restarting it. Defaults to `16` (pm2 built-in). `0` is normalized to `autorestart: false` (PM2's zero-limit check would otherwise mark the app errored on its first exit, including a manual stop).",
     examples: [10, 16],
     default: 16,
   })),
@@ -153,7 +153,7 @@ export const StartPayload = t.Object({
   })),
   env: t.Optional(t.Record(t.String(), t.String(), {
     description:
-      "Environment variables injected into the spawned process. pm2 passes only this object (plus its own additions); it does NOT inherit the shell env. Defaults to `{}`.",
+      "Environment variables injected into the spawned process. Only these explicit pairs are applied — the agent's own environment (`.env` secrets, `PM2_*`/`pm_*` internals) is filtered out before the child is spawned. Reserved PM2 keys (`pm_id`, `name`, `namespace`, `exec_mode`, `NODE_APP_INSTANCE`, `pm_*`, `PM2_*`, `axm_*`, …) are stripped from this object; the canonical `namespace` is added back automatically. Defaults to `{}`.",
     examples: [{ NODE_ENV: "production", PORT: "3000" }],
     default: {},
   })),
