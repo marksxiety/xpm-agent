@@ -21,13 +21,25 @@ type StartPayloadType = Static<typeof StartPayload>;
 const RUNTIME_PROFILES: RuntimeProfile[] = [
   {
     id: "node",
-    executableNames: ["node", "bun"],
+    family: "node",
+    executableNames: ["node"],
     scriptExtensions: /\.(?:m?js|cjs|ts|tsx|jsx|mts|cts)$/i,
     supportsClusterMode: true,
     supportsInterpreterArgs: true,
   },
   {
+    // Bun uses the same script extensions as Node but PM2's cluster mode is
+    // Node-only (see ecosystem.config.js) — always fork.
+    id: "bun",
+    family: "node",
+    executableNames: ["bun"],
+    scriptExtensions: /\.(?:m?js|cjs|ts|tsx|jsx|mts|cts)$/i,
+    supportsClusterMode: false,
+    supportsInterpreterArgs: true,
+  },
+  {
     id: "php",
+    family: "php",
     executableNames: ["php"],
     scriptExtensions: /\.(?:php|phtml)$/i,
     supportsClusterMode: false,
@@ -35,6 +47,7 @@ const RUNTIME_PROFILES: RuntimeProfile[] = [
   },
   {
     id: "python",
+    family: "python",
     executableNames: ["python", "python3", "py", "pythonw"],
     scriptExtensions: /\.pyw?$/i,
     supportsClusterMode: false,
@@ -42,6 +55,7 @@ const RUNTIME_PROFILES: RuntimeProfile[] = [
   },
   {
     id: "go",
+    family: "go",
     executableNames: ["go"],
     scriptExtensions: /\.go$/i,
     supportsClusterMode: false,
@@ -120,6 +134,18 @@ export function inspectStart(options: StartPayloadType): StartIssue[] {
     });
   }
 
+  // PM2 resolves a relative cwd against the agent's own working directory
+  // (pm2/lib/Common.js prepareAppConf), never the target app's — reject it.
+  if (options.cwd !== undefined && !isAbsoluteForTarget(options.cwd, targetOs)) {
+    issues.push({
+      field: "cwd",
+      message:
+        targetOs === "win32"
+          ? "cwd must be an absolute Windows path (e.g. 'C:\\apps\\my-service'), not a relative path — PM2 would resolve it against the agent's directory"
+          : "cwd must be an absolute POSIX path (e.g. '/srv/apps/my-service'), not a relative path — PM2 would resolve it against the agent's directory",
+    });
+  }
+
   const interpreterProfile =
     interpreter === "none"
       ? undefined
@@ -130,7 +156,7 @@ export function inspectStart(options: StartPayloadType): StartIssue[] {
       );
   const scriptProfile = RUNTIME_PROFILES.find((profile) => profile.scriptExtensions.test(script));
 
-  if (scriptProfile && interpreterProfile && scriptProfile.id !== interpreterProfile.id) {
+  if (scriptProfile && interpreterProfile && scriptProfile.family !== interpreterProfile.family) {
     issues.push({
       field: "interpreter",
       message: `script '${script}' looks like a ${scriptProfile.id} file — interpreter should be a ${scriptProfile.id} executable path`,
