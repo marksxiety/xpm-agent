@@ -4,16 +4,26 @@ import type { ApiResponse, ProcessSummary } from "../../types";
 
 const state = {
     stopped: [] as ProcessDescription[],
+    described: [] as ProcessDescription[],
     stopError: null as Error | null,
+    describeError: null as Error | null,
     connectError: null as Error | null,
+    dumpCalls: 0,
 };
 
 mock.module("pm2", () => ({
     default: {
         connect(cb: (err?: Error | null) => void) { cb(state.connectError); },
         disconnect() { },
+        describe(_id: number, cb: (err?: Error | null, procs?: ProcessDescription[]) => void) {
+            cb(state.describeError, state.described);
+        },
         stop(_id: number, cb: (err?: Error | null, procs?: ProcessDescription[]) => void) {
             cb(state.stopError, state.stopped);
+        },
+        dump(cb: (err?: Error | null) => void) {
+            state.dumpCalls += 1;
+            cb(null);
         },
     },
 }));
@@ -24,8 +34,11 @@ const { createApp } = await import("../../index");
 
 function resetState() {
     state.stopped = [];
+    state.described = [];
     state.stopError = null;
+    state.describeError = null;
     state.connectError = null;
+    state.dumpCalls = 0;
     pm2Connection.reset();
 }
 
@@ -47,6 +60,28 @@ describe("pm2 stop service", () => {
         expect(response.message).toBe("PM2 process stopped successfully");
         expect(response.info).toHaveLength(1);
         expect((response.info as ProcessSummary[])?.[0].name).toBe("my-app");
+    });
+
+    test("auto-saves (dump) the process list after a successful stop", async () => {
+        resetState();
+        state.stopped = [{ pm_id: 3, name: "my-app" }];
+
+        await processController.stopProcess(3);
+
+        expect(state.dumpCalls).toBe(1);
+    });
+
+    test("returns 409 and does not stop when the target is the xpm-agent", async () => {
+        resetState();
+        state.described = [{ pm_id: 0, name: "xpm-agent", pm2_env: { namespace: "XPM" } as ProcessDescription["pm2_env"] }];
+
+        const response = await processController.stopProcess(0);
+
+        expect(response.success).toBe(false);
+        expect(response.status).toBe(409);
+        expect(response.code).toBe("AGENT_SELF_MANAGEMENT_FORBIDDEN");
+        expect(response.message).toBe("Refusing to manage the xpm-agent process itself");
+        expect(state.dumpCalls).toBe(0);
     });
 
     test("returns 404 when the process is not found", async () => {
