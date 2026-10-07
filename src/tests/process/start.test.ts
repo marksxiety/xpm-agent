@@ -2,6 +2,7 @@ import { describe, expect, mock, test } from "bun:test";
 import type { ProcessDescription, StartOptions, Proc } from "pm2";
 import type { ApiResponse, ProcessSummary } from "../../types";
 import { StartIssue } from "../../types/inspect";
+import { INHERITED_ENV_DENYLIST } from "../../utils/sanitize";
 
 const state = {
     started: [] as ProcessDescription[],
@@ -152,6 +153,59 @@ describe("pm2 start service", () => {
         await processController.startProcess({ ...VALID_PAYLOAD, env: { FOO: "bar" } });
 
         expect(state.startOpts?.env).toEqual({ FOO: "bar", namespace: "example" });
+    });
+
+    test("injects filter_env so the agent's own environment cannot leak into the child", async () => {
+        resetState();
+        state.started = [{ name: "my-app" }];
+
+        await processController.startProcess(VALID_PAYLOAD);
+
+        expect(state.startOpts?.filter_env).toEqual(INHERITED_ENV_DENYLIST);
+    });
+
+    test("strips reserved PM2 keys from the payload env before dispatch", async () => {
+        resetState();
+        state.started = [{ name: "my-app" }];
+
+        await processController.startProcess({
+            ...VALID_PAYLOAD,
+            env: { FOO: "bar", pm_id: "0", name: "evil", NODE_APP_INSTANCE: "1" },
+        });
+
+        expect(state.startOpts?.env).toEqual({ FOO: "bar", namespace: "example" });
+    });
+
+    test("defaults an empty namespace to 'default'", async () => {
+        resetState();
+        state.started = [{ name: "my-app" }];
+
+        await processController.startProcess({ ...VALID_PAYLOAD, namespace: "" });
+
+        expect(state.startOpts?.namespace).toBe("default");
+        expect(state.startOpts?.env?.namespace).toBe("default");
+    });
+
+    test("converts max_restarts: 0 into autorestart: false", async () => {
+        resetState();
+        state.started = [{ name: "my-app" }];
+
+        await processController.startProcess({ ...VALID_PAYLOAD, max_restarts: 0 });
+
+        expect(state.startOpts?.autorestart).toBe(false);
+        expect(state.startOpts?.max_restarts).toBeUndefined();
+    });
+
+    test("returns 422 with the issue list when cwd is relative", async () => {
+        resetState();
+
+        const response = await processController.startProcess({ ...VALID_PAYLOAD, cwd: "relative\\dir" });
+
+        expect(response.success).toBe(false);
+        expect(response.status).toBe(422);
+        expect(response.code).toBe("INVALID_PROCESS_CONFIGURATION");
+        expect((response.info as StartIssue[])[0]?.field).toBe("cwd");
+        expect(state.startOpts).toBeNull();
     });
 
     test("returns the launched process when pm2 does not report a pm_id", async () => {
@@ -384,7 +438,7 @@ describe("pm2 start route", () => {
         state.started = [{ pm_id: 3, name: "my-app" }];
         state.listAfterStart = [{ pm_id: 3, name: "my-app" }];
 
-        const { status, body } = await postStart({ ...VALID_PAYLOAD, targetOs: "linux", interpreter: "/usr/bin/node" });
+        const { status, body } = await postStart({ ...VALID_PAYLOAD, targetOs: "linux", cwd: "/srv/example", interpreter: "/usr/bin/node" });
 
         expect(status).toBe(200);
         expect(body.success).toBe(true);
