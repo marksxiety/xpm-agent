@@ -7,6 +7,8 @@ export interface StartIssue {
 
 export interface RuntimeProfile {
   id: string;
+  /** Groups interchangeable runtimes (node/bun) so script/interpreter matching is family-based. */
+  family: string;
   executableNames: string[];
   scriptExtensions: RegExp;
   supportsClusterMode: boolean;
