@@ -68,7 +68,7 @@ export const StartPayload = t.Object({
   namespace: t.Optional(t.String({
     description:
       "PM2 namespace for the process. Empty or whitespace-only values fall back to `'default'`. Grouping label only — a `name` already registered in PM2 (in any namespace) is rejected with `409`.",
-    examples: ["DPR", "default"],
+    examples: ["example", "default"],
     default: "default",
   })),
   cwd: t.Optional(t.String({
@@ -153,7 +153,7 @@ export const StartPayload = t.Object({
   })),
   env: t.Optional(t.Record(t.String(), t.String(), {
     description:
-      "Environment variables injected into the spawned process. Only these explicit pairs are applied — the agent's own environment (`.env` secrets, `PM2_*`/`pm_*` internals) is filtered out before the child is spawned. Reserved PM2 keys (`pm_id`, `name`, `namespace`, `exec_mode`, `NODE_APP_INSTANCE`, `pm_*`, `PM2_*`, `axm_*`, …) are stripped from this object; the canonical `namespace` is added back automatically. Defaults to `{}`.",
+      "Environment variables injected into the spawned process. Only these explicit pairs are applied — the agent's own environment is not inherited at all, so the child runs with exactly this object (plus PM2's own runtime metadata like `pm_id`/`NODE_APP_INSTANCE`). Reserved PM2 keys (`pm_id`, `name`, `namespace`, `exec_mode`, `NODE_APP_INSTANCE`, `pm_*`, `PM2_*`, `axm_*`, …) are stripped from this object; the canonical `namespace` is added back automatically. Defaults to `{}`.",
     examples: [{ NODE_ENV: "production", PORT: "3000" }],
     default: {},
   })),

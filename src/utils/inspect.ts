@@ -87,6 +87,22 @@ const ENTRYPOINT_CONVENTIONS: EntrypointConvention[] = [
 ];
 
 
+/**
+ * Resolves the runtime profile for an interpreter executable path (or "none").
+ * Used by the configuration guide and by describeProcessDetails to decide which
+ * runtime-specific fields are meaningful.
+ */
+export function findInterpreterProfile(interpreter: string | undefined): RuntimeProfile | undefined {
+  if (!interpreter || interpreter === "none") return undefined;
+  const basename = (interpreter.split(/[\\/]/).pop() ?? interpreter).replace(/\.exe$/i, "").toLowerCase();
+  return RUNTIME_PROFILES.find((profile) => profile.executableNames.includes(basename));
+}
+
+/** True for Node.js and Bun interpreters (the runtimes that report node metadata). */
+export function isNodeFamilyInterpreter(interpreter: string | undefined): boolean {
+  return findInterpreterProfile(interpreter)?.family === "node";
+}
+
 export function inspectStart(options: StartPayloadType): StartIssue[] {
   const issues: StartIssue[] = [];
   const script = options.script ?? "";
@@ -146,14 +162,7 @@ export function inspectStart(options: StartPayloadType): StartIssue[] {
     });
   }
 
-  const interpreterProfile =
-    interpreter === "none"
-      ? undefined
-      : RUNTIME_PROFILES.find((profile) =>
-        profile.executableNames.includes(
-          (interpreter.split(/[\\/]/).pop() ?? interpreter).replace(/\.exe$/i, "").toLowerCase(),
-        ),
-      );
+  const interpreterProfile = findInterpreterProfile(interpreter);
   const scriptProfile = RUNTIME_PROFILES.find((profile) => profile.scriptExtensions.test(script));
 
   if (scriptProfile && interpreterProfile && scriptProfile.family !== interpreterProfile.family) {

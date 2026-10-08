@@ -90,15 +90,15 @@ const NETSTAT_SAMPLE = [
     "",
     "  Proto  Local Address          Foreign Address        State           PID",
     "  TCP    0.0.0.0:4000           0.0.0.0:0              LISTENING       5552",
-    "  TCP    192.168.36.212:4000    192.168.36.212:52948   ESTABLISHED     5552",
-    "  TCP    192.168.36.212:52948   192.168.36.212:4000    ESTABLISHED     14324",
+    "  TCP    192.168.1.10:4000    192.168.1.10:52948   ESTABLISHED     5552",
+    "  TCP    192.168.1.10:52948   192.168.1.10:4000    ESTABLISHED     14324",
     "  TCP    127.0.0.1:4000         0.0.0.0:0              LISTENING       777",
     "  TCP    [::]:4000              [::]:0                 LISTENING       5552",
     "  TCP    [::1]:4000             [::]:0                 LISTENING       888",
     "  TCP    0.0.0.0:40000          0.0.0.0:0              LISTENING       999",
     "  TCP    0.0.0.0:49152          0.0.0.0:0              LISTENING       321",
     "  UDP    0.0.0.0:4000           *:*                                    123",
-    "  TCP    192.168.36.212:4000    0.0.0.0:0              TIME_WAIT       0",
+    "  TCP    192.168.1.10:4000    0.0.0.0:0              TIME_WAIT       0",
 ].join("\n");
 
 describe("findListeningPids", () => {
@@ -108,9 +108,9 @@ describe("findListeningPids", () => {
 
     test("ignores established and TIME_WAIT connections to the port", () => {
         const establishedOnly = [
-            "  TCP    192.168.36.212:4000    192.168.36.212:52948   ESTABLISHED     5552",
-            "  TCP    192.168.36.212:52948   192.168.36.212:4000    ESTABLISHED     14324",
-            "  TCP    192.168.36.212:4000    192.168.36.212:53111   TIME_WAIT       0",
+            "  TCP    192.168.1.10:4000    192.168.1.10:52948   ESTABLISHED     5552",
+            "  TCP    192.168.1.10:52948   192.168.1.10:4000    ESTABLISHED     14324",
+            "  TCP    192.168.1.10:4000    192.168.1.10:53111   TIME_WAIT       0",
         ].join("\n");
         expect(findListeningPids(establishedOnly, 4000)).toEqual([]);
     });

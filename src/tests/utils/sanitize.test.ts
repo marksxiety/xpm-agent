@@ -1,6 +1,5 @@
 import { describe, expect, test } from "bun:test";
 import {
-  INHERITED_ENV_DENYLIST,
   isReservedEnvKey,
   sanitizeEnv,
   sanitizeProcessConfig,
@@ -99,16 +98,56 @@ describe("sanitizeProcessConfig", () => {
     expect(options?.env).toEqual({ FOO: "bar", namespace: "example" });
   });
 
-  test("injects the inherited-env denylist as filter_env", () => {
-    const { options } = sanitize(VALID_PAYLOAD);
+  test("denies every inherited variable via filter_env", () => {
+    process.env.XPM_LEAK_TEST = "1";
+    try {
+      const { options } = sanitize(VALID_PAYLOAD);
 
-    expect(options?.filter_env).toEqual(INHERITED_ENV_DENYLIST);
+      expect(options?.filter_env).toEqual(Object.keys(process.env));
+      expect(options?.filter_env).toContain("XPM_LEAK_TEST");
+    } finally {
+      delete process.env.XPM_LEAK_TEST;
+    }
   });
 
-  test("denylist covers agent secrets and pm2 internals", () => {
-    for (const key of ["AUTH_TOKEN", "SERVER_PORT", "CORS_ORIGIN", "pm_", "PM2_", "namespace", "exec_mode", "NODE_APP_INSTANCE"]) {
-      expect(INHERITED_ENV_DENYLIST).toContain(key);
+  test("does not inherit the agent environment", () => {
+    const previousNodeEnv = process.env.NODE_ENV;
+    process.env.XPM_LEAK_TEST = "1";
+    process.env.NODE_ENV = "production";
+    try {
+      const { options } = sanitize(VALID_PAYLOAD);
+
+      expect(options?.env).toEqual({ namespace: "default" });
+    } finally {
+      delete process.env.XPM_LEAK_TEST;
+      if (previousNodeEnv === undefined) delete process.env.NODE_ENV;
+      else process.env.NODE_ENV = previousNodeEnv;
     }
+  });
+
+  test("strips pm2 metadata keys from the payload env", () => {
+    const { options } = sanitize({
+      ...VALID_PAYLOAD,
+      env: { FOO: "bar", max_restarts: "99", node_version: "1.2.3" },
+    });
+
+    expect(options?.env).toEqual({ FOO: "bar", namespace: "default" });
+  });
+
+  test("treats reserved keys case-insensitively", () => {
+    expect(isReservedEnvKey("MAX_RESTARTS")).toBe(true);
+    expect(isReservedEnvKey("Max_Restarts")).toBe(true);
+    expect(isReservedEnvKey("pm2_home")).toBe(true);
+    expect(isReservedEnvKey("MY_APP_FLAG")).toBe(false);
+  });
+
+  test("strips case-variant reserved keys from the payload env", () => {
+    const { options } = sanitize({
+      ...VALID_PAYLOAD,
+      env: { FOO: "bar", MAX_RESTARTS: "99", MIN_UPTIME: "1s", Min_Uptime: "1s" },
+    });
+
+    expect(options?.env).toEqual({ FOO: "bar", namespace: "default" });
   });
 
   test("strips reserved keys from the payload env", () => {

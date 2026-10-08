@@ -103,6 +103,50 @@ describe("pm2 describe service", () => {
         expect(info.describe.max_memory_restart).toBeUndefined();
     });
 
+    test("nulls Node-only fields for non-Node interpreters even when pm2_env carries them", async () => {
+        resetState();
+        state.described = [{
+            pm_id: 7,
+            name: "py-app",
+            pm2_env: {
+                status: "online",
+                exec_interpreter: "C:\\Program Files\\Python313\\python.exe",
+                node_version: "24.3.0",
+                version: "1.0.0-beta",
+                env: { NODE_ENV: "production" },
+            } as ProcessDescription["pm2_env"],
+        }];
+
+        const response = await processController.describeProcess(7);
+
+        const info = response.info as ProcessDescriptionDetails;
+        expect(info.describe.node_version).toBeNull();
+        expect(info.describe.node_env).toBeNull();
+        expect(info.describe.version).toBeNull();
+    });
+
+    test("keeps Node-only fields for Node family interpreters", async () => {
+        resetState();
+        state.described = [{
+            pm_id: 8,
+            name: "node-app",
+            pm2_env: {
+                status: "online",
+                exec_interpreter: "C:\\Program Files\\nodejs\\node.exe",
+                node_version: "24.3.0",
+                version: "2.0.0",
+                env: { NODE_ENV: "staging" },
+            } as ProcessDescription["pm2_env"],
+        }];
+
+        const response = await processController.describeProcess(8);
+
+        const info = response.info as ProcessDescriptionDetails;
+        expect(info.describe.node_version).toBe("24.3.0");
+        expect(info.describe.node_env).toBe("staging");
+        expect(info.describe.version).toBe("2.0.0");
+    });
+
     test("includes conditional describe fields only when configured", async () => {
         resetState();
         state.described = [{

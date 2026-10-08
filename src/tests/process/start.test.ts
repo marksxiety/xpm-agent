@@ -2,7 +2,6 @@ import { describe, expect, mock, test } from "bun:test";
 import type { ProcessDescription, StartOptions, Proc } from "pm2";
 import type { ApiResponse, ProcessSummary } from "../../types";
 import { StartIssue } from "../../types/inspect";
-import { INHERITED_ENV_DENYLIST } from "../../utils/sanitize";
 
 const state = {
     started: [] as ProcessDescription[],
@@ -155,13 +154,13 @@ describe("pm2 start service", () => {
         expect(state.startOpts?.env).toEqual({ FOO: "bar", namespace: "example" });
     });
 
-    test("injects filter_env so the agent's own environment cannot leak into the child", async () => {
+    test("denies every inherited variable so the agent environment cannot leak into the child", async () => {
         resetState();
         state.started = [{ name: "my-app" }];
 
         await processController.startProcess(VALID_PAYLOAD);
 
-        expect(state.startOpts?.filter_env).toEqual(INHERITED_ENV_DENYLIST);
+        expect(state.startOpts?.filter_env).toEqual(Object.keys(process.env));
     });
 
     test("strips reserved PM2 keys from the payload env before dispatch", async () => {

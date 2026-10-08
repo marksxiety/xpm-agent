@@ -3,7 +3,7 @@ import path from "node:path";
 
 import { pm2LogsDir, resolveLogFiles, tailLines, DEFAULT_TAIL_LINES, MAX_TAIL_LINES } from "../../utils/log";
 
-const FIXED_PM2_HOME = "C:\\Apps\\DPR\\.pm2";
+const FIXED_PM2_HOME = "C:\\Apps\\.pm2";
 
 function expectedLogFile(base: string): string {
   return path.join(FIXED_PM2_HOME, "logs", `${base}.log`);
