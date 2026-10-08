@@ -9,6 +9,7 @@ const state = {
     describeError: null as Error | null,
     connectError: null as Error | null,
     dumpCalls: 0,
+    stopCalls: 0,
 };
 
 mock.module("pm2", () => ({
@@ -19,6 +20,7 @@ mock.module("pm2", () => ({
             cb(state.describeError, state.described);
         },
         stop(_id: number, cb: (err?: Error | null, procs?: ProcessDescription[]) => void) {
+            state.stopCalls += 1;
             cb(state.stopError, state.stopped);
         },
         dump(cb: (err?: Error | null) => void) {
@@ -39,6 +41,7 @@ function resetState() {
     state.describeError = null;
     state.connectError = null;
     state.dumpCalls = 0;
+    state.stopCalls = 0;
     pm2Connection.reset();
 }
 
@@ -82,6 +85,19 @@ describe("pm2 stop service", () => {
         expect(response.code).toBe("AGENT_SELF_MANAGEMENT_FORBIDDEN");
         expect(response.message).toBe("Refusing to manage the xpm-agent process itself");
         expect(state.dumpCalls).toBe(0);
+        expect(state.stopCalls).toBe(0);
+    });
+
+    test("fails closed: does not stop when the guard cannot inspect the target", async () => {
+        resetState();
+        state.describeError = new Error("connect ECONNREFUSED 127.0.0.1:4444");
+
+        const response = await processController.stopProcess(3);
+
+        expect(response.success).toBe(false);
+        expect(response.status).toBe(503);
+        expect(response.code).toBe("PM2_DAEMON_UNAVAILABLE");
+        expect(state.stopCalls).toBe(0);
     });
 
     test("returns 404 when the process is not found", async () => {

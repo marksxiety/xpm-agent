@@ -155,6 +155,16 @@ describe("pm2 logs service", () => {
     expect(response.message).toBe("Process 99 not found");
   });
 
+  test("returns 409 for the agent's own process", async () => {
+    state.described = [{ pm_id: 0, name: "xpm-agent", pm2_env: { namespace: "XPM" } }] as unknown as ProcessDescription[];
+
+    const response = await processController.getLogs(0);
+
+    expect(response.success).toBe(false);
+    expect(response.status).toBe(409);
+    expect(response.code).toBe("AGENT_SELF_MANAGEMENT_FORBIDDEN");
+  });
+
   test("returns 503 when the PM2 daemon is unreachable", async () => {
     state.connectError = new Error("connect ECONNREFUSED 127.0.0.1:4444");
 

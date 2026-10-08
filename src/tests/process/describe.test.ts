@@ -179,6 +179,17 @@ describe("pm2 describe service", () => {
         expect(response.message).toBe("Process 99 not found");
     });
 
+    test("returns 409 for the agent's own process", async () => {
+        resetState();
+        state.described = [{ pm_id: 0, name: "xpm-agent", pm2_env: { namespace: "XPM" } as ProcessDescription["pm2_env"] }];
+
+        const response = await processController.describeProcess(0);
+
+        expect(response.success).toBe(false);
+        expect(response.status).toBe(409);
+        expect(response.code).toBe("AGENT_SELF_MANAGEMENT_FORBIDDEN");
+    });
+
     test("returns 404 when PM2 reports process not found", async () => {
         resetState();
         state.describeError = new Error("Process not found");
