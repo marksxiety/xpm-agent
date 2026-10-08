@@ -306,7 +306,7 @@ describe("pm2 start service", () => {
         expect(response.info as unknown as StartIssue[]).toEqual([{ field: "script", message: "script is required and cannot be empty" }]);
     });
 
-    test("returns 422 with the issue list when instances is a string other than 'max'", async () => {
+    test("returns 422 with the issue list when instances is a string", async () => {
         resetState();
 
         const response = await processController.startProcess({
@@ -320,7 +320,7 @@ describe("pm2 start service", () => {
         expect(response.code).toBe("INVALID_PROCESS_CONFIGURATION");
         expect(response.message).toBe("Invalid process configuration");
         expect(response.info as unknown as StartIssue[]).toEqual([
-            { field: "instances", message: "instances must be a positive integer or 'max'" },
+            { field: "instances", message: "instances must be 1 — cluster mode is disabled" },
         ]);
     });
 
@@ -334,11 +334,11 @@ describe("pm2 start service", () => {
         expect(response.code).toBe("INVALID_PROCESS_CONFIGURATION");
         expect(response.message).toBe("Invalid process configuration");
         expect(response.info as unknown as StartIssue[]).toEqual([
-            { field: "instances", message: "instances must be a positive integer or 'max'" },
+            { field: "instances", message: "instances must be 1 — cluster mode is disabled" },
         ]);
     });
 
-    test("returns 422 with the issue list when instances exceeds 1 in fork mode", async () => {
+    test("returns 422 with the issue list when instances exceeds 1", async () => {
         resetState();
 
         const response = await processController.startProcess({ ...VALID_PAYLOAD, exec_mode: "fork", instances: 2 });
@@ -348,7 +348,23 @@ describe("pm2 start service", () => {
         expect(response.code).toBe("INVALID_PROCESS_CONFIGURATION");
         expect(response.message).toBe("Invalid process configuration");
         expect(response.info as unknown as StartIssue[]).toEqual([
-            { field: "instances", message: "'instances' has no effect in fork mode — set exec_mode to 'cluster' if supported" },
+            { field: "instances", message: "instances must be 1 — cluster mode is disabled" },
+        ]);
+    });
+
+    test("returns 422 with the issue list when exec_mode is cluster", async () => {
+        resetState();
+
+        const response = await processController.startProcess({
+            ...VALID_PAYLOAD,
+            exec_mode: "cluster",
+        });
+
+        expect(response.success).toBe(false);
+        expect(response.status).toBe(422);
+        expect(response.code).toBe("INVALID_PROCESS_CONFIGURATION");
+        expect(response.info as unknown as StartIssue[]).toEqual([
+            { field: "exec_mode", message: "only 'fork' exec_mode is supported — cluster mode would inherit the daemon environment" },
         ]);
     });
 
@@ -495,7 +511,7 @@ describe("pm2 start route", () => {
         expect(body.message).toContain("Validation failed");
     });
 
-    test("returns 422 when instances is a string other than 'max'", async () => {
+    test("returns 422 when instances is a string", async () => {
         resetState();
 
         const { status, body } = await postStart({ ...VALID_PAYLOAD, instances: "2" });
@@ -506,16 +522,15 @@ describe("pm2 start route", () => {
         expect(body.message).toContain("Validation failed");
     });
 
-    test("returns 422 with the issue list when name is empty", async () => {
+    test("returns 422 when name is empty", async () => {
         resetState();
 
         const { status, body } = await postStart({ ...VALID_PAYLOAD, name: "" });
 
         expect(status).toBe(422);
         expect(body.success).toBe(false);
-        expect(body.code).toBe("INVALID_PROCESS_CONFIGURATION");
-        expect(body.message).toBe("Invalid process configuration");
-        expect(body.info).toEqual([{ field: "name", message: "name is required and cannot be empty" }]);
+        expect(body.code).toBe("VALIDATION_FAILED");
+        expect(body.message).toContain("Validation failed");
     });
 
     test("returns 400 when PM2 reports script not found", async () => {
@@ -551,6 +566,39 @@ describe("pm2 start route", () => {
         expect(body.success).toBe(false);
         expect(body.code).toBe("VALIDATION_FAILED");
         expect(body.message).toContain("uid");
+    });
+
+    test("returns 422 when cwd is omitted", async () => {
+        resetState();
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { cwd: _cwd, ...withoutCwd } = VALID_PAYLOAD;
+
+        const { status, body } = await postStart(withoutCwd);
+
+        expect(status).toBe(422);
+        expect(body.success).toBe(false);
+        expect(body.code).toBe("VALIDATION_FAILED");
+        expect(body.message).toContain("cwd");
+    });
+
+    test("returns 422 when exec_mode is cluster", async () => {
+        resetState();
+
+        const { status, body } = await postStart({ ...VALID_PAYLOAD, exec_mode: "cluster" });
+
+        expect(status).toBe(422);
+        expect(body.success).toBe(false);
+        expect(body.code).toBe("VALIDATION_FAILED");
+    });
+
+    test("returns 422 when instances is not 1", async () => {
+        resetState();
+
+        const { status, body } = await postStart({ ...VALID_PAYLOAD, instances: 2 });
+
+        expect(status).toBe(422);
+        expect(body.success).toBe(false);
+        expect(body.code).toBe("VALIDATION_FAILED");
     });
 
     test("returns 503 when the PM2 daemon is unreachable", async () => {

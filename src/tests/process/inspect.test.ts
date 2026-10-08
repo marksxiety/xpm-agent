@@ -6,9 +6,16 @@ import { StartPayload } from "../../schemas/process";
 type Payload = Static<typeof StartPayload>;
 
 const NODE = "C:\\Program Files\\nodejs\\node.exe";
+const CWD = "C:\\apps\\example";
+const LINUX_CWD = "/srv/apps/example";
 
 function issues(payload: Payload): string[] {
   return inspect("start", payload).map((issue) => issue.field);
+}
+
+/** For values the schema rejects but the controller can still receive directly. */
+function runtimeIssues(payload: Record<string, unknown>): string[] {
+  return inspect("start", payload as unknown as Payload).map((issue) => issue.field);
 }
 
 describe("start inspection", () => {
@@ -16,6 +23,7 @@ describe("start inspection", () => {
     const payload: Payload = {
       name: "client",
       script: ".output/server/index.mjs",
+      cwd: CWD,
       interpreter: NODE,
       interpreter_args: ["--env-file=.env"],
       exec_mode: "fork",
@@ -28,21 +36,23 @@ describe("start inspection", () => {
     expect(inspect("stop", {})).toEqual([]);
   });
 
-  test("returns no issues for a Node cluster with multiple instances", () => {
-    const payload: Payload = {
+  test("flags cluster mode even for a Node interpreter", () => {
+    const payload = {
       name: "api",
       script: "server.js",
+      cwd: CWD,
       interpreter: NODE,
       exec_mode: "cluster",
       instances: 2,
     };
-    expect(issues(payload)).toEqual([]);
+    expect(runtimeIssues(payload)).toContain("exec_mode");
   });
 
   test("returns no issues for a bare binary with interpreter 'none'", () => {
     const payload: Payload = {
       name: "worker",
       script: "./my-binary",
+      cwd: CWD,
       interpreter: "none",
     };
     expect(issues(payload)).toEqual([]);
@@ -52,6 +62,7 @@ describe("start inspection", () => {
     const payload: Payload = {
       name: "client",
       script: ".output/server/index.mjs",
+      cwd: CWD,
       interpreter: "node",
     };
     expect(issues(payload)).toEqual(["interpreter"]);
@@ -61,6 +72,7 @@ describe("start inspection", () => {
     const payload: Payload = {
       name: "app",
       script: "app.py",
+      cwd: CWD,
       interpreter: "none",
       interpreter_args: ["--max-old-space-size=512"],
     };
@@ -68,41 +80,45 @@ describe("start inspection", () => {
   });
 
   test("flags cluster mode on a non-node interpreter", () => {
-    const payload: Payload = {
+    const payload = {
       name: "server",
       script: "server.py",
+      cwd: CWD,
       interpreter: "none",
       exec_mode: "cluster",
       instances: 2,
     };
-    expect(issues(payload)).toContain("exec_mode");
+    expect(runtimeIssues(payload)).toContain("exec_mode");
   });
 
-  test("flags instances > 1 in fork mode", () => {
-    const payload: Payload = {
+  test("flags instances > 1", () => {
+    const payload = {
       name: "api",
       script: "server.js",
+      cwd: CWD,
       interpreter: NODE,
       exec_mode: "fork",
       instances: 2,
     };
-    expect(issues(payload)).toContain("instances");
+    expect(runtimeIssues(payload)).toContain("instances");
   });
 
-  test("flags instances 'max' without cluster mode", () => {
-    const payload: Payload = {
+  test("flags instances 'max'", () => {
+    const payload = {
       name: "api",
       script: "server.js",
+      cwd: CWD,
       interpreter: NODE,
       instances: "max",
     };
-    expect(issues(payload)).toContain("instances");
+    expect(runtimeIssues(payload)).toContain("instances");
   });
 
   test("flags an empty script", () => {
     const payload: Payload = {
       name: "api",
       script: "",
+      cwd: CWD,
       interpreter: NODE,
     };
     expect(issues(payload)).toEqual(["script"]);
@@ -112,38 +128,40 @@ describe("start inspection", () => {
     const payload: Payload = {
       name: "api",
       script: "   ",
+      cwd: CWD,
       interpreter: NODE,
     };
     expect(issues(payload)).toEqual(["script"]);
   });
 
-  test("flags instances as a string other than 'max'", () => {
-    const payload: Payload = {
+  test("flags instances that are not exactly 1", () => {
+    const payload = {
       name: "api",
       script: "server.js",
+      cwd: CWD,
       interpreter: NODE,
-      // @ts-expect-error Testing runtime validation for an invalid type
       instances: "2",
     };
-    expect(issues(payload)).toEqual(["instances"]);
+    expect(runtimeIssues(payload)).toEqual(["instances"]);
   });
 
   test("flags instances of zero", () => {
-    const payload: Payload = {
+    const payload = {
       name: "api",
       script: "server.js",
+      cwd: CWD,
       interpreter: NODE,
       instances: 0,
     };
-    expect(issues(payload)).toEqual(["instances"]);
+    expect(runtimeIssues(payload)).toEqual(["instances"]);
   });
 
   test("accepts duration strings and milliseconds for min_uptime", () => {
     expect(
-      issues({ name: "api", script: "server.js", interpreter: NODE, min_uptime: "10s" }),
+      issues({ name: "api", script: "server.js", cwd: CWD, interpreter: NODE, min_uptime: "10s" }),
     ).toEqual([]);
     expect(
-      issues({ name: "api", script: "server.js", interpreter: NODE, min_uptime: 10000 }),
+      issues({ name: "api", script: "server.js", cwd: CWD, interpreter: NODE, min_uptime: 10000 }),
     ).toEqual([]);
   });
 
@@ -151,6 +169,7 @@ describe("start inspection", () => {
     const payload: Payload = {
       name: "api",
       script: "server.js",
+      cwd: CWD,
       interpreter: NODE,
       min_uptime: "soon",
     };
@@ -158,19 +177,21 @@ describe("start inspection", () => {
   });
 
   test("flags negative instances", () => {
-    const payload: Payload = {
+    const payload = {
       name: "api",
       script: "server.js",
+      cwd: CWD,
       interpreter: NODE,
       instances: -1,
     };
-    expect(issues(payload)).toEqual(["instances"]);
+    expect(runtimeIssues(payload)).toEqual(["instances"]);
   });
 
   test("returns no issues for a posix absolute interpreter on a win32 target", () => {
     const payload: Payload = {
       name: "api",
       script: "server.js",
+      cwd: CWD,
       interpreter: "/usr/bin/node",
       targetOs: "win32",
     };
@@ -181,6 +202,7 @@ describe("start inspection", () => {
     const payload: Payload = {
       name: "api",
       script: "server.js",
+      cwd: LINUX_CWD,
       interpreter: NODE,
       targetOs: "linux",
     };
@@ -191,6 +213,7 @@ describe("start inspection", () => {
     const payload: Payload = {
       name: "api",
       script: "server.js",
+      cwd: LINUX_CWD,
       interpreter: "/usr/bin/node",
       targetOs: "linux",
     };

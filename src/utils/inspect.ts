@@ -24,7 +24,6 @@ const RUNTIME_PROFILES: RuntimeProfile[] = [
     family: "node",
     executableNames: ["node"],
     scriptExtensions: /\.(?:m?js|cjs|ts|tsx|jsx|mts|cts)$/i,
-    supportsClusterMode: true,
     supportsInterpreterArgs: true,
   },
   {
@@ -34,7 +33,6 @@ const RUNTIME_PROFILES: RuntimeProfile[] = [
     family: "node",
     executableNames: ["bun"],
     scriptExtensions: /\.(?:m?js|cjs|ts|tsx|jsx|mts|cts)$/i,
-    supportsClusterMode: false,
     supportsInterpreterArgs: true,
   },
   {
@@ -42,7 +40,6 @@ const RUNTIME_PROFILES: RuntimeProfile[] = [
     family: "php",
     executableNames: ["php"],
     scriptExtensions: /\.(?:php|phtml)$/i,
-    supportsClusterMode: false,
     supportsInterpreterArgs: false,
   },
   {
@@ -50,7 +47,6 @@ const RUNTIME_PROFILES: RuntimeProfile[] = [
     family: "python",
     executableNames: ["python", "python3", "py", "pythonw"],
     scriptExtensions: /\.pyw?$/i,
-    supportsClusterMode: false,
     supportsInterpreterArgs: true, // e.g. -O, -u
   },
   {
@@ -58,7 +54,6 @@ const RUNTIME_PROFILES: RuntimeProfile[] = [
     family: "go",
     executableNames: ["go"],
     scriptExtensions: /\.go$/i,
-    supportsClusterMode: false,
     supportsInterpreterArgs: false,
   },
 ];
@@ -123,10 +118,23 @@ export function inspectStart(options: StartPayloadType): StartIssue[] {
     });
   }
 
-  if (options.instances !== undefined && options.instances !== "max" && (typeof options.instances !== "number" || options.instances < 1)) {
+  // The schema only accepts `"fork"`/`1`, but the controller can be called
+  // directly, so re-check here: PM2 cluster workers fork from the daemon and
+  // would inherit its environment instead of the payload env.
+  const execMode = options.exec_mode as string | undefined;
+  const instanceCount = options.instances as number | string | undefined;
+
+  if (execMode !== undefined && execMode !== "fork") {
+    issues.push({
+      field: "exec_mode",
+      message: "only 'fork' exec_mode is supported — cluster mode would inherit the daemon environment",
+    });
+  }
+
+  if (instanceCount !== undefined && instanceCount !== 1) {
     issues.push({
       field: "instances",
-      message: "instances must be a positive integer or 'max'",
+      message: "instances must be 1 — cluster mode is disabled",
     });
   }
 
@@ -177,24 +185,6 @@ export function inspectStart(options: StartPayloadType): StartIssue[] {
       field: "interpreter_args",
       message: `'interpreter_args' isn't supported by this interpreter${interpreterProfile ? ` (${interpreterProfile.id})` : ""
         }`,
-    });
-  }
-
-  if (options.exec_mode === "cluster" && !interpreterProfile?.supportsClusterMode) {
-    issues.push({
-      field: "exec_mode",
-      message: `cluster mode isn't supported by this interpreter${interpreterProfile ? ` (${interpreterProfile.id})` : ""
-        } — use 'fork' instead`,
-    });
-  }
-
-  if (
-    (options.instances === "max" || (typeof options.instances === "number" && options.instances > 1)) &&
-    options.exec_mode !== "cluster"
-  ) {
-    issues.push({
-      field: "instances",
-      message: "'instances' has no effect in fork mode — set exec_mode to 'cluster' if supported",
     });
   }
 

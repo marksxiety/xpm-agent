@@ -197,7 +197,7 @@ describe("sanitizeProcessConfig", () => {
     expect(options?.autorestart).toBeUndefined();
   });
 
-  test("rejects cluster mode for a Bun interpreter", () => {
+  test("rejects cluster mode and multi-instance configs", () => {
     const { options, issues } = sanitize({
       ...VALID_PAYLOAD,
       script: "C:\\apps\\index.ts",
@@ -207,23 +207,7 @@ describe("sanitizeProcessConfig", () => {
     });
 
     expect(options).toBeNull();
-    expect(issues).toEqual([
-      {
-        field: "exec_mode",
-        message: "cluster mode isn't supported by this interpreter (bun) — use 'fork' instead",
-      },
-    ]);
-  });
-
-  test("allows cluster mode for a Node interpreter", () => {
-    const { options, issues } = sanitize({
-      ...VALID_PAYLOAD,
-      exec_mode: "cluster",
-      instances: 2,
-    });
-
-    expect(issues).toEqual([]);
-    expect(options?.exec_mode).toBe("cluster");
+    expect(issues.map((issue) => issue.field)).toEqual(["exec_mode", "instances"]);
   });
 
   test("accepts .js scripts with a Bun interpreter (same runtime family)", () => {

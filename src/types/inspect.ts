@@ -11,7 +11,6 @@ export interface RuntimeProfile {
   family: string;
   executableNames: string[];
   scriptExtensions: RegExp;
-  supportsClusterMode: boolean;
   supportsInterpreterArgs: boolean;
 }
 

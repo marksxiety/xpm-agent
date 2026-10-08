@@ -57,6 +57,7 @@ export const DeleteLogsQuery = t.Object({
 export const StartPayload = t.Object({
   name: t.String({
     description: "Process name shown in `pm2 list`. Used in log file names and lifecycle commands. Required.",
+    pattern: "^[A-Za-z0-9._-]{1,64}$",
     examples: ["client", "server", "worker"],
   }),
   targetOs: t.Optional(t.Union([t.Literal("win32"), t.Literal("linux")], {
@@ -71,11 +72,11 @@ export const StartPayload = t.Object({
     examples: ["example", "default"],
     default: "default",
   })),
-  cwd: t.Optional(t.String({
+  cwd: t.String({
     description:
-      "Working directory the process is launched from. Must be an **absolute** path for the declared `targetOs` — relative paths are rejected with `422` because PM2 would resolve them against the agent's own directory, not the target app root. When omitted, PM2 falls back to the agent's working directory.",
+      "Working directory the process is launched from. Required and must be an **absolute** path for the declared `targetOs` — relative paths, paths containing `..` segments, and the agent's own directory are rejected with `422` because PM2 would otherwise resolve them against the agent's directory, not the target app root.",
     examples: ["C:\\apps\\my-service", "/srv/apps/my-service"],
-  })),
+  }),
   script: t.String({
     description:
       "Path to the script to run. Can be a relative or absolute path; when `cwd` is omitted, it is resolved against the API server's working directory. Examples: a Node entry file (`.output/server/index.mjs`), an artisan binary (`artisan`), a PHP file, or a compiled binary.",
@@ -96,16 +97,16 @@ export const StartPayload = t.Object({
       "Arguments passed to the interpreter process (e.g. Node/V8 flags like `--max-old-space-size=512` or `--env-file=.env`). Only supported for interpreters that accept extra args (Node/Bun and Python); rejected for PHP, Go, and `'none'`. No pm2 default.",
     examples: ["--env-file=.env", ["--env-file=.env", "--max-old-space-size=512"]],
   })),
-  exec_mode: t.Optional(t.Union([t.Literal("fork"), t.Literal("cluster")], {
+  exec_mode: t.Optional(t.Literal("fork", {
     description:
-      "Execution mode. Defaults to `'fork'` (pm2 built-in). `'cluster'` is required for `instances > 1` and is Node-only — requests are rejected with `422` for Bun, Python, PHP, Go, and `interpreter: 'none'`.",
-    examples: ["fork", "cluster"],
+      "Execution mode. Only `'fork'` is accepted: PM2's cluster mode forks workers from the daemon and would leak the agent's environment into them, so `'cluster'` is rejected with `422`.",
+    examples: ["fork"],
     default: "fork",
   })),
-  instances: t.Optional(t.Union([t.Number(), t.Literal("max")], {
+  instances: t.Optional(t.Literal(1, {
     description:
-      "Number of process instances. Defaults to `1` (pm2 built-in). Only meaningful with `exec_mode: 'cluster'`; `'max'` uses one instance per CPU core.",
-    examples: [1, 2, "max"],
+      "Number of process instances. Only `1` is accepted — cluster mode is disabled, so `'max'` and any other count are rejected with `422`. Defaults to `1`.",
+    examples: [1],
     default: 1,
   })),
   autorestart: t.Optional(t.Boolean({
@@ -179,6 +180,7 @@ export const StartPayload = t.Object({
     examples: ["*/5 * * * *"],
   })),
 }, {
+  additionalProperties: false,
   examples: [{
     name: "example-app",
     namespace: "example",
