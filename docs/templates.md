@@ -2,7 +2,7 @@
 
 Copy-paste templates for `POST /pm2/start`, grouped by language. Each section carries the UI metadata (what to lock, hide, or derive), a sample payload, and the language-specific gotchas.
 
-Framework templates (Nuxt, Next, Nest, Laravel, ...) will be added later as new sections reusing this format — they build on the language recipes below.
+Framework templates (Laravel today; Nuxt, Next, Nest, ... later) are added as new sections reusing this format — they build on the language recipes below.
 
 > Base URL `http://localhost:4000/pm2`. When `AUTH_TOKEN` is set, every request needs `Authorization: Bearer <AUTH_TOKEN>`. All responses use the envelope `{ success, message, code?, info }` — see [ROUTES.md](./ROUTES.md).
 
@@ -162,7 +162,7 @@ Same as Python direct, with the interpreter pointing at the venv's own `python.e
 
 ## PHP
 
-Run PHP's built-in web server (`php -S`). Currently no framework conventions — a Laravel/artisan template will be added with the framework recipes.
+Run PHP's built-in web server (`php -S`) for a plain PHP app. For Laravel, see the Laravel section below.
 
 **UI metadata**
 
@@ -188,6 +188,38 @@ Run PHP's built-in web server (`php -S`). Currently no framework conventions —
 - Why the inversion: PM2 always launches `interpreter <script> <args>`. With `interpreter: "php.exe"` and `script: "server.php"` the `-S` flag would land **after** the script (`php server.php -S ...`) and no server would start. Putting `php.exe` in `script` with `interpreter: "none"` yields the real `php -S 127.0.0.1:8080 -t public`.
 - Add a router as the last argument when needed: `["-S", "127.0.0.1:8080", "-t", "public", "server.php"]` (path relative to `cwd` or absolute).
 - `interpreter_args` and cluster mode are rejected for PHP — the config guide returns `422 INVALID_PROCESS_CONFIGURATION`.
+
+---
+
+## Laravel
+
+Run a Laravel app through its Artisan CLI (`php artisan serve`).
+
+**UI metadata**
+
+- Lock: `script` = `artisan`, `interpreter` = absolute `php.exe`
+- Hide: `interpreter_args`, `exec_mode`, `instances`
+- Derive: `args` default `["serve", "--host=127.0.0.1", "--port=8080"]`
+
+```json
+{
+  "name": "my-laravel-app",
+  "namespace": "apps",
+  "cwd": "C:\\apps\\my-laravel-app",
+  "script": "artisan",
+  "args": ["serve", "--host=127.0.0.1", "--port=8080"],
+  "interpreter": "C:\\php\\php.exe",
+  "autorestart": true,
+  "windowsHide": true
+}
+```
+
+**Gotchas**
+
+- No inversion is needed (unlike the PHP `php -S` recipe): `artisan` is a real entrypoint script, so the normal `interpreter <script> <args>` order already yields `php artisan serve ...`.
+- `script` is relative and PM2 resolves it against `cwd` — set `cwd` to the Laravel project root (the folder containing `artisan`).
+- `artisan` is a recognized entrypoint convention: the config guide requires a PHP interpreter path and a subcommand in `args`; `interpreter_args` and cluster mode are rejected for PHP.
+- `artisan serve` boots PHP's built-in server as a child process and reloads it when `.env` changes — it is Laravel's dev server. For production, prefer php-fpm behind nginx, or supervise `php artisan queue:work` / `php artisan schedule:work` as separate long-running processes.
 
 ---
 
