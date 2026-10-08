@@ -128,7 +128,7 @@ export class ProcessController {
       );
       const target = processDescriptions[0];
       const targetNamespace = (target?.pm2_env as { namespace?: string } | undefined)?.namespace;
-      if (target?.name === AGENT_NAME && targetNamespace === AGENT_NAMESPACE) {
+      if (target?.name && AGENT_NAME.has(target.name) && targetNamespace === AGENT_NAMESPACE) {
         return respond("Refusing to manage the xpm-agent process itself", null, {
           success: false,
           status: 409,

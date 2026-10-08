@@ -1,4 +1,4 @@
-export const AGENT_NAME = "xpm-agent";
+export const AGENT_NAME = new Set(["xpm-agent", "xpm-client", "xpm-server"]); // process name for agent, client (frontend), and server (backend) processes
 export const AGENT_NAMESPACE = "XPM";
 const INACTIVE_STATUSES = new Set(["stopped", "errored"]);
 const DEFAULT_STDIO = { stdin: "ignore", stdout: "pipe", stderr: "ignore" } as const;
@@ -34,7 +34,7 @@ export function parsePm2Jlist(output: string): Pm2AgentProcess[] | undefined {
 export function isAgentHoldingPort(processes: Pm2AgentProcess[]): boolean {
   return processes.some(
     (process_) =>
-      process_.name === AGENT_NAME &&
+      AGENT_NAME.has(process_.name ?? "") &&
       process_.pm2_env?.namespace === AGENT_NAMESPACE &&
       !INACTIVE_STATUSES.has(process_.pm2_env?.status ?? ""),
   );
