@@ -11,6 +11,7 @@ import { systemController } from "./controller/system.controller";
 import { getRouteMeta } from "./meta/process";
 import { getSystemRouteMeta } from "./meta/system";
 import { config } from "./config";
+import { checkBootSecurity } from "./utils/boot";
 import { formatPortError, formatPortInUseError, resolveServerPort, STARTUP_ERROR_EXIT_CODE } from "./utils/port";
 import { findListeningPidsOnHost, findProcessName } from "./utils/port-usage";
 import { systemInformationSource } from "./utils/system";
@@ -84,6 +85,16 @@ const normalizePath = (filePath: string) => filePath.replaceAll("\\", "/").toLow
 const isPm2EntryPoint = process.env.pm_exec_path !== undefined && normalizePath(import.meta.path) === normalizePath(process.env.pm_exec_path);
 
 if (import.meta.main || isPm2EntryPoint) {
+  const security = checkBootSecurity({
+    AUTH_TOKEN: process.env.AUTH_TOKEN,
+    ALLOW_INSECURE: process.env.ALLOW_INSECURE,
+  });
+  if (!security.allowed) {
+    console.error(`xpm-agent failed to start: ${security.error}`);
+    process.exit(STARTUP_ERROR_EXIT_CODE);
+  }
+  if (security.warning) console.warn(security.warning);
+
   const resolution = resolveServerPort(process.env.SERVER_PORT);
   if (!resolution.ok) {
     console.error(`xpm-agent failed to start: ${resolution.message}`);
