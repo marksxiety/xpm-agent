@@ -1,8 +1,13 @@
 import { expect } from "bun:test";
-import { mkdirSync } from "node:fs";
+import { spawn } from "node:child_process";
+import { existsSync, mkdirSync } from "node:fs";
 import fs from "node:fs/promises";
+import { createRequire } from "node:module";
+import net from "node:net";
 import os from "node:os";
 import path from "node:path";
+
+const require = createRequire(import.meta.url);
 
 export interface CanaryContext {
   homeDir: string;
@@ -96,6 +101,38 @@ const PM2_METADATA_KEYS = new Set([
   "PWD",
 ]);
 
+/**
+ * pm2/lib/paths.js applies `PM2_DAEMON_*_PORT` env overrides and then
+ * unconditionally overwrites them with `\\.\pipe\rpc.sock`/`pub.sock` on
+ * Windows. Patching the module in the require cache re-applies the overrides
+ * after that block so the client talks to our isolated daemon, never the
+ * machine-wide one.
+ */
+function patchPm2Paths(): void {
+  const pathsPath = require.resolve("pm2/paths.js");
+  const original = require(pathsPath) as (overHome?: string) => Record<string, string>;
+  const cacheEntry = require.cache[pathsPath];
+  if (!cacheEntry) throw new Error(`Cannot patch ${pathsPath}: not in require cache`);
+
+  cacheEntry.exports = (overHome?: string) => {
+    const structure = original(overHome);
+    if (process.env.PM2_DAEMON_RPC_PORT) structure.DAEMON_RPC_PORT = process.env.PM2_DAEMON_RPC_PORT;
+    if (process.env.PM2_DAEMON_PUB_PORT) structure.DAEMON_PUB_PORT = process.env.PM2_DAEMON_PUB_PORT;
+    if (process.env.PM2_INTERACTOR_RPC_PORT) structure.INTERACTOR_RPC_PORT = process.env.PM2_INTERACTOR_RPC_PORT;
+    return structure;
+  };
+}
+
+function assertIsolatedPipes(): void {
+  const constants = require("pm2/constants.js") as { DAEMON_RPC_PORT: string };
+  const expected = process.platform === "win32" ? process.env.PM2_DAEMON_RPC_PORT : undefined;
+  if (expected !== undefined && constants.DAEMON_RPC_PORT !== expected) {
+    throw new Error(
+      `Canary isolation failed: PM2 client would use ${constants.DAEMON_RPC_PORT}, not ${expected}`,
+    );
+  }
+}
+
 export function configureIsolatedPm2(label: string): CanaryContext {
   const runId = `${label}-${process.pid}-${Date.now()}`;
   const homeDir = path.join(os.tmpdir(), `xpm-canary-home-${runId}`);
@@ -104,14 +141,63 @@ export function configureIsolatedPm2(label: string): CanaryContext {
 
   process.env.PM2_HOME = homeDir;
   if (process.platform === "win32") {
-    // Windows PM2 hardcodes \\.\pipe\rpc.sock (pm2/lib/paths.js), so a temp
-    // PM2_HOME alone would collide with the live user daemon.
+    // Windows PM2 hardcodes the machine-wide pipes; these are re-applied by
+    // patchPm2Paths() and passed to the isolated daemon explicitly.
     process.env.PM2_DAEMON_RPC_PORT = `\\\\.\\pipe\\xpm-canary-rpc-${runId}`;
     process.env.PM2_DAEMON_PUB_PORT = `\\\\.\\pipe\\xpm-canary-pub-${runId}`;
+    process.env.PM2_INTERACTOR_RPC_PORT = `\\\\.\\pipe\\xpm-canary-interactor-${runId}`;
   }
+  patchPm2Paths();
+  assertIsolatedPipes();
   delete process.env.AUTH_TOKEN;
 
   return { homeDir, appDir, dumpFile: path.join(appDir, "child-env.json"), runId };
+}
+
+export function rpcSocketPath(context: CanaryContext): string {
+  return process.platform === "win32"
+    ? process.env.PM2_DAEMON_RPC_PORT ?? ""
+    : path.join(context.homeDir, "rpc.sock");
+}
+
+/** Spawns the isolated daemon detached; returns its pid. */
+export function launchIsolatedDaemon(context: CanaryContext, extraEnv: Record<string, string> = {}): number {
+  const daemonPath = path.join(import.meta.dir, "isolated-daemon.ts");
+  const child = spawn(process.execPath, [daemonPath], {
+    env: { ...process.env, ...extraEnv },
+    cwd: context.appDir,
+    detached: true,
+    stdio: "ignore",
+    windowsHide: true,
+  });
+  child.unref();
+  if (child.pid === undefined) throw new Error("Failed to spawn the isolated PM2 daemon");
+  return child.pid;
+}
+
+function canConnect(socketPath: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    const socket = net.connect(socketPath);
+    const done = (result: boolean) => {
+      socket.destroy();
+      resolve(result);
+    };
+    socket.once("connect", () => done(true));
+    socket.once("error", () => done(false));
+    socket.setTimeout(500, () => done(false));
+  });
+}
+
+/** Waits until the isolated daemon's RPC socket answers, so pm2.connect never spawns its own. */
+export async function waitForDaemon(context: CanaryContext, timeoutMs = 20000): Promise<void> {
+  const socketPath = rpcSocketPath(context);
+  const pidFile = path.join(context.homeDir, "pm2.pid");
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (existsSync(pidFile) && (await canConnect(socketPath))) return;
+    await Bun.sleep(100);
+  }
+  throw new Error(`Timed out waiting for the isolated PM2 daemon (${socketPath})`);
 }
 
 export async function prepareAppDir(context: CanaryContext): Promise<void> {
@@ -166,18 +252,47 @@ export async function waitForEnvDump(context: CanaryContext, timeoutMs = 20000):
   throw new Error(`Timed out waiting for ${context.dumpFile}`);
 }
 
-export async function cleanupCanary(context: CanaryContext): Promise<void> {
-  const pm2 = (await import("pm2")).default;
-  await Promise.race([
-    new Promise<void>((resolve) => {
-      try {
-        pm2.killDaemon(() => resolve());
-      } catch {
-        resolve();
-      }
-    }),
-    Bun.sleep(5000),
-  ]);
+/**
+ * Kills only a daemon we launched: the temp-home pm2.pid must match the pid we
+ * recorded, otherwise it disconnects and leaves the process alone.
+ */
+export async function cleanupCanary(context: CanaryContext, daemonPid?: number): Promise<void> {
+  let recordedPid: number | undefined;
+  try {
+    recordedPid = Number((await fs.readFile(path.join(context.homeDir, "pm2.pid"), "utf8")).trim());
+  } catch {
+    recordedPid = undefined;
+  }
+
+  if (daemonPid !== undefined && recordedPid === daemonPid) {
+    const pm2 = (await import("pm2")).default;
+    await Promise.race([
+      new Promise<void>((resolve) => {
+        try {
+          pm2.killDaemon(() => resolve());
+        } catch {
+          resolve();
+        }
+      }),
+      Bun.sleep(5000),
+    ]);
+  }
+
+  if (daemonPid !== undefined) {
+    try {
+      process.kill(daemonPid);
+    } catch {
+      // Already stopped by killDaemon.
+    }
+  }
+
+  try {
+    const pm2 = (await import("pm2")).default;
+    pm2.disconnect();
+  } catch {
+    // Nothing to disconnect.
+  }
+
   await fs.rm(context.homeDir, { recursive: true, force: true });
   await fs.rm(context.appDir, { recursive: true, force: true });
 }
