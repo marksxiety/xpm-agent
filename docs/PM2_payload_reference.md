@@ -1,20 +1,20 @@
 # PM2 Payload Reference
 
-Reference for a PM2 ecosystem-style process payload. **Every field is optional except `script`** — the entry file is required; everything else falls back to PM2 defaults.
+Reference for a PM2 ecosystem-style process payload. **`script`, `cwd`, and `interpreter` are required**; every other field falls back to PM2 defaults, and unknown keys are rejected with `422`.
 
-> **Sanitized before dispatch (`POST /pm2/start`).** Empty/whitespace `namespace` becomes `default`; `cwd` must be absolute (relative paths are rejected with `422`); `max_restarts: 0` becomes `autorestart: false`; `exec_mode: "cluster"` is Node-only (Bun/Python/PHP/Go/`interpreter: "none"` must use `fork`); reserved PM2 keys are stripped from `env` and the agent's own environment is filtered out so only the explicit `env` pairs reach the child.
+> **Sanitized before dispatch (`POST /pm2/start`).** Empty/whitespace `namespace` becomes `default`; `cwd` must be absolute, free of `..` segments, and never the agent's own directory; `max_restarts: 0` becomes `autorestart: false`; `exec_mode` is always `fork` with `instances: 1` (cluster mode is rejected because cluster workers inherit the daemon's environment); reserved PM2 keys and runtime loader options (`NODE_OPTIONS`, `BUN_OPTIONS`, `NODE_PATH`, `PYTHONSTARTUP`/`PYTHONPATH`, `PHPRC`, `PHP_INI_SCAN_DIR`, `LD_PRELOAD`) are rejected from `env` with `422`; the agent's own environment is never inherited, so only the explicit `env` pairs reach the child.
 
 ## Identity & script
 
 Identifies the process and defines how its entry script is invoked: the file path, display name, working directory, arguments, and interpreter.
 
-- `script` — **required** — entry file to run.
-- `name` — process name shown in `pm2 list`.
-- `cwd` — working directory for the process. **Must be an absolute path** matching `targetOs` — PM2 resolves relative paths against the agent's directory.
+- `script` — **required** — entry file to run; must resolve inside `cwd`.
+- `name` — process name shown in `pm2 list`; must match `^[A-Za-z0-9._-]{1,64}$`.
+- `cwd` — **required** — working directory for the process. **Must be an absolute path** matching `targetOs`, without `..` segments, not the agent's own directory, and inside `APP_ROOTS` when that allowlist is configured.
 - `args` — arguments passed to the script (array or string).
-- `interpreter` — **this API requires an absolute path to the interpreter executable** (e.g. `C:\Program Files\nodejs\node.exe`) or `"none"` — bare names like `"node"`/`"python3"` are rejected by `/start` (PM2 itself accepts bare names, but this API does not).
-- `interpreter_args` — arguments passed to the interpreter itself.
-- `namespace` — logical grouping (`pm2 list` can show/filter by this). Empty/whitespace falls back to `default`.
+- `interpreter` — **this API requires an absolute path to the interpreter executable** (e.g. `C:\Program Files\nodejs\node.exe`) or `"none"` — bare names like `"node"`/`"python3"` are rejected by `/start`, and the executable must be a recognized runtime (`node`, `bun`, `php`, `python`, `go`). `"none"` additionally requires `AUTH_TOKEN` to be configured.
+- `interpreter_args` — arguments passed to the interpreter itself. Allowlisted per runtime: `--max-old-space-size=<n>` and `--env-file` pointing inside `cwd` (Node/Bun), `-O/-OO/-u/-B` (Python); anything else (`--require`, `-e`, `-c`, …) is rejected.
+- `namespace` — logical grouping (`pm2 list` can show/filter by this); must match `^[A-Za-z0-9._-]{1,64}$`. Empty/whitespace falls back to `default`.
 
 ```json
 {
@@ -32,8 +32,8 @@ Identifies the process and defines how its entry script is invoked: the file pat
 
 Controls how the process runs: execution mode, instance count, auto-restart on crash, and file watching for hot reloads.
 
-- `exec_mode` — `"fork"` | `"cluster"` (real values are `"fork"`/`"cluster"`, not `"fork_mode"`). Cluster mode is **Node-only** — non-Node interpreters are rejected with `422`.
-- `instances` — number of instances, or `"max"`/`-1` for all CPU cores (cluster only).
+- `exec_mode` — only `"fork"` is accepted. `"cluster"` is rejected with `422`: PM2 cluster workers fork from the daemon and would inherit the daemon's environment instead of the payload env.
+- `instances` — only `1` is accepted; `"max"`, `-1`, and any other count are rejected with `422`.
 - `autorestart` — restart automatically on crash/exit.
 - `watch` — `true`, or an array of paths to watch for changes.
 - `ignore_watch` — paths excluded from watch.
@@ -144,12 +144,12 @@ Less common settings for special cases: V8 flags, scheduled restarts, git versio
 - `node_args` — V8/Node flags (alternative to `interpreter_args` for node). PM2 supports it, but this API's `/start` schema rejects it — use `interpreter_args` instead.
 - `cron_restart` — cron pattern to force periodic restart.
 - `vizion` — disable git metadata versioning.
-- `post_update` — commands run after a `pm2 pull`/deploy update.
-- `force` — allow starting a script already running under the same name.
-- `source_map_support` — enable source-map-aware stack traces.
-- `instance_var` — env var name exposing instance index in cluster mode.
-- `filter_env` — strip matching env vars from inherited `process.env`.
-- `increment_var` — auto-increment this env var per cluster instance.
+- `post_update` — commands run after a `pm2 pull`/deploy update. PM2 supports it, but `/start` rejects it (unknown key).
+- `force` — allow starting a script already running under the same name. PM2 supports it, but `/start` rejects it (unknown key).
+- `source_map_support` — enable source-map-aware stack traces. PM2 supports it, but `/start` rejects it (unknown key).
+- `instance_var` — env var name exposing instance index in cluster mode. PM2 supports it, but `/start` rejects it (unknown key).
+- `filter_env` — strip matching env vars from inherited `process.env`. PM2 supports it, but `/start` rejects it — the agent manages `filter_env` itself.
+- `increment_var` — auto-increment this env var. Accepted by `/start`, but the key must be a valid env name, not reserved, and present in `env`.
 
 ```json
 {
@@ -167,7 +167,7 @@ Less common settings for special cases: V8 flags, scheduled restarts, git versio
 
 ## Complete payload
 
-Full merged payload for copy-paste. Only `script` is required; every other key is optional and shown with its sample value.
+Full merged payload for copy-paste. `script`, `cwd`, and `interpreter` are required; every other key is optional and shown with its sample value.
 
 ```json
 {

@@ -20,13 +20,15 @@ Framework templates (Laravel today; Nuxt, Next, Nest, ... later) are added as ne
 
 Field visibility source for the UI.
 
-| Language | `interpreter` | `interpreter_args` | `cluster` | Required extras |
-|---|---|---|---|---|
-| Node | absolute `node.exe` | yes | yes | — |
-| npm | absolute `node.exe` | yes | no (not meaningful) | `script` locked to `npm-cli.js` |
-| Python | absolute `python.exe` (system or venv) | yes | no | — |
-| PHP | absolute `php.exe`, or `"none"` for the built-in server | no | no | `php -S` uses the `"none"` inversion |
-| Go | `"none"` (compiled binary) | no | no | build the binary first |
+| Language | `interpreter` | `interpreter_args` | Required extras |
+|---|---|---|---|
+| Node | absolute `node.exe` | yes | — |
+| npm | absolute `node.exe` | yes | `script` locked to `npm-cli.js` |
+| Python | absolute `python.exe` (system or venv) | yes | — |
+| PHP | absolute `php.exe`, or `"none"` for the built-in server | no | `php -S` uses the `"none"` inversion |
+| Go | `"none"` (compiled binary) | no | build the binary first |
+
+> Cluster mode is disabled for every template: `/start` rejects `exec_mode: "cluster"` and any `instances` value other than `1`.
 
 ---
 
@@ -61,7 +63,7 @@ Run a `.js`/`.mjs`/`.cjs` entry file directly under `node.exe`.
 
 - `interpreter_args` becomes node's `node_args`: the process starts as `node --env-file=.env index.js --port 3000`.
 - `env` is injected as real process environment and takes precedence over values loaded from `--env-file` (Node docs). Drop the `--env-file` entry if `.env` is the single source of truth, or drop the overlapping `env` keys.
-- Cluster mode is allowed: `"exec_mode": "cluster"` with `"instances": 2` (or `"max"`). `fork` + `instances > 1` is rejected.
+- Cluster mode is rejected: `"exec_mode": "cluster"` and any `"instances"` other than `1` return `422`. Node apps run in `fork` mode.
 
 ---
 
@@ -187,7 +189,7 @@ Run PHP's built-in web server (`php -S`) for a plain PHP app. For Laravel, see t
 
 - Why the inversion: PM2 always launches `interpreter <script> <args>`. With `interpreter: "php.exe"` and `script: "server.php"` the `-S` flag would land **after** the script (`php server.php -S ...`) and no server would start. Putting `php.exe` in `script` with `interpreter: "none"` yields the real `php -S 127.0.0.1:8080 -t public`.
 - Add a router as the last argument when needed: `["-S", "127.0.0.1:8080", "-t", "public", "server.php"]` (path relative to `cwd` or absolute).
-- `interpreter_args` and cluster mode are rejected for PHP — the config guide returns `422 INVALID_PROCESS_CONFIGURATION`.
+- `interpreter_args` is rejected for PHP — the config guide returns `422 INVALID_PROCESS_CONFIGURATION`.
 
 ---
 
@@ -218,7 +220,7 @@ Run a Laravel app through its Artisan CLI (`php artisan serve`).
 
 - No inversion is needed (unlike the PHP `php -S` recipe): `artisan` is a real entrypoint script, so the normal `interpreter <script> <args>` order already yields `php artisan serve ...`.
 - `script` is relative and PM2 resolves it against `cwd` — set `cwd` to the Laravel project root (the folder containing `artisan`).
-- `artisan` is a recognized entrypoint convention: the config guide requires a PHP interpreter path and a subcommand in `args`; `interpreter_args` and cluster mode are rejected for PHP.
+- `artisan` is a recognized entrypoint convention: the config guide requires a PHP interpreter path and a subcommand in `args`; `interpreter_args` is rejected for PHP.
 - `artisan serve` boots PHP's built-in server as a child process and reloads it when `.env` changes — it is Laravel's dev server. For production, prefer php-fpm behind nginx, or supervise `php artisan queue:work` / `php artisan schedule:work` as separate long-running processes.
 
 ---

@@ -36,11 +36,13 @@ Open `.env` and `.env.production` and set:
 |---|---|---|
 | `SERVER_PORT` | **Required.** Port the API listens on. Startup fails with a clear command-line error when it is missing, not a whole number, outside 1–65535, or already in use by another process. | `4000` |
 | `CORS_ORIGIN` | **Required for browser-facing deployments.** Comma-separated allowed browser origins (e.g. `http://localhost:3000,http://localhost:5173`). Omit or leave empty to **deny all browser origins** with 403 (`CORS_ORIGIN_NOT_ALLOWED`) — non-browser clients (curl, Postman, other services) are unaffected. | `http://localhost:3000,http://localhost:5173` |
-| `AUTH_TOKEN` | Optional bearer token. When set, every `/pm2/*` request must include `Authorization: Bearer <AUTH_TOKEN>` or it is rejected with 401 (`UNAUTHORIZED`). Leave empty to disable auth. No database needed — this is a single shared secret. | `a-secret-string` |
+| `AUTH_TOKEN` | **Required.** Bearer token for every `/pm2/*` request (`Authorization: Bearer <AUTH_TOKEN>`). The agent refuses to boot without it because `POST /pm2/start` executes code by design; generate one with e.g. `openssl rand -hex 32`. | `a-secret-string` |
+| `ALLOW_INSECURE` | Local-development escape hatch. Set to `true` to boot without `AUTH_TOKEN`; the agent logs an insecure-mode warning on every start. Never enable on a reachable host. | `true` |
+| `APP_ROOTS` | Optional comma-separated allowlist of absolute app roots. When set, `cwd` on `/start` must live under one of them, otherwise the request is rejected with 422. | `C:\apps,/srv/apps` |
 
 **Which file wins?** `.env` is the base config, always loaded. When the service runs in production (`npm run start` → `--env production` → `NODE_ENV=production`), Bun also loads `.env.production` and its values **override** `.env`. So put generic defaults in `.env` and production-specific values (real `AUTH_TOKEN`, server port, CORS origins) in `.env.production`. Both files are gitignored.
 
-> **Authentication (optional):** set `AUTH_TOKEN` when the agent runs on a network that isn't strictly localhost. CORS only blocks browsers — curl, scripts, and other servers bypass it entirely. The token gates those. When unset, all `/pm2/*` routes are open to any client that can reach the port.
+> **Authentication (required):** set `AUTH_TOKEN` whenever the agent runs — it will not start otherwise. CORS only blocks browsers — curl, scripts, and other servers bypass it entirely. The token is the only access control, so pair it with OS-level isolation when the port is reachable beyond localhost.
 
 ## 4. Run the service (production)
 
@@ -83,7 +85,7 @@ Production runs the compiled `dist/` bundle. During development, run the TypeScr
 
 ```bash
 bun run dev        # hot reload, no build, no PM2
-bun test           # unit tests (PM2 and the filesystem are mocked — no daemon needed)
+bun test           # unit tests + the start-isolation canary (spawns an isolated PM2 daemon)
 bun run typecheck  # TypeScript type check
 bun run build      # produce dist/index.js, as CI and `npm run start` do
 ```
@@ -98,4 +100,19 @@ PM2 is restored automatically on reboot thanks to `pm2-windows-startup` (already
 bunx pm2-startup install
 ```
 
+The installer writes an `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` entry that runs `pm2 resurrect` at user logon (with the logon user's environment), so keep the service account logged in or use a service manager for headless hosts.
+
 After running, `pm2 save` (from step 4) ensures the process list is restored at boot.
+
+## 7. Security notes
+
+- `POST /pm2/start` is remote code execution by design: the child runs as the service account. `AUTH_TOKEN` is mandatory (boot fails without it) and should be paired with OS-level isolation when the port is reachable beyond localhost.
+- The agent pins `pm2` to an exact version (`package.json`) and ships a lockfile; PM2 internals (`filter_env`, `prepareAppConf`, `executeApp`, fork/cluster env handling) are security-relevant, so re-run `bun test` before bumping.
+- `%USERPROFILE%\.pm2\dump.pm2` stores each app's `env` in plaintext. Restrict it to the service account, e.g.:
+
+  ```cmd
+  icacls "%USERPROFILE%\.pm2" /inheritance:r /grant:r "%USERNAME%:(OI)(CI)F"
+  ```
+
+- Keep `PM2_NODE_OPTIONS` unset: PM2 appends it to every fork child's interpreter args. Fork children do not otherwise inherit the daemon's env — `src/tests/integration/start-isolation.test.ts` proves it with a canary secret.
+- See the README's [Security model](../README.md#security-model) for the full allowlist/threat-model description.
