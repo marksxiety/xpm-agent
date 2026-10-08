@@ -163,16 +163,20 @@ describe("pm2 start service", () => {
         expect(state.startOpts?.filter_env).toEqual(Object.keys(process.env));
     });
 
-    test("strips reserved PM2 keys from the payload env before dispatch", async () => {
+    test("rejects reserved PM2 keys in the payload env", async () => {
         resetState();
         state.started = [{ name: "my-app" }];
 
-        await processController.startProcess({
+        const response = await processController.startProcess({
             ...VALID_PAYLOAD,
             env: { FOO: "bar", pm_id: "0", name: "evil", NODE_APP_INSTANCE: "1" },
         });
 
-        expect(state.startOpts?.env).toEqual({ FOO: "bar", namespace: "example" });
+        expect(response.success).toBe(false);
+        expect(response.status).toBe(422);
+        expect(response.code).toBe("INVALID_PROCESS_CONFIGURATION");
+        expect((response.info as StartIssue[]).map((issue) => issue.field)).toEqual(["env", "env", "env"]);
+        expect(state.startOpts).toBeNull();
     });
 
     test("defaults an empty namespace to 'default'", async () => {
@@ -470,6 +474,7 @@ describe("pm2 start route", () => {
             restart_delay: 4000,
             max_memory_restart: "500M",
             increment_var: "PORT",
+            env: { PORT: "3000" },
             kill_timeout: 5000,
         });
 

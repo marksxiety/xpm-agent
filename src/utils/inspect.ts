@@ -2,13 +2,60 @@ import { win32, posix } from "node:path";
 import type { Static } from "elysia";
 import { StartPayload } from "../schemas/process";
 import { parseDurationMs } from "./duration";
+import { ENV_KEY_PATTERN, isReservedEnvKey } from "./env-keys";
+import { AGENT_NAME, AGENT_NAMESPACE } from "../pm2/cli";
 import type { StartIssue, RuntimeProfile, EntrypointConvention, InspectCommand } from "../types/inspect"
+
+type StartPayloadType = Static<typeof StartPayload>;
+
+export interface InspectContext {
+  /** Whether the API has AUTH_TOKEN configured; gates `interpreter: "none"`. */
+  hasAuthToken?: boolean;
+  /** Optional allowlist of absolute app roots the cwd must live under. */
+  appRoots?: string[];
+  /** The agent's own directory; a payload may not use it as cwd. */
+  agentDir?: string;
+}
+
+const NAME_PATTERN = /^[A-Za-z0-9._-]{1,64}$/;
+const NAMESPACE_PATTERN = /^[A-Za-z0-9._-]{1,64}$/;
 
 function isAbsoluteForTarget(p: string, targetOs: "win32" | "linux"): boolean {
   return targetOs === "win32" ? win32.isAbsolute(p) : posix.isAbsolute(p);
 }
 
-type StartPayloadType = Static<typeof StartPayload>;
+function pathApiFor(targetOs: "win32" | "linux") {
+  return targetOs === "win32" ? win32 : posix;
+}
+
+function hasParentSegment(p: string): boolean {
+  return p.split(/[\\/]+/).includes("..");
+}
+
+/** Normalizes for comparison: resolves, strips the Windows `\\?\` prefix, case-folds on win32. */
+function normalizeForCompare(p: string, targetOs: "win32" | "linux"): string {
+  const api = pathApiFor(targetOs);
+  let normalized = api.resolve(p);
+  if (targetOs === "win32") {
+    normalized = normalized.replace(/^\\\\\?\\/, "").toLowerCase();
+  }
+  return normalized;
+}
+
+function isInsideDirectory(parent: string, child: string, targetOs: "win32" | "linux"): boolean {
+  const api = pathApiFor(targetOs);
+  const normalizedParent = normalizeForCompare(parent, targetOs);
+  const normalizedChild = normalizeForCompare(child, targetOs);
+  if (normalizedParent === normalizedChild) return true;
+  const rel = api.relative(normalizedParent, normalizedChild);
+  return rel !== "" && !rel.startsWith("..") && !api.isAbsolute(rel);
+}
+
+function isResolvedInside(parent: string, candidate: string, targetOs: "win32" | "linux"): boolean {
+  const api = pathApiFor(targetOs);
+  const resolved = api.isAbsolute(candidate) ? candidate : api.resolve(parent, candidate);
+  return isInsideDirectory(parent, resolved, targetOs);
+}
 
 // ---------------------------------------------------------------------------
 // Runtime profiles
@@ -98,16 +145,81 @@ export function isNodeFamilyInterpreter(interpreter: string | undefined): boolea
   return findInterpreterProfile(interpreter)?.family === "node";
 }
 
-export function inspectStart(options: StartPayloadType): StartIssue[] {
+function parseArgTokens(raw: string | string[]): string[] {
+  const tokens = Array.isArray(raw) ? raw : raw.split(/\s+/);
+  return tokens.flatMap((token) => token.split(/\s+/)).filter((token) => token.length > 0);
+}
+
+/**
+ * Per-runtime allowlist for interpreter flags. Everything else (e.g.
+ * `--require`, `--import`, `-e`, `-c`) can execute code and is rejected.
+ */
+function interpreterArgIssue(
+  raw: string | string[],
+  profile: RuntimeProfile,
+  cwd: string,
+  targetOs: "win32" | "linux",
+): StartIssue | undefined {
+  const tokens = parseArgTokens(raw);
+
+  for (let index = 0; index < tokens.length; index += 1) {
+    const token = tokens[index];
+
+    if (profile.family === "node") {
+      if (/^--max-old-space-size=\d+$/.test(token)) continue;
+      if (token === "--env-file") {
+        const value = tokens[index + 1];
+        if (value !== undefined && isResolvedInside(cwd, value, targetOs)) {
+          index += 1;
+          continue;
+        }
+        return {
+          field: "interpreter_args",
+          message: "'--env-file' must point to a file inside cwd",
+        };
+      }
+      const envFileMatch = /^--env-file=(.+)$/.exec(token);
+      if (envFileMatch) {
+        if (isResolvedInside(cwd, envFileMatch[1], targetOs)) continue;
+        return {
+          field: "interpreter_args",
+          message: "'--env-file' must point to a file inside cwd",
+        };
+      }
+      return {
+        field: "interpreter_args",
+        message: `interpreter flag '${token}' is not allowed — only '--max-old-space-size=<n>' and '--env-file' inside cwd are supported`,
+      };
+    }
+
+    if (profile.family === "python" && ["-O", "-OO", "-u", "-B"].includes(token)) continue;
+
+    return {
+      field: "interpreter_args",
+      message: `interpreter flag '${token}' is not allowed for ${profile.id}`,
+    };
+  }
+
+  return undefined;
+}
+
+export function inspectStart(options: StartPayloadType, context: InspectContext = {}): StartIssue[] {
   const issues: StartIssue[] = [];
   const script = options.script ?? "";
   const interpreter = options.interpreter;
   const targetOs = options.targetOs ?? "win32";
+  const namespace = options.namespace?.trim() || "default";
+  const cwd = options.cwd;
 
   if (options.name?.trim() === "") {
     issues.push({
       field: "name",
       message: "name is required and cannot be empty",
+    });
+  } else if (options.name !== undefined && !NAME_PATTERN.test(options.name)) {
+    issues.push({
+      field: "name",
+      message: `name must match ${NAME_PATTERN.source}`,
     });
   }
 
@@ -116,6 +228,73 @@ export function inspectStart(options: StartPayloadType): StartIssue[] {
       field: "script",
       message: "script is required and cannot be empty",
     });
+  } else if (/\s/.test(script)) {
+    // PM2 turns a script containing spaces into `bash -c <script>` on POSIX
+    // (node_modules/pm2/lib/Common.js verifyConfs), which is shell execution.
+    issues.push({
+      field: "script",
+      message: "script must be a single path without whitespace",
+    });
+  }
+
+  if (cwd === undefined || cwd.trim() === "") {
+    issues.push({
+      field: "cwd",
+      message: "cwd is required and must be an absolute path",
+    });
+  } else if (!isAbsoluteForTarget(cwd, targetOs)) {
+    issues.push({
+      field: "cwd",
+      message:
+        targetOs === "win32"
+          ? "cwd must be an absolute Windows path (e.g. 'C:\\apps\\my-service'), not a relative path — PM2 would resolve it against the agent's directory"
+          : "cwd must be an absolute POSIX path (e.g. '/srv/apps/my-service'), not a relative path — PM2 would resolve it against the agent's directory",
+    });
+  } else if (hasParentSegment(cwd)) {
+    issues.push({
+      field: "cwd",
+      message: "cwd must not contain '..' segments",
+    });
+  } else if (
+    context.agentDir !== undefined &&
+    normalizeForCompare(cwd, targetOs) === normalizeForCompare(context.agentDir, targetOs)
+  ) {
+    issues.push({
+      field: "cwd",
+      message: "cwd must not be the agent's own directory",
+    });
+  } else if (
+    context.appRoots !== undefined &&
+    context.appRoots.length > 0 &&
+    !context.appRoots.some((root) => isInsideDirectory(root, cwd, targetOs))
+  ) {
+    issues.push({
+      field: "cwd",
+      message: "cwd must be inside one of the configured app roots",
+    });
+  }
+
+  if (!NAMESPACE_PATTERN.test(namespace)) {
+    issues.push({
+      field: "namespace",
+      message: `namespace must match ${NAMESPACE_PATTERN.source}`,
+    });
+  }
+
+  if (AGENT_NAME.has(options.name?.toLowerCase() ?? "") && namespace.toUpperCase() === AGENT_NAMESPACE) {
+    issues.push({
+      field: "name",
+      message: `'${options.name}' in namespace '${AGENT_NAMESPACE}' is reserved for the agent`,
+    });
+  }
+
+  if (cwd !== undefined && cwd.trim() !== "" && isAbsoluteForTarget(cwd, targetOs) && script.trim() !== "" && !/\s/.test(script)) {
+    if (!isResolvedInside(cwd, script, targetOs)) {
+      issues.push({
+        field: "script",
+        message: "script must resolve inside cwd",
+      });
+    }
   }
 
   // The schema only accepts `"fork"`/`1`, but the controller can be called
@@ -158,19 +337,23 @@ export function inspectStart(options: StartPayloadType): StartIssue[] {
     });
   }
 
-  // PM2 resolves a relative cwd against the agent's own working directory
-  // (pm2/lib/Common.js prepareAppConf), never the target app's — reject it.
-  if (options.cwd !== undefined && !isAbsoluteForTarget(options.cwd, targetOs)) {
+  const interpreterProfile = findInterpreterProfile(interpreter);
+
+  if (interpreter === "none") {
+    if (context.hasAuthToken !== true) {
+      issues.push({
+        field: "interpreter",
+        message: "interpreter 'none' requires AUTH_TOKEN to be configured",
+      });
+    }
+  } else if (interpreterProfile === undefined) {
     issues.push({
-      field: "cwd",
+      field: "interpreter",
       message:
-        targetOs === "win32"
-          ? "cwd must be an absolute Windows path (e.g. 'C:\\apps\\my-service'), not a relative path — PM2 would resolve it against the agent's directory"
-          : "cwd must be an absolute POSIX path (e.g. '/srv/apps/my-service'), not a relative path — PM2 would resolve it against the agent's directory",
+        "interpreter must be a recognized runtime executable (node, bun, php, python, go) or 'none'",
     });
   }
 
-  const interpreterProfile = findInterpreterProfile(interpreter);
   const scriptProfile = RUNTIME_PROFILES.find((profile) => profile.scriptExtensions.test(script));
 
   if (scriptProfile && interpreterProfile && scriptProfile.family !== interpreterProfile.family) {
@@ -180,12 +363,36 @@ export function inspectStart(options: StartPayloadType): StartIssue[] {
     });
   }
 
-  if (options.interpreter_args !== undefined && !interpreterProfile?.supportsInterpreterArgs) {
-    issues.push({
-      field: "interpreter_args",
-      message: `'interpreter_args' isn't supported by this interpreter${interpreterProfile ? ` (${interpreterProfile.id})` : ""
-        }`,
-    });
+  if (options.interpreter_args !== undefined) {
+    if (!interpreterProfile?.supportsInterpreterArgs) {
+      issues.push({
+        field: "interpreter_args",
+        message: `'interpreter_args' isn't supported by this interpreter${interpreterProfile ? ` (${interpreterProfile.id})` : ""
+          }`,
+      });
+    } else if (cwd !== undefined) {
+      const argIssue = interpreterArgIssue(options.interpreter_args, interpreterProfile, cwd, targetOs);
+      if (argIssue) issues.push(argIssue);
+    }
+  }
+
+  if (options.increment_var !== undefined) {
+    if (!ENV_KEY_PATTERN.test(options.increment_var)) {
+      issues.push({
+        field: "increment_var",
+        message: `increment_var must match ${ENV_KEY_PATTERN.source}`,
+      });
+    } else if (isReservedEnvKey(options.increment_var)) {
+      issues.push({
+        field: "increment_var",
+        message: `increment_var '${options.increment_var}' is reserved by PM2`,
+      });
+    } else if (!(options.increment_var in (options.env ?? {}))) {
+      issues.push({
+        field: "increment_var",
+        message: `increment_var '${options.increment_var}' must exist in env`,
+      });
+    }
   }
 
   for (const convention of ENTRYPOINT_CONVENTIONS) {
@@ -209,10 +416,10 @@ export function inspectStart(options: StartPayloadType): StartIssue[] {
   return issues;
 }
 
-export function inspect(command: InspectCommand, input: StartPayloadType | unknown): StartIssue[] {
+export function inspect(command: InspectCommand, input: StartPayloadType | unknown, context: InspectContext = {}): StartIssue[] {
   switch (command) {
     case "start":
-      return inspectStart(input as StartPayloadType);
+      return inspectStart(input as StartPayloadType, context);
     default:
       return [];
   }

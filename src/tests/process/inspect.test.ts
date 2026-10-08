@@ -10,12 +10,12 @@ const CWD = "C:\\apps\\example";
 const LINUX_CWD = "/srv/apps/example";
 
 function issues(payload: Payload): string[] {
-  return inspect("start", payload).map((issue) => issue.field);
+  return inspect("start", payload, { hasAuthToken: true }).map((issue) => issue.field);
 }
 
 /** For values the schema rejects but the controller can still receive directly. */
 function runtimeIssues(payload: Record<string, unknown>): string[] {
-  return inspect("start", payload as unknown as Payload).map((issue) => issue.field);
+  return inspect("start", payload as unknown as Payload, { hasAuthToken: true }).map((issue) => issue.field);
 }
 
 describe("start inspection", () => {
@@ -216,6 +216,170 @@ describe("start inspection", () => {
       cwd: LINUX_CWD,
       interpreter: "/usr/bin/node",
       targetOs: "linux",
+    };
+    expect(issues(payload)).toEqual([]);
+  });
+
+  test("flags interpreter 'none' when AUTH_TOKEN is not configured", () => {
+    const payload: Payload = {
+      name: "worker",
+      script: "./my-binary",
+      cwd: CWD,
+      interpreter: "none",
+    };
+    expect(inspect("start", payload, { hasAuthToken: false }).map((issue) => issue.field)).toEqual(["interpreter"]);
+  });
+
+  test("rejects an unrecognized interpreter executable", () => {
+    const payload: Payload = {
+      name: "api",
+      script: "server.js",
+      cwd: CWD,
+      interpreter: "C:\\Windows\\System32\\cmd.exe",
+    };
+    expect(issues(payload)).toContain("interpreter");
+  });
+
+  test("rejects interpreter flags that can execute code", () => {
+    const payload: Payload = {
+      name: "api",
+      script: "server.js",
+      cwd: CWD,
+      interpreter: NODE,
+      interpreter_args: ["--require=./evil.js"],
+    };
+    expect(issues(payload)).toEqual(["interpreter_args"]);
+  });
+
+  test("rejects an env-file outside cwd", () => {
+    const payload: Payload = {
+      name: "api",
+      script: "server.js",
+      cwd: CWD,
+      interpreter: NODE,
+      interpreter_args: ["--env-file=C:\\outside\\.env"],
+    };
+    expect(issues(payload)).toEqual(["interpreter_args"]);
+  });
+
+  test("rejects cwd with '..' segments", () => {
+    const payload: Payload = {
+      name: "api",
+      script: "server.js",
+      cwd: "C:\\apps\\..\\windows",
+      interpreter: NODE,
+    };
+    expect(issues(payload)).toEqual(["cwd"]);
+  });
+
+  test("rejects the agent's own directory as cwd", () => {
+    const payload: Payload = {
+      name: "api",
+      script: "server.js",
+      cwd: CWD,
+      interpreter: NODE,
+    };
+    expect(inspect("start", payload, { hasAuthToken: true, agentDir: CWD }).map((issue) => issue.field)).toEqual(["cwd"]);
+  });
+
+  test("rejects cwd outside configured app roots", () => {
+    const payload: Payload = {
+      name: "api",
+      script: "server.js",
+      cwd: CWD,
+      interpreter: NODE,
+    };
+    expect(
+      inspect("start", payload, { hasAuthToken: true, appRoots: ["C:\\other"] }).map((issue) => issue.field),
+    ).toEqual(["cwd"]);
+  });
+
+  test("rejects a script that resolves outside cwd", () => {
+    const payload: Payload = {
+      name: "api",
+      script: "..\\evil.js",
+      cwd: CWD,
+      interpreter: NODE,
+    };
+    expect(issues(payload)).toEqual(["script"]);
+  });
+
+  test("rejects a script with whitespace", () => {
+    const payload: Payload = {
+      name: "api",
+      script: "my app.js",
+      cwd: CWD,
+      interpreter: NODE,
+    };
+    expect(issues(payload)).toEqual(["script"]);
+  });
+
+  test("rejects a namespace with path characters", () => {
+    const payload: Payload = {
+      name: "api",
+      script: "server.js",
+      cwd: CWD,
+      interpreter: NODE,
+      namespace: "..\\evil",
+    };
+    expect(issues(payload)).toEqual(["namespace"]);
+  });
+
+  test("rejects agent process names in the agent namespace", () => {
+    const payload: Payload = {
+      name: "xpm-agent",
+      script: "server.js",
+      cwd: CWD,
+      interpreter: NODE,
+      namespace: "XPM",
+    };
+    expect(issues(payload)).toEqual(["name"]);
+  });
+
+  test("rejects an increment_var that is not a valid env key", () => {
+    const payload: Payload = {
+      name: "api",
+      script: "server.js",
+      cwd: CWD,
+      interpreter: NODE,
+      increment_var: "1BAD",
+      env: { "1BAD": "1" },
+    };
+    expect(issues(payload)).toEqual(["increment_var"]);
+  });
+
+  test("rejects a reserved increment_var", () => {
+    const payload: Payload = {
+      name: "api",
+      script: "server.js",
+      cwd: CWD,
+      interpreter: NODE,
+      increment_var: "pm_id",
+      env: { pm_id: "1" },
+    };
+    expect(issues(payload)).toEqual(["increment_var"]);
+  });
+
+  test("rejects an increment_var missing from env", () => {
+    const payload: Payload = {
+      name: "api",
+      script: "server.js",
+      cwd: CWD,
+      interpreter: NODE,
+      increment_var: "PORT",
+      env: { FOO: "bar" },
+    };
+    expect(issues(payload)).toEqual(["increment_var"]);
+  });
+
+  test("accepts an increment_var present in env", () => {
+    const payload: Payload = {
+      name: "api",
+      script: "server.js",
+      cwd: CWD,
+      interpreter: NODE,
+      increment_var: "PORT",
+      env: { PORT: "3000" },
     };
     expect(issues(payload)).toEqual([]);
   });

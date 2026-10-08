@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import {
   isReservedEnvKey,
-  sanitizeEnv,
   sanitizeProcessConfig,
+  validateEnv,
   type SanitizeInput,
 } from "../../utils/sanitize";
 
@@ -16,30 +16,48 @@ const VALID_PAYLOAD = {
 const sanitize = (payload: Record<string, unknown>) =>
   sanitizeProcessConfig(payload as unknown as SanitizeInput);
 
-describe("sanitizeEnv", () => {
+describe("validateEnv", () => {
   test("keeps regular key-value pairs", () => {
-    expect(sanitizeEnv({ NODE_ENV: "production", PORT: "3000" })).toEqual({
+    const { env, issues } = validateEnv({ NODE_ENV: "production", PORT: "3000" });
+
+    expect(issues).toEqual([]);
+    expect(env).toEqual({
       NODE_ENV: "production",
       PORT: "3000",
     });
   });
 
-  test("strips reserved PM2 keys and prefixes", () => {
-    expect(
-      sanitizeEnv({
-        KEEP: "yes",
-        pm_id: "0",
-        pm_exec_path: "C:\\evil.js",
-        PM2_HOME: "C:\\pm2",
-        axm_monitor: "{}",
-        name: "evil",
-        namespace: "XPM",
-        status: "online",
-        exec_mode: "cluster",
-        NODE_APP_INSTANCE: "1",
-        unique_id: "abc",
-      }),
-    ).toEqual({ KEEP: "yes" });
+  test("rejects reserved PM2 keys and prefixes", () => {
+    const { env, issues } = validateEnv({
+      KEEP: "yes",
+      pm_id: "0",
+      pm_exec_path: "C:\\evil.js",
+      PM2_HOME: "C:\\pm2",
+      axm_monitor: "{}",
+      name: "evil",
+      namespace: "XPM",
+      status: "online",
+      exec_mode: "cluster",
+      NODE_APP_INSTANCE: "1",
+      unique_id: "abc",
+    });
+
+    expect(env).toEqual({ KEEP: "yes" });
+    expect(issues).toHaveLength(10);
+    expect(issues.every((issue) => issue.field === "env")).toBe(true);
+  });
+
+  test("rejects keys that are not valid environment variable names", () => {
+    const { env, issues } = validateEnv({ "BAD KEY": "1", "1BAD": "2", GOOD_KEY: "3" });
+
+    expect(env).toEqual({ GOOD_KEY: "3" });
+    expect(issues).toHaveLength(2);
+  });
+
+  test("rejects runtime loader options that inject code", () => {
+    const { issues } = validateEnv({ NODE_OPTIONS: "--require /evil.js", BUN_OPTIONS: "--preload", LD_PRELOAD: "/evil.so" });
+
+    expect(issues.map((issue) => issue.field)).toEqual(["env", "env", "env"]);
   });
 
   test("flags reserved keys", () => {
@@ -88,11 +106,18 @@ describe("sanitizeProcessConfig", () => {
     expect(options?.namespace).toBe("staging");
   });
 
-  test("mirrors the canonical namespace over any payload env.namespace", () => {
+  test("rejects a namespace with path characters", () => {
+    const { options, issues } = sanitize({ ...VALID_PAYLOAD, namespace: "..\\..\\evil" });
+
+    expect(options).toBeNull();
+    expect(issues.map((issue) => issue.field)).toEqual(["namespace"]);
+  });
+
+  test("mirrors the canonical namespace into the payload env", () => {
     const { options } = sanitize({
       ...VALID_PAYLOAD,
       namespace: "example",
-      env: { FOO: "bar", namespace: "XPM" },
+      env: { FOO: "bar" },
     });
 
     expect(options?.env).toEqual({ FOO: "bar", namespace: "example" });
@@ -125,13 +150,14 @@ describe("sanitizeProcessConfig", () => {
     }
   });
 
-  test("strips pm2 metadata keys from the payload env", () => {
-    const { options } = sanitize({
+  test("rejects pm2 metadata keys in the payload env", () => {
+    const { options, issues } = sanitize({
       ...VALID_PAYLOAD,
       env: { FOO: "bar", max_restarts: "99", node_version: "1.2.3" },
     });
 
-    expect(options?.env).toEqual({ FOO: "bar", namespace: "default" });
+    expect(options).toBeNull();
+    expect(issues).toHaveLength(2);
   });
 
   test("treats reserved keys case-insensitively", () => {
@@ -141,22 +167,24 @@ describe("sanitizeProcessConfig", () => {
     expect(isReservedEnvKey("MY_APP_FLAG")).toBe(false);
   });
 
-  test("strips case-variant reserved keys from the payload env", () => {
-    const { options } = sanitize({
+  test("rejects case-variant reserved keys in the payload env", () => {
+    const { options, issues } = sanitize({
       ...VALID_PAYLOAD,
       env: { FOO: "bar", MAX_RESTARTS: "99", MIN_UPTIME: "1s", Min_Uptime: "1s" },
     });
 
-    expect(options?.env).toEqual({ FOO: "bar", namespace: "default" });
+    expect(options).toBeNull();
+    expect(issues).toHaveLength(3);
   });
 
-  test("strips reserved keys from the payload env", () => {
-    const { options } = sanitize({
+  test("rejects reserved keys in the payload env", () => {
+    const { options, issues } = sanitize({
       ...VALID_PAYLOAD,
       env: { FOO: "bar", pm_id: "0", name: "evil", NODE_APP_INSTANCE: "1" },
     });
 
-    expect(options?.env).toEqual({ FOO: "bar", namespace: "default" });
+    expect(options).toBeNull();
+    expect(issues).toHaveLength(3);
   });
 
   test("forces time: true even when the payload disables it", () => {
@@ -169,6 +197,7 @@ describe("sanitizeProcessConfig", () => {
     const { options } = sanitize({
       ...VALID_PAYLOAD,
       cwd: "/srv/apps",
+      script: "/srv/apps/index.js",
       interpreter: "/usr/bin/node",
       targetOs: "linux",
     });

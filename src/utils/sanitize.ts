@@ -2,75 +2,15 @@ import type { StartOptions } from "pm2";
 import type { Static } from "elysia";
 import { StartPayload } from "../schemas/process";
 import type { StartIssue } from "../types/inspect";
-import { inspectStart } from "./inspect";
+import { inspectStart, type InspectContext } from "./inspect";
 import { parseDurationMs } from "./duration";
+import { ENV_KEY_PATTERN, isReservedEnvKey } from "./env-keys";
+
+export { isReservedEnvKey } from "./env-keys";
 
 type StartPayloadType = Static<typeof StartPayload>;
 
 export type SanitizeInput = StartPayloadType;
-
-/**
- * Payload `env` keys that PM2 folds into `pm2_env` before allocating an id
- * (God.js executeApp). Letting a caller set them would overwrite PM2's own
- * process metadata — including another process's pm_id slot.
- */
-const RESERVED_ENV_KEYS = new Set([
-  "namespace",
-  "name",
-  "status",
-  "exec_mode",
-  "env",
-  "args",
-  "command",
-  "created_at",
-  "restart_time",
-  "restart_delay",
-  "unstable_restarts",
-  "instance_var",
-  "instances",
-  "autorestart",
-  "autostart",
-  "stop_exit_codes",
-  "treekill",
-  "exit_code",
-  "watch",
-  "filter_env",
-  "versioning",
-  "vizion",
-  "automation",
-  "pmx",
-  "pmx_module",
-  "kill_retry_time",
-  "merge_logs",
-  "windowsHide",
-  "prev_restart_delay",
-  "node_args",
-  "exec_interpreter",
-  "MODULE_DEBUG",
-  "NODE_APP_INSTANCE",
-  "unique_id",
-  "username",
-  "max_restarts",
-  "min_uptime",
-  "kill_timeout",
-  "wait_ready",
-  "listen_timeout",
-  "shutdown_with_message",
-  "exp_backoff_restart_delay",
-  "cron_restart",
-  "max_memory_restart",
-  "increment_var",
-  "ignore_watch",
-  "watch_delay",
-  "log_date_format",
-  "vizion_running",
-  "node_version",
-]);
-
-const RESERVED_ENV_PREFIXES = ["pm_", "PM2_", "axm_"];
-
-const RESERVED_ENV_KEYS_LOWER = new Set([...RESERVED_ENV_KEYS].map((key) => key.toLowerCase()));
-const RESERVED_ENV_PREFIXES_LOWER = RESERVED_ENV_PREFIXES.map((prefix) => prefix.toLowerCase());
 
 /**
  * Every variable the agent currently holds. PM2 merges the caller's
@@ -88,26 +28,42 @@ function denyInheritedEnv(): string[] {
   return Object.keys(process.env);
 }
 
-export function isReservedEnvKey(key: string): boolean {
-  const normalized = key.toLowerCase();
-  return (
-    RESERVED_ENV_KEYS_LOWER.has(normalized) ||
-    RESERVED_ENV_PREFIXES_LOWER.some((prefix) => normalized.startsWith(prefix))
-  );
-}
-
-export function sanitizeEnv(input: Record<string, string> | undefined): Record<string, string> {
+export function validateEnv(input: Record<string, string> | undefined): {
+  env: Record<string, string>;
+  issues: StartIssue[];
+} {
   const env: Record<string, string> = {};
+  const issues: StartIssue[] = [];
+
   for (const [key, value] of Object.entries(input ?? {})) {
-    if (!isReservedEnvKey(key)) env[key] = value;
+    const trimmed = key.trim();
+    if (trimmed !== key || !ENV_KEY_PATTERN.test(trimmed)) {
+      issues.push({
+        field: "env",
+        message: `env key '${key}' must match ${ENV_KEY_PATTERN.source}`,
+      });
+      continue;
+    }
+    if (isReservedEnvKey(trimmed)) {
+      issues.push({
+        field: "env",
+        message: `env key '${key}' is reserved by PM2 and cannot be set`,
+      });
+      continue;
+    }
+    env[trimmed] = value;
   }
-  return env;
+
+  return { env, issues };
 }
 
 export function sanitizeProcessConfig(
   payload: StartPayloadType,
+  context: InspectContext = {},
 ): { options: StartOptions | null; issues: StartIssue[] } {
-  const issues = inspectStart(payload);
+  const issues = inspectStart(payload, context);
+  const { env, issues: envIssues } = validateEnv(payload.env);
+  issues.push(...envIssues);
   if (issues.length > 0) return { options: null, issues };
 
   // Empty/whitespace must never reach PM2: the env mirror below would write it
@@ -117,8 +73,7 @@ export function sanitizeProcessConfig(
   // Nothing is inherited (see denyInheritedEnv); the payload env is the child's
   // entire environment. The namespace mirror keeps pm2_env.namespace pinned to
   // the sanitized value.
-  const env = sanitizeEnv(payload.env);
-  env.namespace = namespace;
+  const sanitizedEnv = { ...env, namespace };
 
   const minUptime = payload.min_uptime === undefined ? undefined : parseDurationMs(payload.min_uptime);
 
@@ -127,16 +82,39 @@ export function sanitizeProcessConfig(
   // the correct "run once" primitive.
   const disablesRestarts = payload.max_restarts === 0;
 
-  const options = { ...payload } as StartOptions & { targetOs?: unknown };
-  delete options.targetOs;
-  options.namespace = namespace;
-  options.env = env;
-  options.filter_env = denyInheritedEnv();
-  options.time = true;
+  // Explicit pick list: only schema fields reach PM2. Cluster mode and multiple
+  // instances are not passable at all (see inspectStart).
+  const options: StartOptions = {
+    name: payload.name,
+    cwd: payload.cwd,
+    script: payload.script,
+    interpreter: payload.interpreter,
+    exec_mode: "fork",
+    instances: 1,
+    namespace,
+    env: sanitizedEnv,
+    filter_env: denyInheritedEnv(),
+    time: true,
+  };
+
+  if (payload.args !== undefined) options.args = payload.args;
+  if (payload.interpreter_args !== undefined) options.interpreter_args = payload.interpreter_args;
+  if (payload.autorestart !== undefined) options.autorestart = payload.autorestart;
+  if (payload.restart_delay !== undefined) options.restart_delay = payload.restart_delay;
+  if (payload.max_memory_restart !== undefined) options.max_memory_restart = payload.max_memory_restart;
+  if (payload.increment_var !== undefined) options.increment_var = payload.increment_var;
+  if (payload.kill_timeout !== undefined) options.kill_timeout = payload.kill_timeout;
+  if (payload.windowsHide !== undefined) options.windowsHide = payload.windowsHide;
+  if (payload.watch !== undefined) options.watch = payload.watch;
+  if (payload.ignore_watch !== undefined) options.ignore_watch = payload.ignore_watch;
+  if (payload.watch_delay !== undefined) options.watch_delay = payload.watch_delay;
+  if (payload.cron_restart !== undefined) options.cron_restart = payload.cron_restart;
   if (minUptime !== undefined) options.min_uptime = minUptime;
+
   if (disablesRestarts) {
-    delete options.max_restarts;
     options.autorestart = false;
+  } else if (payload.max_restarts !== undefined) {
+    options.max_restarts = payload.max_restarts;
   }
 
   return { options, issues: [] };

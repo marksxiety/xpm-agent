@@ -11,6 +11,7 @@ import { StartIssue } from "../types/inspect";
 import { getHostMetrics, systemInformationSource, type HostMetricsSource } from "../utils/system";
 import { pm2Connection, type Pm2Connection } from "../pm2/client";
 import { AGENT_NAME, AGENT_NAMESPACE } from "../pm2/cli";
+import { config } from "../config";
 export class ProcessController {
   private startChain: Promise<void> = Promise.resolve();
 
@@ -143,7 +144,11 @@ export class ProcessController {
   }
 
   startProcess = async (payload: StartOptions): Promise<ApiResponse<ProcessSummary[] | StartIssue[] | ProcessNameConflict>> => {
-    const { options, issues } = sanitizeProcessConfig(payload as unknown as SanitizeInput);
+    const { options, issues } = sanitizeProcessConfig(payload as unknown as SanitizeInput, {
+      hasAuthToken: Boolean(config.AUTH_TOKEN),
+      appRoots: config.APP_ROOTS,
+      agentDir: process.cwd(),
+    });
     if (options === null) {
       return respond("Invalid process configuration", issues, {
         success: false,

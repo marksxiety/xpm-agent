@@ -13,4 +13,10 @@ export const config = {
   get AUTH_TOKEN(): string {
     return String(process.env.AUTH_TOKEN ?? "");
   },
+  /** Optional comma-separated allowlist of absolute app roots for `cwd`. */
+  get APP_ROOTS(): string[] {
+    const raw = process.env.APP_ROOTS;
+    if (!raw) return [];
+    return raw.split(",").map((root) => root.trim()).filter(Boolean);
+  },
 };
