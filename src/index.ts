@@ -47,7 +47,9 @@ export const pm2Routes = new Elysia({ prefix: "/pm2" })
   .get("/logs/:id", ({ params, query }) => processController.getLogs(params.id, query.tail, query.type), getRouteMeta("logs"));
 
 export const createApp = () =>
-  new Elysia()
+  // normalize: false keeps unknown body/query keys as validation errors (422)
+  // instead of silently stripping them.
+  new Elysia({ normalize: false })
     .onRequest(({ request, set }) => {
       const origin = request.headers.get("Origin");
       if (origin && !config.CORS_ORIGIN.includes(origin)) {

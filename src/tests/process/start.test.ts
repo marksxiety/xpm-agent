@@ -542,6 +542,17 @@ describe("pm2 start route", () => {
         expect(body.info).toEqual({ pm_id: 7, name: "my-app", namespace: "example" });
     });
 
+    test("returns 422 when the payload contains an unknown key", async () => {
+        resetState();
+
+        const { status, body } = await postStart({ ...VALID_PAYLOAD, uid: 1000 });
+
+        expect(status).toBe(422);
+        expect(body.success).toBe(false);
+        expect(body.code).toBe("VALIDATION_FAILED");
+        expect(body.message).toContain("uid");
+    });
+
     test("returns 503 when the PM2 daemon is unreachable", async () => {
         resetState();
         state.connectError = new Error("connect ECONNREFUSED 127.0.0.1:4444");
