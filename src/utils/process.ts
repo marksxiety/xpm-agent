@@ -18,6 +18,7 @@ interface ProcessEnvironment {
   pm_err_log_path?: string;
   watch?: boolean;
   autorestart?: boolean;
+  exit_code?: number;
   version?: string;
   args?: string | string[];
   pm_exec_path?: string;
@@ -56,6 +57,8 @@ export function summarizeProcess(processDescription: ProcessDescription): Proces
     ip_address: getServerIpv4(),
     watch: Boolean(processEnvironment?.watch),
     autorestart: processEnvironment?.autorestart,
+    cron_restart: processEnvironment?.cron_restart ?? null,
+    exit_code: processEnvironment?.exit_code ?? null,
   };
 }
 

@@ -19,6 +19,8 @@ export interface ProcessSummary {
     ip_address: string;
     watch: boolean;
     autorestart: boolean | undefined;
+    cron_restart: string | null;
+    exit_code: number | null;
     logs?: ProcessLogs;
 }
 

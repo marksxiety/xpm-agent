@@ -50,6 +50,8 @@ describe("summarizeProcess", () => {
             cwd: "C:\\Apps\\DPR\\client",
             watch: false,
             autorestart: true,
+            cron_restart: null,
+            exit_code: null,
         });
         expect(ip_address).toMatch(/^\d{1,3}(\.\d{1,3}){3}$/);
     });
@@ -91,8 +93,25 @@ describe("summarizeProcess", () => {
             cwd: undefined,
             watch: false,
             autorestart: undefined,
+            cron_restart: null,
+            exit_code: null,
         });
         expect(ip_address).toMatch(/^\d{1,3}(\.\d{1,3}){3}$/);
+    });
+
+    test("passes cron_restart and exit_code through from pm2_env", () => {
+        const process = onlineProcess({
+            pm2_env: {
+                status: "stopped",
+                cron_restart: "0 2 * * *",
+                exit_code: 1,
+            } as ProcessDescription["pm2_env"],
+        });
+
+        const summary = summarizeProcess(process);
+
+        expect(summary.cron_restart).toBe("0 2 * * *");
+        expect(summary.exit_code).toBe(1);
     });
 });
 

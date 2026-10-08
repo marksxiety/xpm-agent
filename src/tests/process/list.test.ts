@@ -115,6 +115,8 @@ describe("p2m list command", () => {
                 cwd: "C:\\Apps\\DPR\\client",
                 watch: false,
                 autorestart: true,
+                cron_restart: null,
+                exit_code: null,
             },
             {
                 pid: 12346,
@@ -133,6 +135,8 @@ describe("p2m list command", () => {
                 cwd: "C:\\Apps\\DPR\\api",
                 watch: false,
                 autorestart: true,
+                cron_restart: null,
+                exit_code: null,
             },
         ]);
     });
