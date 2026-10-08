@@ -18,6 +18,8 @@ export const APP_NAMESPACE = "canary";
 const DUMP_SCRIPT = `const fs = require("fs");
 const path = require("path");
 fs.writeFileSync(path.join(__dirname, "child-env.json"), JSON.stringify(process.env, null, 2));
+// Stay alive so PM2 keeps the process online across restart/reload/resurrect.
+setInterval(() => {}, 1000);
 `;
 
 /**
@@ -88,6 +90,7 @@ const PM2_METADATA_KEYS = new Set([
   "km_link",
   "exit_code",
   "kill_retry_time",
+  "prev_restart_delay",
   // prepareAppConf overwrites the caller's PWD with the app cwd
   // (node_modules/pm2/lib/Common.js:116) before the env is merged.
   "PWD",
@@ -120,7 +123,7 @@ export function targetOs(): "win32" | "linux" {
   return process.platform === "win32" ? "win32" : "linux";
 }
 
-export async function startCanaryChild(context: CanaryContext): Promise<void> {
+export async function startCanaryChild(context: CanaryContext): Promise<number> {
   await fs.rm(context.dumpFile, { force: true });
   const { createApp } = await import("../../../index");
   const response = await createApp().handle(
@@ -138,6 +141,16 @@ export async function startCanaryChild(context: CanaryContext): Promise<void> {
       }),
     }),
   );
+  expect(response.status).toBe(200);
+  const body = (await response.json()) as { info?: Array<{ pm_id?: number }> };
+  const pmId = body.info?.[0]?.pm_id;
+  expect(typeof pmId).toBe("number");
+  return pmId as number;
+}
+
+export async function postCanaryRoute(route: string): Promise<void> {
+  const { createApp } = await import("../../../index");
+  const response = await createApp().handle(new Request(`http://localhost${route}`, { method: "POST" }));
   expect(response.status).toBe(200);
 }
 

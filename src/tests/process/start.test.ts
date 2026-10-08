@@ -3,6 +3,9 @@ import type { ProcessDescription, StartOptions, Proc } from "pm2";
 import type { ApiResponse, ProcessSummary } from "../../types";
 import { StartIssue } from "../../types/inspect";
 
+// `interpreter: "none"` is gated on AUTH_TOKEN; make the tests deterministic.
+delete process.env.AUTH_TOKEN;
+
 const state = {
     started: [] as ProcessDescription[],
     list: [] as ProcessDescription[],
@@ -617,4 +620,58 @@ describe("pm2 start route", () => {
         expect(body.code).toBe("PM2_DAEMON_UNAVAILABLE");
         expect(body.message).toBe("Cannot connect to PM2 daemon");
     });
+
+    const UNKNOWN_KEYS: Array<[string, Record<string, unknown>]> = [
+        ["uid", { uid: 1000 }],
+        ["gid", { gid: 1000 }],
+        ["out_file", { out_file: "C:\\evil.log" }],
+        ["error_file", { error_file: "C:\\evil.log" }],
+        ["pid_file", { pid_file: "C:\\evil.pid" }],
+        ["post_update", { post_update: ["npm install"] }],
+        ["pm_exec_path", { pm_exec_path: "C:\\evil.js" }],
+        ["env_FOO", { env_FOO: "bar" }],
+    ];
+
+    for (const [label, extra] of UNKNOWN_KEYS) {
+        test(`returns 422 for the unknown key '${label}'`, async () => {
+            resetState();
+
+            const { status, body } = await postStart({ ...VALID_PAYLOAD, ...extra });
+
+            expect(status).toBe(422);
+            expect(body.success).toBe(false);
+            expect(body.code).toBe("VALIDATION_FAILED");
+        });
+    }
+
+    const REJECTED_CONFIGS: Array<[string, Record<string, unknown>]> = [
+        ["a relative cwd", { cwd: "relative\\dir" }],
+        ["a cwd with '..' segments", { cwd: "C:\\apps\\..\\windows" }],
+        ["a non-profile interpreter", { interpreter: "C:\\Windows\\System32\\cmd.exe" }],
+        ["interpreter 'none' without AUTH_TOKEN", { interpreter: "none" }],
+        ["an env-file outside cwd", { interpreter_args: ["--env-file=C:\\outside\\.env"] }],
+        ["a --require flag", { interpreter_args: ["--require=./evil.js"] }],
+        ["a reserved env key", { env: { pm_id: "0" } }],
+        ["an invalid env key", { env: { "BAD KEY": "1" } }],
+        ["a loader env key", { env: { NODE_OPTIONS: "--require ./evil.js" } }],
+        ["an invalid name", { name: "bad name!" }],
+        ["an invalid namespace", { namespace: "..\\evil" }],
+        ["an invalid increment_var", { increment_var: "1BAD", env: { "1BAD": "1" } }],
+        ["an increment_var missing from env", { increment_var: "PORT", env: { FOO: "bar" } }],
+        ["a script with whitespace", { script: "my app.js" }],
+        ["a script outside cwd", { script: "..\\evil.js" }],
+    ];
+
+    for (const [label, extra] of REJECTED_CONFIGS) {
+        test(`returns 422 for ${label}`, async () => {
+            resetState();
+
+            const { status, body } = await postStart({ ...VALID_PAYLOAD, ...extra });
+
+            expect(status).toBe(422);
+            expect(body.success).toBe(false);
+            expect(["VALIDATION_FAILED", "INVALID_PROCESS_CONFIGURATION"]).toContain(body.code ?? "");
+            expect(state.startOpts).toBeNull();
+        });
+    }
 });
