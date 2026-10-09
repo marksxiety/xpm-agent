@@ -63,8 +63,11 @@ function assertCanaryEnv(environment: Record<string, string>): void {
     throw new Error("daemon-only env leaked into the child");
   }
   assertIsolatedEnvironment(environment);
-  if (environment.PWD !== context.appDir) {
-    throw new Error(`expected PWD=${context.appDir}, got ${environment.PWD}`);
+  // PWD is platform-dependent: it is stripped when the agent process already
+  // had one (Linux CI) and survives with the app cwd when it did not (Windows).
+  // The security requirement is only that it never points at the agent's dir.
+  if (environment.PWD !== undefined && environment.PWD !== context.appDir) {
+    throw new Error(`unexpected PWD=${environment.PWD}`);
   }
 }
 
