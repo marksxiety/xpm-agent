@@ -83,6 +83,10 @@ const PM2_METADATA_KEYS = new Set([
   "time",
   "log_date_format",
   "username",
+  // Attached to pm2_env after the process first comes online (package version
+  // lookup + the child's node_version message) and copied into the next spawn.
+  "version",
+  "node_version",
   "unique_id",
   "NODE_APP_INSTANCE",
   "PM2_HOME",
