@@ -106,12 +106,6 @@ export class ProcessController {
           status: 404,
           code: "PROCESS_NOT_FOUND",
         });
-      if (this.isAgentProcess(processDescriptions[0]))
-        return respond("Refusing to manage the xpm-agent process itself", null, {
-          success: false,
-          status: 409,
-          code: "AGENT_SELF_MANAGEMENT_FORBIDDEN",
-        }) as unknown as ApiResponse<ProcessDescriptionDetails>;
       return respond("PM2 process described successfully", describeProcessDetails(processDescriptions[0]));
     } catch (error) {
       return this.handleError(error);
@@ -294,8 +288,6 @@ export class ProcessController {
       const parsedProcessId = Number(processId);
       if (Number.isNaN(parsedProcessId))
         return respond("Invalid process id", null, { success: false, status: 400, code: "INVALID_PROCESS_ID" });
-      const blocked = await this.rejectAgentTarget<null>(parsedProcessId);
-      if (blocked) return blocked;
       await this.withPM2<void>((callback) => pm2.flush(parsedProcessId, callback));
       return respond(`Logs for process ${parsedProcessId} flushed successfully`, null);
     } catch (error) {
@@ -320,12 +312,6 @@ export class ProcessController {
           status: 404,
           code: "PROCESS_NOT_FOUND",
         });
-      if (this.isAgentProcess(processDescriptions[0]))
-        return respond("Refusing to manage the xpm-agent process itself", null, {
-          success: false,
-          status: 409,
-          code: "AGENT_SELF_MANAGEMENT_FORBIDDEN",
-        }) as unknown as ApiResponse<ProcessLogs>;
       const processEnvironment = processDescriptions[0].pm2_env;
       const info: ProcessLogs = {};
       if (type === "both" || type === "output") info.out = await this.readLogFile(processEnvironment?.pm_out_log_path, tail);

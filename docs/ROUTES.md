@@ -815,7 +815,7 @@ The `info` payload for `/list`, `/start`, `/stop/:id`, `/restart/:id`, `/reload/
 | 403 | `CORS_ORIGIN_NOT_ALLOWED` | Origin not in `CORS_ORIGIN` allowlist — browsers sending an `Origin` header without a configured allowlist are rejected |
 | 404 | `PROCESS_NOT_FOUND` | Process with the given `pm_id` not found |
 | 409 | `PROCESS_NAME_CONFLICT` | `/start` body `name` is already registered in PM2 (matched across namespaces) — the existing process is identified in `info` |
-| 409 | `AGENT_SELF_MANAGEMENT_FORBIDDEN` | `describe`/`logs`/`flush`/`stop`/`restart`/`reload`/`delete` targeting the agent's own process (`xpm-agent`/`xpm-client`/`xpm-server` in namespace `XPM`) — refused before any PM2 operation runs |
+| 409 | `AGENT_SELF_MANAGEMENT_FORBIDDEN` | `stop`/`restart`/`reload`/`delete` targeting the agent's own process (`xpm-agent`/`xpm-client`/`xpm-server` in namespace `XPM`) — refused before any PM2 operation runs. Read-only routes (`describe`/`logs`) and `flush` are allowed on the agent |
 | 422 | `VALIDATION_FAILED` | Schema validation failed (unknown body keys, missing `cwd`, bad `name`/`namespace`, non-numeric `id`, missing `name`/`script`/`interpreter` in the body, invalid `exec_mode`/`instances`) **or** an invalid `tail`/`type`/`logs` query |
 | 422 | `INVALID_PROCESS_CONFIGURATION` | `/start` configuration-guide violation (e.g. `.js` script with a `php` interpreter) — the violations are listed in `info`, not `null` |
 | 500 | `PM2_OPERATION_FAILED` | Unexpected PM2 failure — `message` is `"PM2 operation failed: <raw PM2 error>"` |
@@ -827,7 +827,7 @@ All errors use the envelope with `success: false` and include a `code`; `info` i
 ## Lifecycle Notes
 
 - `stop` keeps the process registered and restartable and auto-saves the process list (`pm2 dump`), so the stopped state survives a reboot; `delete` removes it permanently and frees the `pm_id` (which PM2 may recycle).
-- The agent refuses to manage itself: `describe`/`logs`/`flush`/`stop`/`restart`/`reload`/`delete` targeting the agent's own processes are rejected with `409 AGENT_SELF_MANAGEMENT_FORBIDDEN` before any PM2 operation runs. If the guard cannot inspect the target, the request fails closed with `503`.
+- The agent refuses to manage itself: `stop`/`restart`/`reload`/`delete` targeting the agent's own processes are rejected with `409 AGENT_SELF_MANAGEMENT_FORBIDDEN` before any PM2 operation runs. If the guard cannot inspect the target, the request fails closed with `503`. Read-only routes (`describe`/`logs`) and `flush` do not run the guard.
 - `:id` always means the numeric `pm_id` from `GET /list` — process **names are not accepted** (a duplicate `name` is rejected at `/start`, but processes created outside this API via the PM2 CLI with `-f` may still share one).
 - Cluster mode is disabled: `/start` forces `exec_mode: "fork"` and `instances: 1`; every response row therefore describes a single fork process.
 - `env` values injected via `/start` are applied to the spawned process only, and only the explicit pairs reach the child (the agent's own environment is filtered out via `filter_env`); they are **not echoed back** in responses (all responses are sanitized `ProcessSummary` snapshots). The one exception is `GET /describe/:id`, whose `describe`/`metrics` keys additionally expose `pm_exec_path`, the log/pid paths, `NODE_ENV`, and raw code metrics — but no other env values.

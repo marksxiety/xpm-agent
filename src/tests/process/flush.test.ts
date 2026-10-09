@@ -1,21 +1,15 @@
 import { describe, expect, mock, test } from "bun:test";
-import type { ProcessDescription } from "pm2";
 import type { ApiResponse } from "../../types";
 
 const state = {
     flushError: null as Error | null,
     connectError: null as Error | null,
-    described: [] as ProcessDescription[],
-    describeError: null as Error | null,
 };
 
 mock.module("pm2", () => ({
     default: {
         connect(cb: (err?: Error | null) => void) { cb(state.connectError); },
         disconnect() { },
-        describe(_id: number, cb: (err?: Error | null, procs?: ProcessDescription[]) => void) {
-            cb(state.describeError, state.described);
-        },
         flush(_id: number, cb: (err?: Error | null) => void) {
             cb(state.flushError);
         },
@@ -29,8 +23,6 @@ const { createApp } = await import("../../index");
 function resetState() {
     state.flushError = null;
     state.connectError = null;
-    state.described = [];
-    state.describeError = null;
     pm2Connection.reset();
 }
 
@@ -51,27 +43,13 @@ describe("pm2 flush service", () => {
         expect(response.info).toBeNull();
     });
 
-    test("returns 409 and does not flush when the target is the xpm-agent", async () => {
+    test("flushes the agent's own process", async () => {
         resetState();
-        state.described = [{ pm_id: 0, name: "xpm-agent", pm2_env: { namespace: "XPM" } as ProcessDescription["pm2_env"] }];
 
         const response = await processController.flushLogs(0);
 
-        expect(response.success).toBe(false);
-        expect(response.status).toBe(409);
-        expect(response.code).toBe("AGENT_SELF_MANAGEMENT_FORBIDDEN");
-        expect(response.message).toBe("Refusing to manage the xpm-agent process itself");
-    });
-
-    test("returns 503 and does not flush when the guard cannot reach the daemon", async () => {
-        resetState();
-        state.describeError = new Error("connect ECONNREFUSED 127.0.0.1:4444");
-
-        const response = await processController.flushLogs(3);
-
-        expect(response.success).toBe(false);
-        expect(response.status).toBe(503);
-        expect(response.code).toBe("PM2_DAEMON_UNAVAILABLE");
+        expect(response.success).toBe(true);
+        expect(response.message).toBe("Logs for process 0 flushed successfully");
     });
 
     test("returns 400 when the id is not numeric", async () => {

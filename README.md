@@ -103,7 +103,7 @@ What the agent enforces:
 - The child environment is exactly the payload `env` plus PM2 runtime metadata. Reserved PM2 keys and runtime loader options (`NODE_OPTIONS`, `BUN_OPTIONS`, `NODE_PATH`, `PYTHONSTARTUP`/`PYTHONPATH`, `PHPRC`, `PHP_INI_SCAN_DIR`, `LD_PRELOAD`) are rejected with `422`.
 - Interpreter executables must be a recognized runtime (`node`, `bun`, `php`, `python`, `go`); `"none"` is allowed for bare binaries/executables.
 - `interpreter_args` are allowlisted per runtime: `--max-old-space-size=<n>` and `--env-file` pointing inside `cwd` (Node/Bun), `-O/-OO/-u/-B` (Python). Everything else is rejected.
-- `name`/`namespace` are restricted to `^[A-Za-z0-9._-]{1,64}$`; the agent's own processes (`xpm-agent`/`xpm-client`/`xpm-server` in the `XPM` namespace) cannot be started or managed, and `describe`/`logs`/`flush` refuse them too. If the guard cannot inspect a target, the request fails closed with `503`.
+- `name`/`namespace` are restricted to `^[A-Za-z0-9._-]{1,64}$`; the agent's own processes (`xpm-agent`/`xpm-client`/`xpm-server` in the `XPM` namespace) cannot be started, stopped, restarted, reloaded, or deleted. Read-only `describe`/`logs` and `flush` are allowed. If the guard cannot inspect a target on a mutating route, the request fails closed with `503`.
 - Responses never expose `pm2_env.env` or `filter_env`.
 
 These allowlists stop accidental inheritance and casual abuse — they are **not** a hard boundary. A caller who can run an arbitrary script as the same OS user can read the agent's files directly. When the port is reachable beyond localhost, the boundary is `AUTH_TOKEN` plus OS-level isolation.
