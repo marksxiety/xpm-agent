@@ -3,9 +3,6 @@ import type { ProcessDescription, StartOptions, Proc } from "pm2";
 import type { ApiResponse, ProcessSummary } from "../../types";
 import { StartIssue } from "../../types/inspect";
 
-// `interpreter: "none"` is gated on AUTH_TOKEN; make the tests deterministic.
-delete process.env.AUTH_TOKEN;
-
 const state = {
     started: [] as ProcessDescription[],
     list: [] as ProcessDescription[],
@@ -467,6 +464,16 @@ describe("pm2 start route", () => {
         expect((body.info as { pm_id: number; name: string }[])[0].pm_id).toBe(3);
     });
 
+    test("returns 200 for interpreter 'none' without AUTH_TOKEN", async () => {
+        resetState();
+        state.started = [{ name: "my-app" }];
+
+        const { status, body } = await postStart({ ...VALID_PAYLOAD, interpreter: "none" });
+
+        expect(status).toBe(200);
+        expect(body.success).toBe(true);
+    });
+
     test("normalizes min_uptime and passes the advanced restart fields through to pm2", async () => {
         resetState();
         state.started = [{ pm_id: 3, name: "my-app" }];
@@ -648,7 +655,6 @@ describe("pm2 start route", () => {
         ["a relative cwd", { cwd: "relative\\dir" }],
         ["a cwd with '..' segments", { cwd: "C:\\apps\\..\\windows" }],
         ["a non-profile interpreter", { interpreter: "C:\\Windows\\System32\\cmd.exe" }],
-        ["interpreter 'none' without AUTH_TOKEN", { interpreter: "none" }],
         ["an env-file outside cwd", { interpreter_args: ["--env-file=C:\\outside\\.env"] }],
         ["a --require flag", { interpreter_args: ["--require=./evil.js"] }],
         ["a reserved env key", { env: { pm_id: "0" } }],

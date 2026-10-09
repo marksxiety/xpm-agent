@@ -9,8 +9,6 @@ import type { StartIssue, RuntimeProfile, EntrypointConvention, InspectCommand }
 type StartPayloadType = Static<typeof StartPayload>;
 
 export interface InspectContext {
-  /** Whether the API has AUTH_TOKEN configured; gates `interpreter: "none"`. */
-  hasAuthToken?: boolean;
   /** Optional allowlist of absolute app roots the cwd must live under. */
   appRoots?: string[];
   /** The agent's own directory; a payload may not use it as cwd. */
@@ -339,14 +337,7 @@ export function inspectStart(options: StartPayloadType, context: InspectContext 
 
   const interpreterProfile = findInterpreterProfile(interpreter);
 
-  if (interpreter === "none") {
-    if (context.hasAuthToken !== true) {
-      issues.push({
-        field: "interpreter",
-        message: "interpreter 'none' requires AUTH_TOKEN to be configured",
-      });
-    }
-  } else if (interpreterProfile === undefined) {
+  if (interpreter !== "none" && interpreterProfile === undefined) {
     issues.push({
       field: "interpreter",
       message:

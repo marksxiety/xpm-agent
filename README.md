@@ -48,7 +48,7 @@ if not exist .env.production copy .env.example .env.production
 bun run start
 ```
 
-> Set `AUTH_TOKEN` in `.env` and `.env.production` before `bun run start` — the agent refuses to boot without it. For local development only, `ALLOW_INSECURE=true` is the explicit escape hatch.
+> `AUTH_TOKEN` is optional: set it in `.env`/`.env.production` whenever the port is reachable beyond localhost — `POST /pm2/start` executes code by design.
 
 > `bunx pm2-startup install` registers boot auto-start. It must run **after** `bun install` — the `pm2-startup` binary ships with the `pm2-windows-startup` dependency, not npm. Re-running it is safe; undo with `bunx pm2-startup uninstall`.
 
@@ -86,11 +86,9 @@ See [SETUP.md](./docs/SETUP.md) for full configuration options.
 
 ## Authentication
 
-**Required.** Set `AUTH_TOKEN` in `.env` (or `.env.production` when running in production) and every `/pm2/*` request must send `Authorization: Bearer <AUTH_TOKEN>` or it is rejected with `401`. The agent refuses to boot without a token because `POST /pm2/start` executes code by design.
+**Optional.** Set `AUTH_TOKEN` in `.env` (or `.env.production` when running in production) and every `/pm2/*` request must send `Authorization: Bearer <AUTH_TOKEN>` or it is rejected with `401`. Leave it empty to disable auth — fine for a strictly local/internal tool.
 
-For local development only, `ALLOW_INSECURE=true` boots the agent without authentication and logs a warning on every start. Never enable it on a reachable host.
-
-> CORS only blocks browsers — curl, scripts, and servers bypass it entirely. `AUTH_TOKEN` is the only access control.
+> CORS only blocks browsers — curl, scripts, and servers bypass it entirely. Set `AUTH_TOKEN` whenever the agent runs on anything but a strictly localhost port; it is the only access control.
 
 > **Breaking API changes:** `cwd` is now required, unknown payload keys are rejected with `422` (no silent stripping), and `exec_mode: 'cluster'` / `instances > 1` are rejected. Update xpm-client (send `cwd`, drop cluster, tolerate `422`) before upgrading an agent.
 
@@ -103,12 +101,12 @@ What the agent enforces:
 - `cwd` is required, absolute, free of `..` segments, never the agent's own directory, and inside `APP_ROOTS` when that allowlist is configured.
 - `exec_mode` is always `fork` with `instances: 1` — PM2 cluster workers fork from the daemon and would inherit its environment.
 - The child environment is exactly the payload `env` plus PM2 runtime metadata. Reserved PM2 keys and runtime loader options (`NODE_OPTIONS`, `BUN_OPTIONS`, `NODE_PATH`, `PYTHONSTARTUP`/`PYTHONPATH`, `PHPRC`, `PHP_INI_SCAN_DIR`, `LD_PRELOAD`) are rejected with `422`.
-- Interpreter executables must be a recognized runtime (`node`, `bun`, `php`, `python`, `go`); `interpreter: "none"` additionally requires `AUTH_TOKEN`.
+- Interpreter executables must be a recognized runtime (`node`, `bun`, `php`, `python`, `go`); `"none"` is allowed for bare binaries/executables.
 - `interpreter_args` are allowlisted per runtime: `--max-old-space-size=<n>` and `--env-file` pointing inside `cwd` (Node/Bun), `-O/-OO/-u/-B` (Python). Everything else is rejected.
 - `name`/`namespace` are restricted to `^[A-Za-z0-9._-]{1,64}$`; the agent's own processes (`xpm-agent`/`xpm-client`/`xpm-server` in the `XPM` namespace) cannot be started or managed, and `describe`/`logs`/`flush` refuse them too. If the guard cannot inspect a target, the request fails closed with `503`.
 - Responses never expose `pm2_env.env` or `filter_env`.
 
-These allowlists stop accidental inheritance and casual abuse — they are **not** a hard boundary. A caller who can run an arbitrary script as the same OS user can read the agent's files directly. The boundary is `AUTH_TOKEN` plus OS-level isolation.
+These allowlists stop accidental inheritance and casual abuse — they are **not** a hard boundary. A caller who can run an arbitrary script as the same OS user can read the agent's files directly. When the port is reachable beyond localhost, the boundary is `AUTH_TOKEN` plus OS-level isolation.
 
 ### Known limits
 

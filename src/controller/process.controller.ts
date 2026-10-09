@@ -153,7 +153,6 @@ export class ProcessController {
 
   startProcess = async (payload: StartOptions): Promise<ApiResponse<ProcessSummary[] | StartIssue[] | ProcessNameConflict>> => {
     const { options, issues } = sanitizeProcessConfig(payload as unknown as SanitizeInput, {
-      hasAuthToken: Boolean(config.AUTH_TOKEN),
       appRoots: config.APP_ROOTS,
       agentDir: process.cwd(),
     });

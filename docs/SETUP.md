@@ -36,13 +36,12 @@ Open `.env` and `.env.production` and set:
 |---|---|---|
 | `SERVER_PORT` | **Required.** Port the API listens on. Startup fails with a clear command-line error when it is missing, not a whole number, outside 1–65535, or already in use by another process. | `4000` |
 | `CORS_ORIGIN` | **Required for browser-facing deployments.** Comma-separated allowed browser origins (e.g. `http://localhost:3000,http://localhost:5173`). Omit or leave empty to **deny all browser origins** with 403 (`CORS_ORIGIN_NOT_ALLOWED`) — non-browser clients (curl, Postman, other services) are unaffected. | `http://localhost:3000,http://localhost:5173` |
-| `AUTH_TOKEN` | **Required.** Bearer token for every `/pm2/*` request (`Authorization: Bearer <AUTH_TOKEN>`). The agent refuses to boot without it because `POST /pm2/start` executes code by design; generate one with e.g. `openssl rand -hex 32`. | `a-secret-string` |
-| `ALLOW_INSECURE` | Local-development escape hatch. Set to `true` to boot without `AUTH_TOKEN`; the agent logs an insecure-mode warning on every start. Never enable on a reachable host. | `true` |
+| `AUTH_TOKEN` | Optional bearer token. When set, every `/pm2/*` request must include `Authorization: Bearer <AUTH_TOKEN>` or it is rejected with 401 (`UNAUTHORIZED`). Leave empty to disable auth (fine for a strictly local/internal tool). | `a-secret-string` |
 | `APP_ROOTS` | Optional comma-separated allowlist of absolute app roots. When set, `cwd` on `/start` must live under one of them, otherwise the request is rejected with 422. | `C:\apps,/srv/apps` |
 
 **Which file wins?** `.env` is the base config, always loaded. When the service runs in production (`npm run start` → `--env production` → `NODE_ENV=production`), Bun also loads `.env.production` and its values **override** `.env`. So put generic defaults in `.env` and production-specific values (real `AUTH_TOKEN`, server port, CORS origins) in `.env.production`. Both files are gitignored.
 
-> **Authentication (required):** set `AUTH_TOKEN` whenever the agent runs — it will not start otherwise. CORS only blocks browsers — curl, scripts, and other servers bypass it entirely. The token is the only access control, so pair it with OS-level isolation when the port is reachable beyond localhost.
+> **Authentication (optional):** set `AUTH_TOKEN` whenever the agent runs on a network that isn't strictly localhost. CORS only blocks browsers — curl, scripts, and other servers bypass it entirely. The token is the only access control, so pair it with OS-level isolation when the port is reachable beyond localhost.
 
 ## 4. Run the service (production)
 
@@ -106,7 +105,7 @@ After running, `pm2 save` (from step 4) ensures the process list is restored at 
 
 ## 7. Security notes
 
-- `POST /pm2/start` is remote code execution by design: the child runs as the service account. `AUTH_TOKEN` is mandatory (boot fails without it) and should be paired with OS-level isolation when the port is reachable beyond localhost.
+- `POST /pm2/start` is remote code execution by design: the child runs as the service account. Set `AUTH_TOKEN` and pair it with OS-level isolation when the port is reachable beyond localhost.
 - The agent pins `pm2` to an exact version (`package.json`) and ships a lockfile; PM2 internals (`filter_env`, `prepareAppConf`, `executeApp`, fork/cluster env handling) are security-relevant, so re-run `bun test` before bumping.
 - `%USERPROFILE%\.pm2\dump.pm2` stores each app's `env` in plaintext. Restrict it to the service account, e.g.:
 

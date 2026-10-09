@@ -10,12 +10,12 @@ const CWD = "C:\\apps\\example";
 const LINUX_CWD = "/srv/apps/example";
 
 function issues(payload: Payload): string[] {
-  return inspect("start", payload, { hasAuthToken: true }).map((issue) => issue.field);
+  return inspect("start", payload).map((issue) => issue.field);
 }
 
 /** For values the schema rejects but the controller can still receive directly. */
 function runtimeIssues(payload: Record<string, unknown>): string[] {
-  return inspect("start", payload as unknown as Payload, { hasAuthToken: true }).map((issue) => issue.field);
+  return inspect("start", payload as unknown as Payload).map((issue) => issue.field);
 }
 
 describe("start inspection", () => {
@@ -220,16 +220,6 @@ describe("start inspection", () => {
     expect(issues(payload)).toEqual([]);
   });
 
-  test("flags interpreter 'none' when AUTH_TOKEN is not configured", () => {
-    const payload: Payload = {
-      name: "worker",
-      script: "./my-binary",
-      cwd: CWD,
-      interpreter: "none",
-    };
-    expect(inspect("start", payload, { hasAuthToken: false }).map((issue) => issue.field)).toEqual(["interpreter"]);
-  });
-
   test("rejects an unrecognized interpreter executable", () => {
     const payload: Payload = {
       name: "api",
@@ -279,7 +269,7 @@ describe("start inspection", () => {
       cwd: CWD,
       interpreter: NODE,
     };
-    expect(inspect("start", payload, { hasAuthToken: true, agentDir: CWD }).map((issue) => issue.field)).toEqual(["cwd"]);
+    expect(inspect("start", payload, { agentDir: CWD }).map((issue) => issue.field)).toEqual(["cwd"]);
   });
 
   test("rejects cwd outside configured app roots", () => {
@@ -290,7 +280,7 @@ describe("start inspection", () => {
       interpreter: NODE,
     };
     expect(
-      inspect("start", payload, { hasAuthToken: true, appRoots: ["C:\\other"] }).map((issue) => issue.field),
+      inspect("start", payload, { appRoots: ["C:\\other"] }).map((issue) => issue.field),
     ).toEqual(["cwd"]);
   });
 

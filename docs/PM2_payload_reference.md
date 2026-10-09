@@ -12,7 +12,7 @@ Identifies the process and defines how its entry script is invoked: the file pat
 - `name` — process name shown in `pm2 list`; must match `^[A-Za-z0-9._-]{1,64}$`.
 - `cwd` — **required** — working directory for the process. **Must be an absolute path** matching `targetOs`, without `..` segments, not the agent's own directory, and inside `APP_ROOTS` when that allowlist is configured.
 - `args` — arguments passed to the script (array or string).
-- `interpreter` — **this API requires an absolute path to the interpreter executable** (e.g. `C:\Program Files\nodejs\node.exe`) or `"none"` — bare names like `"node"`/`"python3"` are rejected by `/start`, and the executable must be a recognized runtime (`node`, `bun`, `php`, `python`, `go`). `"none"` additionally requires `AUTH_TOKEN` to be configured.
+- `interpreter` — **this API requires an absolute path to the interpreter executable** (e.g. `C:\Program Files\nodejs\node.exe`) or `"none"` — bare names like `"node"`/`"python3"` are rejected by `/start`, and the executable must be a recognized runtime (`node`, `bun`, `php`, `python`, `go`).
 - `interpreter_args` — arguments passed to the interpreter itself. Allowlisted per runtime: `--max-old-space-size=<n>` and `--env-file` pointing inside `cwd` (Node/Bun), `-O/-OO/-u/-B` (Python); anything else (`--require`, `-e`, `-c`, …) is rejected.
 - `namespace` — logical grouping (`pm2 list` can show/filter by this); must match `^[A-Za-z0-9._-]{1,64}$`. Empty/whitespace falls back to `default`.
 
