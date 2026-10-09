@@ -7,6 +7,12 @@
   <a href="https://github.com/marksxiety/xpm-agent/releases/latest"><img src="https://img.shields.io/github/v/release/marksxiety/xpm-agent?label=release&include_prereleases" alt="Release"></a>
 </p>
 
+<p align="center">
+  <img src="https://img.shields.io/badge/platform-Windows%20only-0078D6" alt="Platform: Windows only">
+  <img src="https://img.shields.io/badge/Bun-1.3.14-black?logo=bun&logoColor=white" alt="Bun 1.3.14">
+  <img src="https://img.shields.io/badge/PM2-7.0.4-2B037A?logo=pm2&logoColor=white" alt="PM2 7.0.4">
+</p>
+
 <p align="center"><b>PM2, but make it an API — one agent per server.</b></p>
 
 <p align="center">xpm-agent is a <b>cross-server agent</b>: install it on every machine that runs PM2, and drive all of them from a single place — no SSH-ing in per server. This Bun + Elysia service is a <b>thin REST wrapper around PM2</b>. It exposes PM2's full lifecycle (list, start, stop, restart, reload, delete, flush, logs) as clean endpoints so ops scripts, dashboards, and automations can manage any server's processes like any other API.</p>
@@ -17,8 +23,9 @@
 
 ## Prerequisites
 
-- **Bun** — required. Runtime and package manager for this project.
+- **Bun** — required. Runtime and package manager; built and tested on `1.3.14`.
 - **Node.js** — required for npm (used to run package scripts).
+- **PM2** — the process manager this agent wraps; pinned at `7.0.4` in `package.json`.
 
 ## Quickstart
 
