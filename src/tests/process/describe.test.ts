@@ -103,7 +103,7 @@ describe("pm2 describe service", () => {
         expect(info.describe.max_memory_restart).toBeUndefined();
     });
 
-    test("nulls Node-only fields for non-Node interpreters even when pm2_env carries them", async () => {
+    test("returns whatever node metadata pm2_env carries, regardless of interpreter", async () => {
         resetState();
         state.described = [{
             pm_id: 7,
@@ -120,12 +120,12 @@ describe("pm2 describe service", () => {
         const response = await processController.describeProcess(7);
 
         const info = response.info as ProcessDescriptionDetails;
-        expect(info.describe.node_version).toBeNull();
-        expect(info.describe.node_env).toBeNull();
-        expect(info.describe.version).toBeNull();
+        expect(info.describe.node_version).toBe("24.3.0");
+        expect(info.describe.node_env).toBe("production");
+        expect(info.describe.version).toBe("1.0.0-beta");
     });
 
-    test("keeps Node-only fields for Node family interpreters", async () => {
+    test("returns node metadata for a Node interpreter", async () => {
         resetState();
         state.described = [{
             pm_id: 8,
