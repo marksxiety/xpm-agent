@@ -10,7 +10,7 @@ import { processController } from "./controller/process.controller";
 import { systemController } from "./controller/system.controller";
 import { getRouteMeta } from "./meta/process";
 import { getSystemRouteMeta } from "./meta/system";
-import { config } from "./config";
+import { config, validateConfig } from "./config";
 import { formatPortError, formatPortInUseError, resolveServerPort, STARTUP_ERROR_EXIT_CODE } from "./utils/port";
 import { findListeningPidsOnHost, findProcessName } from "./utils/port-usage";
 import { systemInformationSource } from "./utils/system";
@@ -101,6 +101,12 @@ if (import.meta.main || isPm2EntryPoint) {
   // Prime the CPU baseline at startup so the first /system call does not pay
   // systeminformation's ~500 ms baseline window.
   void systemInformationSource.currentLoad();
+  try {
+    validateConfig();
+  } catch (error) {
+    console.error(`xpm-agent failed to start: ${error instanceof Error ? error.message : String(error)}`);
+    process.exit(STARTUP_ERROR_EXIT_CODE);
+  }
   try {
     // reusePort stays false (Elysia defaults it to true), but Windows can still
     // let Bun bind over a listener that did not set SO_EXCLUSIVEADDRUSE, so the
