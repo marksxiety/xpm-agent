@@ -4,25 +4,33 @@ import { StartPayload } from "../schemas/process";
 import { parseDurationMs } from "./duration";
 import { ENV_KEY_PATTERN, isReservedEnvKey } from "./env-keys";
 import { AGENT_NAME, AGENT_NAMESPACE } from "../pm2/cli";
-import type { StartIssue, RuntimeProfile, EntrypointConvention, InspectCommand } from "../types/inspect"
+import type { StartIssue, FlagRule, InspectCommand } from "../types/inspect";
 
 type StartPayloadType = Static<typeof StartPayload>;
+type TargetOs = "win32" | "linux";
 
 export interface InspectContext {
   /** Optional allowlist of absolute app roots the cwd must live under. */
   appRoots?: string[];
   /** The agent's own directory; a payload may not use it as cwd. */
   agentDir?: string;
+  /** Optional allowlist of directories the interpreter executable must live under. Unset or empty = any absolute path. */
+  interpreterRoots?: string[];
+  /**
+   * Allowed interpreter flags, keyed by lowercase executable name without extension
+   * (e.g. "node", "python"). An interpreter with no entry accepts no interpreter_args.
+   */
+  interpreterFlags?: Record<string, FlagRule[]>;
 }
 
 const NAME_PATTERN = /^[A-Za-z0-9._-]{1,64}$/;
 const NAMESPACE_PATTERN = /^[A-Za-z0-9._-]{1,64}$/;
 
-function isAbsoluteForTarget(p: string, targetOs: "win32" | "linux"): boolean {
+function isAbsoluteForTarget(p: string, targetOs: TargetOs): boolean {
   return targetOs === "win32" ? win32.isAbsolute(p) : posix.isAbsolute(p);
 }
 
-function pathApiFor(targetOs: "win32" | "linux") {
+function pathApiFor(targetOs: TargetOs) {
   return targetOs === "win32" ? win32 : posix;
 }
 
@@ -31,7 +39,7 @@ function hasParentSegment(p: string): boolean {
 }
 
 /** Normalizes for comparison: resolves, strips the Windows `\\?\` prefix, case-folds on win32. */
-function normalizeForCompare(p: string, targetOs: "win32" | "linux"): string {
+function normalizeForCompare(p: string, targetOs: TargetOs): string {
   const api = pathApiFor(targetOs);
   let normalized = api.resolve(p);
   if (targetOs === "win32") {
@@ -40,7 +48,7 @@ function normalizeForCompare(p: string, targetOs: "win32" | "linux"): string {
   return normalized;
 }
 
-function isInsideDirectory(parent: string, child: string, targetOs: "win32" | "linux"): boolean {
+function isInsideDirectory(parent: string, child: string, targetOs: TargetOs): boolean {
   const api = pathApiFor(targetOs);
   const normalizedParent = normalizeForCompare(parent, targetOs);
   const normalizedChild = normalizeForCompare(child, targetOs);
@@ -49,98 +57,33 @@ function isInsideDirectory(parent: string, child: string, targetOs: "win32" | "l
   return rel !== "" && !rel.startsWith("..") && !api.isAbsolute(rel);
 }
 
-function isResolvedInside(parent: string, candidate: string, targetOs: "win32" | "linux"): boolean {
+function isResolvedInside(parent: string, candidate: string, targetOs: TargetOs): boolean {
   const api = pathApiFor(targetOs);
   const resolved = api.isAbsolute(candidate) ? candidate : api.resolve(parent, candidate);
   return isInsideDirectory(parent, resolved, targetOs);
 }
 
-// ---------------------------------------------------------------------------
-// Runtime profiles
-//
-// Each profile describes a language/runtime family: how to recognize it from
-// either the interpreter executable or the script's file extension, and what
-// PM2 features it supports. Adding a new runtime is a matter of adding an
-// entry here — inspectStart() itself never references a specific language.
-// ---------------------------------------------------------------------------
-const RUNTIME_PROFILES: RuntimeProfile[] = [
-  {
-    id: "node",
-    family: "node",
-    executableNames: ["node"],
-    scriptExtensions: /\.(?:m?js|cjs|ts|tsx|jsx|mts|cts)$/i,
-    supportsInterpreterArgs: true,
-  },
-  {
-    // Bun uses the same script extensions as Node but PM2's cluster mode is
-    // Node-only (see ecosystem.config.js) — always fork.
-    id: "bun",
-    family: "node",
-    executableNames: ["bun"],
-    scriptExtensions: /\.(?:m?js|cjs|ts|tsx|jsx|mts|cts)$/i,
-    supportsInterpreterArgs: true,
-  },
-  {
-    id: "php",
-    family: "php",
-    executableNames: ["php"],
-    scriptExtensions: /\.(?:php|phtml)$/i,
-    supportsInterpreterArgs: false,
-  },
-  {
-    id: "python",
-    family: "python",
-    executableNames: ["python", "python3", "py", "pythonw"],
-    scriptExtensions: /\.pyw?$/i,
-    supportsInterpreterArgs: true, // e.g. -O, -u
-  },
-  {
-    id: "go",
-    family: "go",
-    executableNames: ["go"],
-    scriptExtensions: /\.go$/i,
-    supportsInterpreterArgs: false,
-  },
-];
-
-
-// ---------------------------------------------------------------------------
-// Entrypoint conventions
-//
-// Framework-specific entrypoint rules (artisan, manage.py, ...) are not
-// runtime checks — they're naming conventions tied to a runtime by id.
-// Keeping this table separate from RUNTIME_PROFILES means language support
-// and framework convention support can evolve independently.
-// ---------------------------------------------------------------------------
-
-const ENTRYPOINT_CONVENTIONS: EntrypointConvention[] = [
-  {
-    matches: (scriptPath) => scriptPath.split(/[\\/]/).pop() === "artisan",
-    requiredRuntimeId: "php",
-    requiresArgs: true,
-  },
-  {
-    matches: (scriptPath) => scriptPath.split(/[\\/]/).pop() === "manage.py",
-    requiredRuntimeId: "python",
-    requiresArgs: true,
-  },
-];
-
-
-/**
- * Resolves the runtime profile for an interpreter executable path (or "none").
- * Used by the configuration guide and by describeProcessDetails to decide which
- * runtime-specific fields are meaningful.
- */
-export function findInterpreterProfile(interpreter: string | undefined): RuntimeProfile | undefined {
-  if (!interpreter || interpreter === "none") return undefined;
-  const basename = (interpreter.split(/[\\/]/).pop() ?? interpreter).replace(/\.exe$/i, "").toLowerCase();
-  return RUNTIME_PROFILES.find((profile) => profile.executableNames.includes(basename));
+/** "C:\Program Files\nodejs\node.exe" -> "node". Used only as a config lookup key. */
+function executableKey(interpreter: string): string {
+  return (interpreter.split(/[\\/]/).pop() ?? interpreter).replace(/\.exe$/i, "").toLowerCase();
 }
 
-/** True for Node.js and Bun interpreters (the runtimes that report node metadata). */
-export function isNodeFamilyInterpreter(interpreter: string | undefined): boolean {
-  return findInterpreterProfile(interpreter)?.family === "node";
+/**
+ * Converts flag rules from the agent's JSON config (patterns are strings there)
+ * into FlagRule objects. Throws on a bad regex so a broken config fails at
+ * startup instead of at request time.
+ */
+export function parseFlagRules(
+  raw: Record<string, Array<{ kind: "exact" | "pattern" | "path"; flag?: string; pattern?: string }>>,
+): Record<string, FlagRule[]> {
+  const out: Record<string, FlagRule[]> = {};
+  for (const [key, rules] of Object.entries(raw)) {
+    out[key.toLowerCase()] = rules.map((rule): FlagRule => {
+      if (rule.kind === "pattern") return { kind: "pattern", pattern: new RegExp(rule.pattern ?? "") };
+      return { kind: rule.kind, flag: rule.flag ?? "" };
+    });
+  }
+  return out;
 }
 
 function parseArgTokens(raw: string | string[]): string[] {
@@ -149,53 +92,54 @@ function parseArgTokens(raw: string | string[]): string[] {
 }
 
 /**
- * Per-runtime allowlist for interpreter flags. Everything else (e.g.
- * `--require`, `--import`, `-e`, `-c`) can execute code and is rejected.
+ * Checks interpreter flags against the configured allowlist for this
+ * interpreter. Anything not listed (e.g. `--require`, `-e`, `-c`) can execute
+ * code and is rejected.
  */
 function interpreterArgIssue(
   raw: string | string[],
-  profile: RuntimeProfile,
+  rules: FlagRule[],
+  label: string,
   cwd: string,
-  targetOs: "win32" | "linux",
+  targetOs: TargetOs,
 ): StartIssue | undefined {
   const tokens = parseArgTokens(raw);
 
   for (let index = 0; index < tokens.length; index += 1) {
     const token = tokens[index];
+    let handled = false;
 
-    if (profile.family === "node") {
-      if (/^--max-old-space-size=\d+$/.test(token)) continue;
-      if (token === "--env-file") {
-        const value = tokens[index + 1];
-        if (value !== undefined && isResolvedInside(cwd, value, targetOs)) {
-          index += 1;
-          continue;
+    for (const rule of rules) {
+      if (rule.kind === "exact" && token === rule.flag) {
+        handled = true;
+        break;
+      }
+
+      if (rule.kind === "pattern" && rule.pattern.test(token)) {
+        handled = true;
+        break;
+      }
+
+      if (rule.kind === "path" && (token === rule.flag || token.startsWith(`${rule.flag}=`))) {
+        const value = token === rule.flag ? tokens[index + 1] : token.slice(rule.flag.length + 1);
+        if (!value || !isResolvedInside(cwd, value, targetOs)) {
+          return {
+            field: "interpreter_args",
+            message: `'${rule.flag}' must point to a file inside cwd`,
+          };
         }
-        return {
-          field: "interpreter_args",
-          message: "'--env-file' must point to a file inside cwd",
-        };
+        if (token === rule.flag) index += 1; // consume the separate value token
+        handled = true;
+        break;
       }
-      const envFileMatch = /^--env-file=(.+)$/.exec(token);
-      if (envFileMatch) {
-        if (isResolvedInside(cwd, envFileMatch[1], targetOs)) continue;
-        return {
-          field: "interpreter_args",
-          message: "'--env-file' must point to a file inside cwd",
-        };
-      }
-      return {
-        field: "interpreter_args",
-        message: `interpreter flag '${token}' is not allowed — only '--max-old-space-size=<n>' and '--env-file' inside cwd are supported`,
-      };
     }
 
-    if (profile.family === "python" && ["-O", "-OO", "-u", "-B"].includes(token)) continue;
-
-    return {
-      field: "interpreter_args",
-      message: `interpreter flag '${token}' is not allowed for ${profile.id}`,
-    };
+    if (!handled) {
+      return {
+        field: "interpreter_args",
+        message: `interpreter flag '${token}' is not allowed for ${label}`,
+      };
+    }
   }
 
   return undefined;
@@ -205,7 +149,7 @@ export function inspectStart(options: StartPayloadType, context: InspectContext 
   const issues: StartIssue[] = [];
   const script = options.script ?? "";
   const interpreter = options.interpreter;
-  const targetOs = options.targetOs ?? "win32";
+  const targetOs: TargetOs = options.targetOs ?? "win32";
   const namespace = options.namespace?.trim() || "default";
   const cwd = options.cwd;
 
@@ -295,7 +239,7 @@ export function inspectStart(options: StartPayloadType, context: InspectContext 
     }
   }
 
-  // The schema only accepts `"fork"`/`1`, but the controller can be called
+  // The schema only accepts "fork"/1, but the controller can be called
   // directly, so re-check here: PM2 cluster workers fork from the daemon and
   // would inherit its environment instead of the payload env.
   const execMode = options.exec_mode as string | undefined;
@@ -315,55 +259,61 @@ export function inspectStart(options: StartPayloadType, context: InspectContext 
     });
   }
 
-  if (options.min_uptime !== undefined && parseDurationMs(options.min_uptime) === undefined) {
-    issues.push({
-      field: "min_uptime",
-      message:
-        "min_uptime must be a number of milliseconds or a duration string like '10s', '500ms', '2m'",
-    });
+  const DURATION_FIELDS = ["min_uptime", "restart_delay", "kill_timeout", "watch_delay"] as const;
+  for (const field of DURATION_FIELDS) {
+    const value = options[field];
+    if (value !== undefined && parseDurationMs(value) === undefined) {
+      issues.push({
+        field,
+        message: `${field} must be a number of milliseconds or a duration string like '10s', '500ms', '2m'`,
+      });
+    }
   }
 
   // Interpreter paths are validated against the OS the target process will
-  // run on (targetOs), not the OS hosting this API.
-  if (interpreter !== "none" && !isAbsoluteForTarget(interpreter, targetOs)) {
-    issues.push({
-      field: "interpreter",
-      message:
-        targetOs === "win32"
-          ? "interpreter must be an absolute path to the executable (e.g. 'C:\\Program Files\\nodejs\\node.exe'), not a bare name like 'node' or 'py' — only 'none' is accepted as a bare value"
-          : "interpreter must be an absolute path to the executable (e.g. '/usr/bin/node'), not a bare name like 'node' or 'py' — only 'none' is accepted as a bare value",
-    });
-  }
-
-  const interpreterProfile = findInterpreterProfile(interpreter);
-
-  if (interpreter !== "none" && interpreterProfile === undefined) {
-    issues.push({
-      field: "interpreter",
-      message:
-        "interpreter must be a recognized runtime executable (node, bun, php, python, go) or 'none'",
-    });
-  }
-
-  const scriptProfile = RUNTIME_PROFILES.find((profile) => profile.scriptExtensions.test(script));
-
-  if (scriptProfile && interpreterProfile && scriptProfile.family !== interpreterProfile.family) {
-    issues.push({
-      field: "interpreter",
-      message: `script '${script}' looks like a ${scriptProfile.id} file — interpreter should be a ${scriptProfile.id} executable path`,
-    });
+  // run on (targetOs), not the OS hosting this API. The agent does not know
+  // which languages exist: "none" or an absolute path, optionally restricted
+  // to the server's configured interpreter roots.
+  if (interpreter !== "none") {
+    if (!isAbsoluteForTarget(interpreter, targetOs)) {
+      issues.push({
+        field: "interpreter",
+        message:
+          targetOs === "win32"
+            ? "interpreter must be an absolute path to the executable (e.g. 'C:\\Program Files\\nodejs\\node.exe'), not a bare name like 'node' or 'py' — only 'none' is accepted as a bare value"
+            : "interpreter must be an absolute path to the executable (e.g. '/usr/bin/node'), not a bare name like 'node' or 'py' — only 'none' is accepted as a bare value",
+      });
+    } else if (
+      context.interpreterRoots !== undefined &&
+      context.interpreterRoots.length > 0 &&
+      !context.interpreterRoots.some((root) => isInsideDirectory(root, interpreter, targetOs))
+    ) {
+      issues.push({
+        field: "interpreter",
+        message: "interpreter must be inside one of the configured interpreter roots",
+      });
+    }
   }
 
   if (options.interpreter_args !== undefined) {
-    if (!interpreterProfile?.supportsInterpreterArgs) {
+    if (interpreter === "none") {
       issues.push({
         field: "interpreter_args",
-        message: `'interpreter_args' isn't supported by this interpreter${interpreterProfile ? ` (${interpreterProfile.id})` : ""
-          }`,
+        message: "'interpreter_args' requires an interpreter",
       });
-    } else if (cwd !== undefined) {
-      const argIssue = interpreterArgIssue(options.interpreter_args, interpreterProfile, cwd, targetOs);
-      if (argIssue) issues.push(argIssue);
+    } else {
+      const key = executableKey(interpreter);
+      const rules = context.interpreterFlags?.[key];
+
+      if (rules === undefined || rules.length === 0) {
+        issues.push({
+          field: "interpreter_args",
+          message: `'interpreter_args' isn't allowed for '${key}' — no interpreter flags are configured on this server`,
+        });
+      } else if (cwd !== undefined) {
+        const argIssue = interpreterArgIssue(options.interpreter_args, rules, key, cwd, targetOs);
+        if (argIssue) issues.push(argIssue);
+      }
     }
   }
 
@@ -382,24 +332,6 @@ export function inspectStart(options: StartPayloadType, context: InspectContext 
       issues.push({
         field: "increment_var",
         message: `increment_var '${options.increment_var}' must exist in env`,
-      });
-    }
-  }
-
-  for (const convention of ENTRYPOINT_CONVENTIONS) {
-    if (!convention.matches(script)) continue;
-
-    if (convention.requiredRuntimeId && interpreterProfile?.id !== convention.requiredRuntimeId) {
-      issues.push({
-        field: "interpreter",
-        message: `script matches a known entrypoint convention — interpreter should be a ${convention.requiredRuntimeId} executable`,
-      });
-    }
-
-    if (convention.requiresArgs && !options.args) {
-      issues.push({
-        field: "args",
-        message: "this entrypoint requires a subcommand in 'args'",
       });
     }
   }
