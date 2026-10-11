@@ -6,7 +6,7 @@ import { respond } from "../utils/response";
 import { classifyPm2Error } from "../utils/errors";
 import { describeProcessDetails, summarizeProcess, toProcessDescriptions } from "../utils/process";
 import { resolveLogFiles, tailLines } from "../utils/log";
-import { sanitizeProcessConfig, type SanitizeInput } from "../utils/sanitize";
+import { sanitizeProcessConfigAsync, type SanitizeInput } from "../utils/sanitize";
 import { StartIssue } from "../types/inspect";
 import { getHostMetrics, systemInformationSource, type HostMetricsSource } from "../utils/system";
 import { pm2Connection, type Pm2Connection } from "../pm2/client";
@@ -18,7 +18,7 @@ export class ProcessController {
   constructor(
     private metricsSource: HostMetricsSource = systemInformationSource,
     private connection: Pm2Connection = pm2Connection,
-  ) {}
+  ) { }
 
   private runExclusive<T>(operation: () => Promise<T>): Promise<T> {
     const result = this.startChain.then(operation);
@@ -146,7 +146,7 @@ export class ProcessController {
   }
 
   startProcess = async (payload: StartOptions): Promise<ApiResponse<ProcessSummary[] | StartIssue[] | ProcessNameConflict>> => {
-    const { options, issues } = sanitizeProcessConfig(payload as unknown as SanitizeInput, {
+    const { options, issues } = await sanitizeProcessConfigAsync(payload as unknown as SanitizeInput, {
       appRoots: config.APP_ROOTS,
       agentDir: process.cwd(),
       interpreterRoots: config.INTERPRETER_ROOTS,
