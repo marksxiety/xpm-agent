@@ -294,7 +294,7 @@ Registers and launches a new process under PM2. `name`, `script`, `cwd`, and `in
 The body is validated **twice**:
 
 1. **Schema validation** — wrong types or missing required fields → `422` (handled by the API validation layer).
-2. **Configuration guide** — cross-field checks that catch impossible or misleading combos (e.g. a `.js` script with `interpreter: "php"`) → `422` with the list of issues in `info`.
+2. **Configuration guide** — cross-field checks that catch impossible or misleading combos (e.g. a relative `cwd`, or `interpreter_args` when the server has configured no flags for that interpreter) → `422` with the list of issues in `info`.
 
 A `name` that is already registered in PM2 is rejected with `409` — this API never silently restarts/overrides an existing process. The conflict is matched on `name` alone (PM2 cannot host two same-name processes in different namespaces), and the existing process's `pm_id`/`namespace` are returned in `info`.
 
@@ -345,22 +345,22 @@ A `name` that is already registered in PM2 is rejected with `409` — this API n
 | `cwd` | string | **yes** | Working directory the process is launched from. Must be an **absolute** path for the declared `targetOs`, must not contain `..` segments or be the agent's own directory, and must live under `APP_ROOTS` when that allowlist is configured. Relative paths and the other cases are rejected with `422`. |
 | `script` | string | **yes** | Path to the script to run. Resolved against `cwd` (PM2 would otherwise resolve it against the agent's directory); it must resolve inside `cwd` and contain no whitespace. |
 | `args` | string \| string[] | no | Arguments passed to the script itself. No pm2 default. |
-| `interpreter` | string | **yes** | Absolute path to the interpreter executable (e.g. `C:\Program Files\nodejs\node.exe`). The executable must be a recognized runtime (`node`, `bun`, `php`, `python`, `go`) or `"none"` when `script` is itself a binary. Bare names like `"node"`/`"php"` are rejected. Validated for the declared `targetOs`. |
-| `interpreter_args` | string \| string[] | no | Arguments passed to the interpreter process. Allowlisted per runtime: `--max-old-space-size=<n>` and `--env-file` pointing inside `cwd` (Node/Bun), `-O/-OO/-u/-B` (Python). Everything else — including `--require`, `--import`, `-e`, `-c` — is rejected with `422`. Not supported for PHP, Go, and `"none"`. |
+| `interpreter` | string | **yes** | Absolute path to the interpreter executable (e.g. `C:\Program Files\nodejs\node.exe`) or `"none"` when `script` is itself a binary. Bare names like `"node"`/`"php"` are rejected. The agent is **runtime-agnostic**: any absolute path is accepted as-is and validated only for the declared `targetOs` (and, when `INTERPRETER_ROOTS` is set, must live under one of those roots). |
+| `interpreter_args` | string \| string[] | no | Arguments passed to the interpreter process. Allowlisted by the server's configured interpreter flags (env var `INTERPRETER_FLAGS`, keyed by executable base name); until the server configures rules for an interpreter, any `interpreter_args` for it are rejected with `422`. Everything not allowlisted — including `--require`, `--import`, `-e`, `-c` — is rejected. `path` rules must resolve inside `cwd`. Not allowed with `interpreter: "none"`. |
 | `exec_mode` | `"fork"` | no | Only `"fork"` is accepted (and forced). `"cluster"` is rejected with `422`: PM2 cluster workers fork from the daemon and would inherit the daemon's environment. |
 | `instances` | `1` | no | Only `1` is accepted (and forced); `"max"`, `-1`, floats, and any other count are rejected with `422`. |
 | `autorestart` | boolean | no | Restart automatically on crash. Defaults to `true` (pm2 built-in). Set `false` for one-shot jobs. |
 | `max_restarts` | number | no | Consecutive unstable-restart limit (a crash within `min_uptime` of launch counts as unstable). At the limit, PM2 marks the process `errored` and stops. `0` is normalized by this API to `autorestart: false` (PM2's zero-limit check would otherwise mark the app errored on its first exit, including a manual stop). Defaults to `16` (pm2 built-in). |
 | `min_uptime` | number \| string | no | Time the app must stay up before its start counts as stable (resets the unstable-restart counter). A number is milliseconds; strings accept `"10s"`, `"500ms"`, `"2m"`, `"1h"`, or a bare number string. Defaults to `1000` (pm2 built-in). Normalized to milliseconds by this API before `pm2.start` — PM2 does numeric math on it, so a raw string would silently disable unstable-restart counting. |
-| `restart_delay` | number | no | Delay (ms) before restarting a crashed app, preventing rapid crash loops from spiking CPU. **No pm2 default** — restarts fire immediately. |
+| `restart_delay` | number \| string | no | Delay before restarting a crashed app, preventing rapid crash loops from spiking CPU. A number is milliseconds; strings accept `"10s"`, `"500ms"`, `"2m"` and are normalized to milliseconds. **No pm2 default** — restarts fire immediately. |
 | `max_memory_restart` | number \| string | no | Restart the app when its memory usage exceeds this threshold. A number is bytes; strings accept K/M/G units (`"500M"`, `"1G"`). No pm2 default. |
 | `increment_var` | string | no | Environment variable auto-incremented per instance (e.g. `"PORT"`). Must be a valid env key, not reserved by PM2, and present in `env` — otherwise rejected with `422`. |
-| `kill_timeout` | number | no | Time (ms) PM2 waits after the stop signal for the app to exit gracefully before force-killing it. Defaults to `1600` (pm2 built-in). |
-| `windowsHide` | boolean | no | Hide the process console window on Windows. Defaults to `false` (pm2 built-in). **Recommended `true` for console-style apps**; use `false` for GUI binaries that need a visible window. |
+| `kill_timeout` | number \| string | no | Time PM2 waits after the stop signal for the app to exit gracefully before force-killing it. A number is milliseconds; strings accept durations and are normalized to milliseconds. Defaults to `1600` (pm2 built-in). |
+| `windowsHide` | boolean | no | Hide the process console window on Windows. Defaults to `true`. Use `false` for GUI binaries that need a visible window. |
 | `env` | object\<string, string\> | no | Environment variables injected into the spawned process. Keys must match `^[A-Za-z_][A-Za-z0-9_]*$`; reserved PM2 keys and runtime loader options (`NODE_OPTIONS`, `BUN_OPTIONS`, `NODE_PATH`, `PYTHONSTARTUP`/`PYTHONPATH`, `PHPRC`, `PHP_INI_SCAN_DIR`, `LD_PRELOAD`) are rejected with `422`. Only these explicit pairs reach the child — the agent's own environment is never inherited (see [Sanitization](#sanitization)). Defaults to `{}`. |
 | `watch` | boolean \| string[] | no | Restart on file changes. `true` watches the whole tree; an array watches only those paths. Defaults to `false` (pm2 built-in). |
 | `ignore_watch` | string[] | no | Paths/glob patterns excluded from `watch`. No pm2 default. Recommended `["node_modules", "logs", "*.log"]` when `watch` is on — otherwise pm2 restarts on its own log writes. |
-| `watch_delay` | number | no | Delay (ms) before restarting a watched process after a change. **No pm2 default** — restarts fire immediately. |
+| `watch_delay` | number \| string | no | Delay before restarting a watched process after a change. A number is milliseconds; strings accept durations and are normalized to milliseconds. **No pm2 default** — restarts fire immediately. |
 | `cron_restart` | string | no | Cron expression to periodically restart the process, e.g. `"0 2 * * *"`. No pm2 default. |
 
 **Defaults & provenance:**
@@ -384,15 +384,12 @@ Every default listed above is **PM2's own runtime default** — it is applied by
 **Configuration guide rules (each violation blocks with `422`):**
 
 - `name` and `script` must be non-empty (whitespace-only values are rejected)
-- `cwd`, when provided, must be an absolute path for the declared `targetOs` — relative paths are rejected
-- `instances` must be a positive integer or `"max"`
-- `min_uptime` must be milliseconds (number) or a duration string (`"10s"`, `"500ms"`, `"2m"`)
-- `interpreter` must be an absolute path for the declared `targetOs` — bare names like `"node"`/`"py"` are rejected (only `"none"` is accepted as a bare value). On `win32`, both `C:\...` and `/...` absolute forms pass; on `linux` only POSIX absolute paths pass
-- Script extension must match the interpreter's runtime family — Node and Bun share one family, so `.js`/`.ts` scripts are accepted with either; e.g. a Node-extension script (`.js`, `.mjs`, `.cjs`, `.ts`, …) with a `php`/`python`/`go` interpreter, or a `.php`/`.py`/`.go` script with a non-matching interpreter
-- `artisan` requires a PHP interpreter executable path and `args` (a subcommand: `serve`, `schedule:work`, …); `manage.py` requires a Python interpreter path and `args`
-- `interpreter_args` only with interpreters that support them (Node/Bun and Python) — rejected for PHP, Go, and `"none"`
-- `exec_mode: "cluster"` with anything other than a Node interpreter — rejected for Bun, Python, PHP, Go, and `"none"` (PM2 cluster mode is Node-only)
-- `instances > 1` / `"max"` with `exec_mode: "fork"`
+- `cwd`, when provided, must be an absolute path for the declared `targetOs` — relative paths are rejected, and (with `APP_ROOTS`) it must live under one of the configured roots
+- `interpreter` must be an absolute path for the declared `targetOs` — bare names like `"node"`/`"py"` are rejected (only `"none"` is accepted as a bare value). On `win32`, both `C:\...` and `/...` absolute forms pass; on `linux` only POSIX absolute paths pass. When `INTERPRETER_ROOTS` is configured, the executable must live under one of those roots
+- `instances` must be exactly `1`
+- `min_uptime`, `restart_delay`, `kill_timeout`, and `watch_delay` must be milliseconds (number) or a duration string (`"10s"`, `"500ms"`, `"2m"`)
+- `interpreter_args` are rejected unless the server configured flags for that interpreter (`INTERPRETER_FLAGS`); configured flags are matched as `exact` tokens, `pattern` regexes, or `path` values that must resolve inside `cwd`
+- `exec_mode` must be `"fork"` — cluster mode is rejected for every runtime (PM2 cluster workers inherit the daemon's environment)
 
 **Response `200`** — `info` is an array of `ProcessSummary`, one per launched instance:
 
@@ -817,7 +814,7 @@ The `info` payload for `/list`, `/start`, `/stop/:id`, `/restart/:id`, `/reload/
 | 409 | `PROCESS_NAME_CONFLICT` | `/start` body `name` is already registered in PM2 (matched across namespaces) — the existing process is identified in `info` |
 | 409 | `AGENT_SELF_MANAGEMENT_FORBIDDEN` | `stop`/`restart`/`reload`/`delete` targeting the agent's own process (`xpm-agent`/`xpm-client`/`xpm-server` in namespace `XPM`) — refused before any PM2 operation runs. Read-only routes (`describe`/`logs`) and `flush` are allowed on the agent |
 | 422 | `VALIDATION_FAILED` | Schema validation failed (unknown body keys, missing `cwd`, bad `name`/`namespace`, non-numeric `id`, missing `name`/`script`/`interpreter` in the body, invalid `exec_mode`/`instances`) **or** an invalid `tail`/`type`/`logs` query |
-| 422 | `INVALID_PROCESS_CONFIGURATION` | `/start` configuration-guide violation (e.g. `.js` script with a `php` interpreter) — the violations are listed in `info`, not `null` |
+| 422 | `INVALID_PROCESS_CONFIGURATION` | `/start` configuration-guide violation (e.g. a relative `cwd`, or `interpreter_args` with no configured flags for that interpreter) — the violations are listed in `info`, not `null` |
 | 500 | `PM2_OPERATION_FAILED` | Unexpected PM2 failure — `message` is `"PM2 operation failed: <raw PM2 error>"` |
 | 500 | `INTERNAL_SERVER_ERROR` / `UNKNOWN` | Unhandled server error |
 | 503 | `PM2_DAEMON_UNAVAILABLE` | Cannot connect to the PM2 daemon |
@@ -833,5 +830,5 @@ All errors use the envelope with `success: false` and include a `code`; `info` i
 - `env` values injected via `/start` are applied to the spawned process only, and only the explicit pairs reach the child (the agent's own environment is filtered out via `filter_env`); they are **not echoed back** in responses (all responses are sanitized `ProcessSummary` snapshots). The one exception is `GET /describe/:id`, whose `describe`/`metrics` keys additionally expose `pm_exec_path`, the log/pid paths, `NODE_ENV`, and raw code metrics — but no other env values.
 - `namespace` is normalized and enforced by the API: when omitted or empty/whitespace-only it is sent to PM2 as `"default"` (trimmed), and the resolved value is also mirrored into the process `env` so the payload's `namespace` always wins over the namespace inherited from the agent's own PM2 environment. Namespace is a grouping label, **not** an isolation mechanism for duplicate names: PM2's own start matches processes by `name` only, so `/start` rejects any existing `name` regardless of namespace with `409 PROCESS_NAME_CONFLICT`.
 - `/start` applies no PM2 *defaults* of its own (every default in the table is PM2's), but it validates and sanitizes the payload before dispatch — required/absolute `cwd`, unknown-key rejection, reserved `env`-key rejection, `filter_env`, forced `exec_mode: "fork"`/`instances: 1`, `max_restarts: 0` → `autorestart: false`, forced `time: true`, and an explicit pick list that never forwards `targetOs` (see [Sanitization](#sanitization)). The only API-level field is `targetOs` (used for path validation, default `"win32"`), and `time` is always forced to `true` so log lines carry timestamps.
-- `windowsHide` is **recommended `true` for console-style apps** on Windows hosts (pm2's own default is `false`) to avoid a spawned console window per process; use `false` for GUI binaries that need a visible window.
+- `windowsHide` defaults to `true` so no console window is spawned per process on Windows hosts; set it to `false` for GUI binaries that need a visible window.
 - **Name/namespace are immutable after start** — PM2 has no rename. To rename, `delete` (optionally with `delete_logs: true`) and `start` under the new name. Logs are named after the name/namespace, so a rename starts new `-out.log`/`-error.log` files.
