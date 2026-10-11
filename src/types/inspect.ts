@@ -5,17 +5,7 @@ export interface StartIssue {
   message: string;
 }
 
-export interface RuntimeProfile {
-  id: string;
-  /** Groups interchangeable runtimes (node/bun) so script/interpreter matching is family-based. */
-  family: string;
-  executableNames: string[];
-  scriptExtensions: RegExp;
-  supportsInterpreterArgs: boolean;
-}
-
-export interface EntrypointConvention {
-  matches: (script: string) => boolean;
-  requiredRuntimeId?: string;
-  requiresArgs?: boolean;
-}
+export type FlagRule =
+  | { kind: "exact"; flag: string }       // e.g. -u
+  | { kind: "pattern"; pattern: RegExp }  // e.g. --max-old-space-size=\d+
+  | { kind: "path"; flag: string };       // value must resolve inside cwd
