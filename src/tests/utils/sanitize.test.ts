@@ -239,7 +239,7 @@ describe("sanitizeProcessConfig", () => {
     expect(issues.map((issue) => issue.field)).toEqual(["exec_mode", "instances"]);
   });
 
-  test("accepts .js scripts with a Bun interpreter (same runtime family)", () => {
+  test("accepts .js scripts with a Bun interpreter (no runtime matching)", () => {
     const { options, issues } = sanitize({
       ...VALID_PAYLOAD,
       interpreter: "C:\\Program Files\\bun\\bun.exe",
@@ -247,5 +247,32 @@ describe("sanitizeProcessConfig", () => {
 
     expect(issues).toEqual([]);
     expect(options).not.toBeNull();
+  });
+
+  test("defaults windowsHide to true when absent", () => {
+    const { options } = sanitize(VALID_PAYLOAD);
+
+    expect(options?.windowsHide).toBe(true);
+  });
+
+  test("honors an explicit windowsHide: false", () => {
+    const { options } = sanitize({ ...VALID_PAYLOAD, windowsHide: false });
+
+    expect(options?.windowsHide).toBe(false);
+  });
+
+  test("normalizes every duration field to milliseconds", () => {
+    const { options } = sanitize({
+      ...VALID_PAYLOAD,
+      min_uptime: "10s",
+      restart_delay: "4s",
+      kill_timeout: "5s",
+      watch_delay: "1s",
+    });
+
+    expect(options?.min_uptime).toBe(10000);
+    expect(options?.restart_delay).toBe(4000);
+    expect(options?.kill_timeout).toBe(5000);
+    expect(options?.watch_delay).toBe(1000);
   });
 });
