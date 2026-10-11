@@ -40,6 +40,13 @@ mock.module("pm2", () => ({
     },
 }));
 
+// Filesystem existence checks hit the real disk; existing start tests use a
+// fixture cwd that does not exist, so stub the path phase here. Real
+// cwd-vs-script behavior is covered in paths.test.ts.
+mock.module("../../utils/paths", () => ({
+    verifyStartPaths: async () => [],
+}));
+
 const { processController } = await import("../../controller/process.controller");
 const { pm2Connection } = await import("../../pm2/client");
 const { createApp } = await import("../../index");
