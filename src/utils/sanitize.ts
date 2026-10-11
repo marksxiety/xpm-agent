@@ -3,6 +3,7 @@ import type { Static } from "elysia";
 import { StartPayload } from "../schemas/process";
 import type { StartIssue } from "../types/inspect";
 import { inspectStart, type InspectContext } from "./inspect";
+import { verifyStartPaths, type PathCheckOverrides } from "./paths";
 import { parseDurationMs } from "./duration";
 import { ENV_KEY_PATTERN, isReservedEnvKey } from "./env-keys";
 
@@ -60,6 +61,33 @@ export function validateEnv(input: Record<string, string> | undefined): {
 export function sanitizeProcessConfig(
   payload: StartPayloadType,
   context: InspectContext = {},
+): { options: StartOptions | null; issues: StartIssue[] } {
+  const { options, issues } = buildOptions(payload, context);
+  return { options, issues };
+}
+
+/**
+ * Async variant used by `POST /pm2/start`: runs the sync shape checks first,
+ * then verifies `cwd` exists (directory) and the resolved `script` exists
+ * (file). A missing `cwd` reports `field: "cwd"` and skips the script check;
+ * otherwise a missing script reports `field: "script"`. Skipped on
+ * `targetOs`/host mismatch (see `verifyStartPaths`).
+ */
+export async function sanitizeProcessConfigAsync(
+  payload: StartPayloadType,
+  context: InspectContext = {},
+  pathOverrides: PathCheckOverrides = {},
+): Promise<{ options: StartOptions | null; issues: StartIssue[] }> {
+  const { options, issues } = buildOptions(payload, context);
+  if (options === null) return { options, issues };
+  const pathIssues = await verifyStartPaths(payload, pathOverrides);
+  if (pathIssues.length > 0) return { options: null, issues: [...issues, ...pathIssues] };
+  return { options, issues };
+}
+
+function buildOptions(
+  payload: StartPayloadType,
+  context: InspectContext,
 ): { options: StartOptions | null; issues: StartIssue[] } {
   const issues = inspectStart(payload, context);
   const { env, issues: envIssues } = validateEnv(payload.env);
