@@ -29,7 +29,37 @@ describe("start inspection", () => {
       exec_mode: "fork",
       instances: 1,
     };
-    expect(issues(payload)).toEqual([]);
+    expect(
+      inspect("start", payload, {
+        interpreterFlags: { node: [{ kind: "path", flag: "--env-file" }] },
+      }).map((issue) => issue.field),
+    ).toEqual([]);
+  });
+
+  test("rejects interpreter_args when the server configures no flags for that interpreter", () => {
+    const payload: Payload = {
+      name: "client",
+      script: ".output/server/index.mjs",
+      cwd: CWD,
+      interpreter: NODE,
+      interpreter_args: ["--env-file=.env"],
+    };
+    expect(issues(payload)).toEqual(["interpreter_args"]);
+  });
+
+  test("accepts an allowlisted pattern flag when configured", () => {
+    const payload: Payload = {
+      name: "api",
+      script: "server.js",
+      cwd: CWD,
+      interpreter: NODE,
+      interpreter_args: ["--max-old-space-size=512"],
+    };
+    expect(
+      inspect("start", payload, {
+        interpreterFlags: { node: [{ kind: "pattern", pattern: /^--max-old-space-size=\d+$/ }] },
+      }).map((issue) => issue.field),
+    ).toEqual([]);
   });
 
   test("returns no issues for commands not yet inspected (e.g. stop)", () => {
@@ -176,6 +206,33 @@ describe("start inspection", () => {
     expect(issues(payload)).toEqual(["min_uptime"]);
   });
 
+  test("accepts duration strings and milliseconds for the other duration fields", () => {
+    expect(
+      issues({
+        name: "api",
+        script: "server.js",
+        cwd: CWD,
+        interpreter: NODE,
+        restart_delay: "4s",
+        kill_timeout: "5s",
+        watch_delay: 1000,
+      }),
+    ).toEqual([]);
+  });
+
+  test("flags malformed restart_delay, kill_timeout and watch_delay", () => {
+    const payload = {
+      name: "api",
+      script: "server.js",
+      cwd: CWD,
+      interpreter: NODE,
+      restart_delay: "soon",
+      kill_timeout: "later",
+      watch_delay: "nope",
+    };
+    expect(runtimeIssues(payload)).toEqual(["restart_delay", "kill_timeout", "watch_delay"]);
+  });
+
   test("flags negative instances", () => {
     const payload = {
       name: "api",
@@ -220,14 +277,26 @@ describe("start inspection", () => {
     expect(issues(payload)).toEqual([]);
   });
 
-  test("rejects an unrecognized interpreter executable", () => {
+  test("accepts any absolute interpreter path (agent is runtime-agnostic)", () => {
     const payload: Payload = {
       name: "api",
       script: "server.js",
       cwd: CWD,
       interpreter: "C:\\Windows\\System32\\cmd.exe",
     };
-    expect(issues(payload)).toContain("interpreter");
+    expect(issues(payload)).toEqual([]);
+  });
+
+  test("rejects an interpreter outside the configured interpreter roots", () => {
+    const payload: Payload = {
+      name: "api",
+      script: "server.js",
+      cwd: CWD,
+      interpreter: NODE,
+    };
+    expect(
+      inspect("start", payload, { interpreterRoots: ["C:\\other"] }).map((issue) => issue.field),
+    ).toEqual(["interpreter"]);
   });
 
   test("rejects interpreter flags that can execute code", () => {
@@ -238,7 +307,16 @@ describe("start inspection", () => {
       interpreter: NODE,
       interpreter_args: ["--require=./evil.js"],
     };
-    expect(issues(payload)).toEqual(["interpreter_args"]);
+    expect(
+      inspect("start", payload, {
+        interpreterFlags: {
+          node: [
+            { kind: "pattern", pattern: /^--max-old-space-size=\d+$/ },
+            { kind: "path", flag: "--env-file" },
+          ],
+        },
+      }).map((issue) => issue.field),
+    ).toEqual(["interpreter_args"]);
   });
 
   test("rejects an env-file outside cwd", () => {
@@ -249,7 +327,11 @@ describe("start inspection", () => {
       interpreter: NODE,
       interpreter_args: ["--env-file=C:\\outside\\.env"],
     };
-    expect(issues(payload)).toEqual(["interpreter_args"]);
+    expect(
+      inspect("start", payload, {
+        interpreterFlags: { node: [{ kind: "path", flag: "--env-file" }] },
+      }).map((issue) => issue.field),
+    ).toEqual(["interpreter_args"]);
   });
 
   test("rejects cwd with '..' segments", () => {
