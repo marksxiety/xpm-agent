@@ -149,6 +149,8 @@ export class ProcessController {
     const { options, issues } = sanitizeProcessConfig(payload as unknown as SanitizeInput, {
       appRoots: config.APP_ROOTS,
       agentDir: process.cwd(),
+      interpreterRoots: config.INTERPRETER_ROOTS,
+      interpreterFlags: config.INTERPRETER_FLAGS,
     });
     if (options === null) {
       return respond("Invalid process configuration", issues, {
