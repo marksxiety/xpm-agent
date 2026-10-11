@@ -126,10 +126,10 @@ export const StartPayload = t.Object({
       "Time the app must stay up before its start counts as stable (resetting the unstable-restart counter). A number is milliseconds; strings accept durations like `'10s'`, `'500ms'`, `'2m'`, `'1h'`, or a bare number string. Defaults to `1000` (pm2 built-in). The agent normalizes strings to milliseconds before `pm2.start` because PM2 does numeric math on this value — a raw string would silently disable unstable-restart counting.",
     examples: ["10s", 10000],
   })),
-  restart_delay: t.Optional(t.Number({
+  restart_delay: t.Optional(t.Union([t.Number(), t.String()], {
     description:
-      "Delay in milliseconds before restarting a crashed app, so rapid crash loops don't spike CPU. No pm2 default (restarts immediately).",
-    examples: [4000],
+      "Delay before restarting a crashed app, so rapid crash loops don't spike CPU. A number is milliseconds; strings accept durations like `'10s'`, `'500ms'`, `'2m'` and are normalized to milliseconds. No pm2 default (restarts immediately).",
+    examples: [4000, "10s"],
   })),
   max_memory_restart: t.Optional(t.Union([t.String(), t.Number()], {
     description:
@@ -141,16 +141,16 @@ export const StartPayload = t.Object({
       "Environment variable auto-incremented per forked instance (e.g. `PORT` with `env.PORT` set assigns 8000, 8001, … so ports don't collide). No pm2 default.",
     examples: ["PORT"],
   })),
-  kill_timeout: t.Optional(t.Number({
+  kill_timeout: t.Optional(t.Union([t.Number(), t.String()], {
     description:
-      "Time in milliseconds PM2 waits after sending the stop signal for the app to exit gracefully before force-killing it. Defaults to `1600` (pm2 built-in).",
-    examples: [5000],
+      "Time PM2 waits after sending the stop signal for the app to exit gracefully before force-killing it. A number is milliseconds; duration strings like `'5s'` are normalized to milliseconds. Defaults to `1600` (pm2 built-in).",
+    examples: [5000, "5s"],
   })),
   windowsHide: t.Optional(t.Boolean({
     description:
-      "Hide the process console window on Windows. Defaults to `false` (pm2 built-in). Recommended `true` on Windows hosts to avoid a console window per spawned process.",
+      "Hide the process console window on Windows. Defaults to `true` so a console window is not spawned per process on Windows hosts.",
     examples: [true, false],
-    default: false,
+    default: true,
   })),
   env: t.Optional(t.Record(t.String(), t.String(), {
     description:
@@ -169,10 +169,10 @@ export const StartPayload = t.Object({
       "Paths/glob patterns excluded from `watch`. No pm2 default. Recommended: `['node_modules', 'logs', '*.log']` when `watch` is enabled — otherwise pm2 restarts on its own log writes.",
     examples: [["node_modules", "logs", "*.log"]],
   })),
-  watch_delay: t.Optional(t.Number({
+  watch_delay: t.Optional(t.Union([t.Number(), t.String()], {
     description:
-      "Delay in milliseconds before restarting a watched process after a file change. PM2 has no default — restarts fire immediately on change.",
-    examples: [1000, 5000],
+      "Delay before restarting a watched process after a file change. A number is milliseconds; duration strings like `'1s'` are normalized to milliseconds. PM2 has no default — restarts fire immediately on change.",
+    examples: [1000, "1s"],
   })),
   cron_restart: t.Optional(t.String({
     description:
