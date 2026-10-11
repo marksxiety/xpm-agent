@@ -646,6 +646,45 @@ describe("pm2 start route", () => {
         expect(body.code).toBe("PM2_DAEMON_UNAVAILABLE");
         expect(body.message).toBe("Cannot connect to PM2 daemon");
     });
+    test("returns 409 when a process with the same name and namespace already exists", async () => {
+        resetState();
+        state.list = [{ pm_id: 7, name: "my-app", pm2_env: { namespace: "example" } as ProcessDescription["pm2_env"] }];
+
+        const PAYLOAD: StartOptions = {
+            name: "my-app",
+            namespace: "example",
+            cwd: "C:\\Example\\Application",
+            script: ".output/server/index.mjs",
+            interpreter: "C:\\Program Files\\nodejs\\node.exe"
+        };
+
+        const { status, body } = await postStart(PAYLOAD);
+
+        expect(status).toBe(409);
+        expect(body.success).toBe(false);
+        expect(body.code).toBe("PROCESS_NAME_CONFLICT");
+        expect(body.info).toEqual({ pm_id: 7, name: "my-app", namespace: "example" });
+    });
+
+    test("returns 409 when the process name differs only by letter case (uppercase)", async () => {
+        resetState();
+        state.list = [{ pm_id: 7, name: "my-app", pm2_env: { namespace: "example" } as ProcessDescription["pm2_env"] }];
+
+        const PAYLOAD: StartOptions = {
+            name: "MY-APP",
+            namespace: "example",
+            cwd: "C:\\Example\\Application",
+            script: ".output/server/index.mjs",
+            interpreter: "C:\\Program Files\\nodejs\\node.exe",
+        };
+
+        const { status, body } = await postStart(PAYLOAD);
+
+        expect(status).toBe(409);
+        expect(body.success).toBe(false);
+        expect(body.code).toBe("PROCESS_NAME_CONFLICT");
+        expect(body.info).toEqual({ pm_id: 7, name: "my-app", namespace: "example" });
+    });
 
     const UNKNOWN_KEYS: Array<[string, Record<string, unknown>]> = [
         ["uid", { uid: 1000 }],
