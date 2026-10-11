@@ -116,7 +116,15 @@ export class ProcessController {
     const processDescriptions = await this.withPM2<ProcessDescription[]>((callback) =>
       pm2.list((listError, list) => callback(listError, list ?? [])),
     );
-    const existingProcess = processDescriptions.find((process) => process.name === name);
+
+    // PM2's default is case-insensitive for process names, so we normalize the name to lowercase for comparison.
+    // Note that this may not be the same behavior as PM2's internal name matching, but it is a safety precaution because PM2 accepts name
+    // as the identifer for operations like stop/restart/delete, and we want to avoid accidentally stopping/restarting/deleting the wrong process.
+    const normalized = name.trim().toLowerCase();
+    const existingProcess = processDescriptions.find(
+      (process) => process.name?.toLowerCase() === normalized
+    );
+
     if (!existingProcess) return null;
     const summary = summarizeProcess(existingProcess);
     return { pm_id: summary.pm_id, name: summary.name, namespace: summary.namespace };
