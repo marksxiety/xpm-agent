@@ -474,18 +474,19 @@ describe("pm2 start route", () => {
         expect(body.success).toBe(true);
     });
 
-    test("normalizes min_uptime and passes the advanced restart fields through to pm2", async () => {
+    test("normalizes every duration and passes the advanced fields through to pm2", async () => {
         resetState();
         state.started = [{ pm_id: 3, name: "my-app" }];
 
         const { status } = await postStart({
             ...VALID_PAYLOAD,
             min_uptime: "10s",
-            restart_delay: 4000,
+            restart_delay: "4s",
             max_memory_restart: "500M",
             increment_var: "PORT",
             env: { PORT: "3000" },
-            kill_timeout: 5000,
+            kill_timeout: "5s",
+            watch_delay: "1s",
         });
 
         expect(status).toBe(200);
@@ -494,6 +495,17 @@ describe("pm2 start route", () => {
         expect(state.startOpts?.max_memory_restart).toBe("500M");
         expect(state.startOpts?.increment_var).toBe("PORT");
         expect(state.startOpts?.kill_timeout).toBe(5000);
+        expect(state.startOpts?.watch_delay).toBe(1000);
+    });
+
+    test("defaults windowsHide to true when the payload omits it", async () => {
+        resetState();
+        state.started = [{ pm_id: 4, name: "my-app" }];
+
+        const { status } = await postStart({ ...VALID_PAYLOAD });
+
+        expect(status).toBe(200);
+        expect(state.startOpts?.windowsHide).toBe(true);
     });
 
     test("returns 422 when min_uptime is not a duration", async () => {
@@ -654,7 +666,7 @@ describe("pm2 start route", () => {
     const REJECTED_CONFIGS: Array<[string, Record<string, unknown>]> = [
         ["a relative cwd", { cwd: "relative\\dir" }],
         ["a cwd with '..' segments", { cwd: "C:\\apps\\..\\windows" }],
-        ["a non-profile interpreter", { interpreter: "C:\\Windows\\System32\\cmd.exe" }],
+        ["a bare (non-absolute) interpreter", { interpreter: "node" }],
         ["an env-file outside cwd", { interpreter_args: ["--env-file=C:\\outside\\.env"] }],
         ["a --require flag", { interpreter_args: ["--require=./evil.js"] }],
         ["a reserved env key", { env: { pm_id: "0" } }],
