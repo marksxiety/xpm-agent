@@ -108,8 +108,8 @@ What the agent enforces:
 - `cwd` is required, absolute, free of `..` segments, never the agent's own directory, and inside `APP_ROOTS` when that allowlist is configured.
 - `exec_mode` is always `fork` with `instances: 1` — PM2 cluster workers fork from the daemon and would inherit its environment.
 - The child environment is exactly the payload `env` plus PM2 runtime metadata. Reserved PM2 keys and runtime loader options (`NODE_OPTIONS`, `BUN_OPTIONS`, `NODE_PATH`, `PYTHONSTARTUP`/`PYTHONPATH`, `PHPRC`, `PHP_INI_SCAN_DIR`, `LD_PRELOAD`) are rejected with `422`.
-- Interpreter executables must be a recognized runtime (`node`, `bun`, `php`, `python`, `go`); `"none"` is allowed for bare binaries/executables.
-- `interpreter_args` are allowlisted per runtime: `--max-old-space-size=<n>` and `--env-file` pointing inside `cwd` (Node/Bun), `-O/-OO/-u/-B` (Python). Everything else is rejected.
+- Interpreter executables must be an absolute path (for the declared `targetOs`) or `"none"` for bare binaries. The agent is runtime-agnostic: it does not validate the language, and optionally restricts executables to `INTERPRETER_ROOTS`.
+- `interpreter_args` are allowlisted by the server's configured interpreter flags (`INTERPRETER_FLAGS`); until an interpreter is configured, its `interpreter_args` are rejected. `path` rules must resolve inside `cwd`.
 - `name`/`namespace` are restricted to `^[A-Za-z0-9._-]{1,64}$`; the agent's own processes (`xpm-agent`/`xpm-client`/`xpm-server` in the `XPM` namespace) cannot be started, stopped, restarted, reloaded, or deleted. Read-only `describe`/`logs` and `flush` are allowed. If the guard cannot inspect a target on a mutating route, the request fails closed with `503`.
 - Responses never expose `pm2_env.env` or `filter_env`.
 
