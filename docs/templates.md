@@ -220,7 +220,7 @@ Run a Laravel app through its Artisan CLI (`php artisan serve`).
 
 - No inversion is needed (unlike the PHP `php -S` recipe): `artisan` is a real entrypoint script, so the normal `interpreter <script> <args>` order already yields `php artisan serve ...`.
 - `script` is relative and PM2 resolves it against `cwd` — set `cwd` to the Laravel project root (the folder containing `artisan`).
-- `artisan` is a recognized entrypoint convention: the config guide requires a PHP interpreter path and a subcommand in `args`; `interpreter_args` is rejected for PHP.
+- The agent is runtime-agnostic and does not special-case `artisan` — point `interpreter` at `php.exe` and pass the subcommand (`serve`) in `args` yourself.
 - `artisan serve` boots PHP's built-in server as a child process and reloads it when `.env` changes — it is Laravel's dev server. For production, prefer php-fpm behind nginx, or supervise `php artisan queue:work` / `php artisan schedule:work` as separate long-running processes.
 
 ---
