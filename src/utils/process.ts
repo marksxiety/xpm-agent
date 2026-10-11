@@ -1,7 +1,6 @@
 import type { ProcessDescription, Proc } from "pm2";
 import type { ProcessDescriptionDetails, ProcessSummary } from "../types";
 import { getServerIpv4 } from "./network"
-import { isNodeFamilyInterpreter } from "./inspect";
 
 interface ProcessEnvironment {
   status?: string;
@@ -71,22 +70,22 @@ function toIsoString(createdAt: number | undefined): string | null {
 
 export function describeProcessDetails(processDescription: ProcessDescription): ProcessDescriptionDetails {
   const processEnvironment = processDescription.pm2_env as ProcessEnvironment | undefined;
-  // Node/Bun are the only runtimes that report node metadata (and the only ones
-  // where PM2's package.json version lookup is meaningful).
-  const isNodeFamily = isNodeFamilyInterpreter(processEnvironment?.exec_interpreter);
 
   return {
     summary: summarizeProcess(processDescription),
     describe: {
-      version: isNodeFamily ? processEnvironment?.version ?? null : null,
+      // The agent is runtime-agnostic: it does not decide which fields are
+      // "Node-only". PM2 only populates node_version/version/node_env for the
+      // runs that have them, so any interpreter gets whatever is present.
+      version: processEnvironment?.version ?? null,
       script_path: processEnvironment?.pm_exec_path ?? null,
       script_args: processEnvironment?.args ?? null,
       error_log_path: processEnvironment?.pm_err_log_path ?? null,
       out_log_path: processEnvironment?.pm_out_log_path ?? null,
       pid_path: processEnvironment?.pm_pid_path ?? null,
       interpreter_args: processEnvironment?.node_args?.length ? processEnvironment.node_args : null,
-      node_version: isNodeFamily ? processEnvironment?.node_version ?? null : null,
-      node_env: isNodeFamily ? processEnvironment?.env?.NODE_ENV ?? null : null,
+      node_version: processEnvironment?.node_version ?? null,
+      node_env: processEnvironment?.env?.NODE_ENV ?? null,
       created_at: toIsoString(processEnvironment?.created_at),
       ...(processEnvironment?.pm_log_path !== undefined ? { entire_log_path: processEnvironment.pm_log_path } : {}),
       ...(processEnvironment?.cron_restart !== undefined ? { cron_restart: processEnvironment.cron_restart } : {}),
