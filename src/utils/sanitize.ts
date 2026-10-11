@@ -75,7 +75,15 @@ export function sanitizeProcessConfig(
   // the sanitized value.
   const sanitizedEnv = { ...env, namespace };
 
+  // Durations are validated by inspectStart above; normalize every one to
+  // milliseconds because PM2 does numeric math on them.
   const minUptime = payload.min_uptime === undefined ? undefined : parseDurationMs(payload.min_uptime);
+  const restartDelay =
+    payload.restart_delay === undefined ? undefined : parseDurationMs(payload.restart_delay);
+  const killTimeout =
+    payload.kill_timeout === undefined ? undefined : parseDurationMs(payload.kill_timeout);
+  const watchDelay =
+    payload.watch_delay === undefined ? undefined : parseDurationMs(payload.watch_delay);
 
   // PM2 evaluates `unstable_restarts >= max_restarts` on every exit, so 0 marks
   // the app errored immediately (even on a manual stop). autorestart:false is
@@ -95,20 +103,21 @@ export function sanitizeProcessConfig(
     env: sanitizedEnv,
     filter_env: denyInheritedEnv(),
     time: true,
+    // Defaults to hiding the console window on Windows unless explicitly disabled.
+    windowsHide: payload.windowsHide ?? true,
   };
 
   if (payload.args !== undefined) options.args = payload.args;
   if (payload.interpreter_args !== undefined) options.interpreter_args = payload.interpreter_args;
   if (payload.autorestart !== undefined) options.autorestart = payload.autorestart;
-  if (payload.restart_delay !== undefined) options.restart_delay = payload.restart_delay;
   if (payload.max_memory_restart !== undefined) options.max_memory_restart = payload.max_memory_restart;
   if (payload.increment_var !== undefined) options.increment_var = payload.increment_var;
-  if (payload.kill_timeout !== undefined) options.kill_timeout = payload.kill_timeout;
-  if (payload.windowsHide !== undefined) options.windowsHide = payload.windowsHide;
   if (payload.watch !== undefined) options.watch = payload.watch;
   if (payload.ignore_watch !== undefined) options.ignore_watch = payload.ignore_watch;
-  if (payload.watch_delay !== undefined) options.watch_delay = payload.watch_delay;
   if (payload.cron_restart !== undefined) options.cron_restart = payload.cron_restart;
+  if (restartDelay !== undefined) options.restart_delay = restartDelay;
+  if (killTimeout !== undefined) options.kill_timeout = killTimeout;
+  if (watchDelay !== undefined) options.watch_delay = watchDelay;
   if (minUptime !== undefined) options.min_uptime = minUptime;
 
   if (disablesRestarts) {
