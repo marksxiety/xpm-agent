@@ -7,7 +7,7 @@ import { AGENT_NAME, AGENT_NAMESPACE } from "../pm2/cli";
 import type { StartIssue, FlagRule, InspectCommand } from "../types/inspect";
 
 type StartPayloadType = Static<typeof StartPayload>;
-type TargetOs = "win32" | "linux";
+export type TargetOs = "win32" | "linux";
 
 export interface InspectContext {
   /** Optional allowlist of absolute app roots the cwd must live under. */
@@ -57,10 +57,13 @@ function isInsideDirectory(parent: string, child: string, targetOs: TargetOs): b
   return rel !== "" && !rel.startsWith("..") && !api.isAbsolute(rel);
 }
 
-function isResolvedInside(parent: string, candidate: string, targetOs: TargetOs): boolean {
+export function resolveStartScriptPath(cwd: string, script: string, targetOs: TargetOs): string {
   const api = pathApiFor(targetOs);
-  const resolved = api.isAbsolute(candidate) ? candidate : api.resolve(parent, candidate);
-  return isInsideDirectory(parent, resolved, targetOs);
+  return api.isAbsolute(script) ? script : api.resolve(cwd, script);
+}
+
+function isResolvedInside(parent: string, candidate: string, targetOs: TargetOs): boolean {
+  return isInsideDirectory(parent, resolveStartScriptPath(parent, candidate, targetOs), targetOs);
 }
 
 /** "C:\Program Files\nodejs\node.exe" -> "node". Used only as a config lookup key. */
