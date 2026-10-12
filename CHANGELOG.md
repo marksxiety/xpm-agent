@@ -5,6 +5,14 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.1] - 2026-10-12
+
+### Added
+
+- Public `GET /` liveness endpoint returning `{ success, message, info: { pid } }`
+  with the agent's OS process id. It is documented in Swagger and excluded from
+  `AUTH_TOKEN` checks.
+
 ## [2.0.0] - 2026-10-11
 
 ### Breaking changes
@@ -291,6 +299,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Initial release: an ElysiaJS REST API exposing a PM2 service with `/pm2` CRUD routes for
   process management.
 
+[2.0.1]: https://github.com/marksxiety/xpm-agent/compare/v2.0.0...v2.0.1
 [2.0.0]: https://github.com/marksxiety/xpm-agent/compare/v1.2.0...v2.0.0
 [1.2.0]: https://github.com/marksxiety/xpm-agent/compare/v1.1.7...v1.2.0
 [1.1.7]: https://github.com/marksxiety/xpm-agent/compare/v1.1.6...v1.1.7
