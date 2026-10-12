@@ -1,131 +1,93 @@
 <h1 align="center">xpm-agent</h1>
 
+<p align="center"><b>PM2, but make it an API — one agent per server.</b></p>
+
 <p align="center">
   <a href="https://github.com/marksxiety/xpm-agent/actions/workflows/tests.yml"><img src="https://github.com/marksxiety/xpm-agent/actions/workflows/tests.yml/badge.svg" alt="Tests"></a>
   <a href="https://github.com/marksxiety/xpm-agent/actions/workflows/lint.yml"><img src="https://github.com/marksxiety/xpm-agent/actions/workflows/lint.yml/badge.svg" alt="Lint"></a>
   <a href="https://github.com/marksxiety/xpm-agent/actions/workflows/build.yml"><img src="https://github.com/marksxiety/xpm-agent/actions/workflows/build.yml/badge.svg" alt="Build"></a>
   <a href="https://github.com/marksxiety/xpm-agent/releases/latest"><img src="https://img.shields.io/github/v/release/marksxiety/xpm-agent?label=release&include_prereleases" alt="Release"></a>
-</p>
-
-<p align="center">
   <img src="https://img.shields.io/badge/platform-Windows%20only-0078D6" alt="Platform: Windows only">
   <img src="https://img.shields.io/badge/Bun-1.3.14-black?logo=bun&logoColor=white" alt="Bun 1.3.14">
   <img src="https://img.shields.io/badge/PM2-7.0.4-2B037A?logo=pm2&logoColor=white" alt="PM2 7.0.4">
 </p>
 
-<p align="center"><b>PM2, but make it an API — one agent per server.</b></p>
+A small [Bun](https://bun.sh) + [Elysia](https://elysiajs.com/) service that runs next to PM2 on each machine and exposes it over HTTP. Install one on every server and manage your whole fleet with plain HTTP requests, with no SSH sessions needed.
 
-<p align="center">xpm-agent is a <b>cross-server agent</b>: install it on every machine that runs PM2, and drive all of them from a single place — no SSH-ing in per server. This Bun + Elysia service is a <b>thin REST wrapper around PM2</b>. It exposes PM2's full lifecycle (list, start, stop, restart, reload, delete, flush, logs) as clean endpoints so ops scripts, dashboards, and automations can manage any server's processes like any other API.</p>
+> **⚠️ Use at your own risk.** xpm-agent can launch arbitrary scripts on the
+> machine it runs on, and it is provided as is, without warranty. Set
+> `AUTH_TOKEN` and restrict network access before exposing it beyond
+> localhost. See [SECURITY.md](./docs/SECURITY.md).
 
-> **PM2 does the real work.** This agent does not reimplement process management — it connects to PM2's daemon and relays your HTTP commands to it. PM2 handles daemonization, restarts, log rotation, and persistence; the agent just makes PM2 callable over HTTP.
+## Features
 
-> **Platform support: Windows only, for now.** Boot-time integration relies on `pm2-windows-startup`. Linux/macOS support isn't implemented yet.
+- **Full process lifecycle:** list, start, stop, restart, reload, delete
+- **Logs:** tail `out`/`error` logs and flush them
+- **Live metrics:** per-process CPU, memory, and restarts, plus host-level stats
+- **Safe by default:** optional bearer-token auth and guardrails on what can be launched
+- **Survives reboots:** runs under PM2 itself and registers with `pm2-windows-startup`
+- **Interactive API docs:** served at `/swagger`
 
-## Prerequisites
+## How it works
 
-- **Bun** — required. Runtime and package manager; built and tested on `1.3.14`.
-- **Node.js** — required for npm (used to run package scripts).
-- **PM2** — the process manager this agent wraps; pinned at `7.0.4` in `package.json`.
+The agent doesn't replace PM2. It connects to the PM2 daemon already running on the machine and relays your requests to it. PM2 still handles daemonization, restarts, log rotation, and persistence.
+> **Windows only, for now.** Boot-time startup relies on `pm2-windows-startup`. Linux/macOS is not yet supported.
 
-## Quickstart
-
-One-time setup (skip a step if it is already done):
-
-- **Install Bun** — skip if `bun --version` works. Do not re-run while Bun processes are running: the installer replaces `bun.exe` and fails if it is locked (e.g. the agent is live under PM2).
-
-  ```powershell
-  powershell -c "irm bun.sh/install.ps1 | iex"
-  ```
-
-- **Install PM2 globally** — skip if `pm2 -v` works. The boot task registered below runs a bare `pm2 resurrect`, so `pm2` must be on `PATH`.
-
-  ```cmd
-  bun install -g pm2
-  ```
-
-Then clone and start:
-
-```cmd
-git clone https://github.com/marksxiety/xpm-agent.git
-cd xpm-agent
-bun install
-bunx pm2-startup install
-if not exist .env copy .env.example .env
-if not exist .env.production copy .env.example .env.production
-bun run start
+```mermaid
+flowchart LR
+    Client -->|HTTP request| Guard
+    subgraph Agent["xpm-agent"]
+        Guard["1. Guard<br/>auth + payload checks"] --> Relay["2. Relay<br/>start / stop / restart / ..."]
+        Answer["3. Answer<br/>normalized JSON, no env values"]
+    end
+    Relay --> PM2["PM2 daemon"]
+    PM2 --> Procs["Your processes"]
+    PM2 --> Answer
+    Answer -->|JSON response| Client
 ```
 
-> `AUTH_TOKEN` is optional: set it in `.env`/`.env.production` whenever the port is reachable beyond localhost — `POST /pm2/start` executes code by design.
+## API
 
-> `bunx pm2-startup install` registers boot auto-start. It must run **after** `bun install` — the `pm2-startup` binary ships with the `pm2-windows-startup` dependency, not npm. Re-running it is safe; undo with `bunx pm2-startup uninstall`.
-
-Then verify it's up:
-
-```cmd
-curl http://localhost:<PORT>/pm2/health
-```
-
-See [SETUP.md](./docs/SETUP.md) for full configuration options.
-
-## Libraries
-
-- **[pm2](https://pm2.io/)** — the actual process manager. This agent is a wrapper around it: it connects to PM2's daemon and relays your HTTP commands; PM2 itself does the daemonization, restarts, and log rotation.
-- **[pm2-windows-startup](https://www.npmjs.com/package/pm2-windows-startup)** — boots PM2 (and your processes) automatically when Windows starts.
-- **[ElysiaJS](https://elysiajs.com/)** — the HTTP framework powering the REST endpoints.
-- **[@elysiajs/swagger](https://github.com/elysiajs/documentation)** — interactive API docs at `/swagger`.
-- **[systeminformation](https://systeminformation.io/)** — cross-platform host metrics (CPU usage, memory) behind `/pm2/system` and `/pm2/list?overview=true`.
-
-## Routes at a glance
+All routes are prefixed with `/pm2`. Interactive docs are served at `/swagger`. Full request/response details are in **[ROUTES.md](./docs/ROUTES.md)**.
 
 | Route | Method | Purpose |
 |---|---|---|
-| `/pm2/list` | GET | List all processes with live CPU/memory/restarts (optional `?overview=true`, `?logs=N`) |
-| `/pm2/system` | GET | Host-level metrics only (CPU usage, memory) |
-| `/pm2/health` | GET | API liveness check |
-| `/pm2/describe/:id` | GET | Details + code metrics for one process (`summary`, `describe`, `metrics`) |
+| `/pm2/health` | GET | Liveness check |
+| `/pm2/list` | GET | All processes with live CPU/memory/restarts (`?overview=true`, `?logs=N`) |
+| `/pm2/system` | GET | Host-level metrics (CPU, memory) |
+| `/pm2/describe/:id` | GET | Details and code metrics for one process |
 | `/pm2/start` | POST | Register and launch a new process |
-| `/pm2/stop/:id` | POST | Stop (keep registered) |
+| `/pm2/stop/:id` | POST | Stop, keeping it registered |
 | `/pm2/restart/:id` | POST | Kill and relaunch |
-| `/pm2/reload/:id` | POST | Graceful restart (fork mode falls back to a normal restart) |
+| `/pm2/reload/:id` | POST | Graceful restart (fork mode falls back to restart) |
 | `/pm2/delete/:id` | DELETE | Stop and remove permanently |
-| `/pm2/logs/:id` | GET | Tail a process's `out`/`error` logs (last N lines) |
+| `/pm2/logs/:id` | GET | Tail `out`/`error` logs (last N lines) |
 | `/pm2/flush/:id` | POST | Empty a process's log files |
 
-## Authentication
+## Security
 
-**Optional.** Set `AUTH_TOKEN` in `.env` (or `.env.production` when running in production) and every `/pm2/*` request must send `Authorization: Bearer <AUTH_TOKEN>` or it is rejected with `401`. Leave it empty to disable auth — fine for a strictly local/internal tool.
+`POST /pm2/start` launches an arbitrary script as the service account. Treat the agent as remote code execution by design and protect it like SSH access.
 
-> CORS only blocks browsers — curl, scripts, and servers bypass it entirely. Set `AUTH_TOKEN` whenever the agent runs on anything but a strictly localhost port; it is the only access control.
+| Scenario | Recommendation |
+|---|---|
+| Localhost only | Auth is optional |
+| Reachable beyond localhost | Set `AUTH_TOKEN` (requests must send `Authorization: Bearer <token>`) and add a firewall or reverse-proxy rule. CORS only restricts browsers, so the token is your real access control. |
 
-> **Breaking API changes:** `cwd` is now required, unknown payload keys are rejected with `422` (no silent stripping), and `exec_mode: 'cluster'` / `instances > 1` are rejected. Update xpm-client (send `cwd`, drop cluster, tolerate `422`) before upgrading an agent.
+**Guardrails on `/start`:** `cwd` must be absolute (and inside `APP_ROOTS` if set), children receive only the env you send, interpreter flags are allowlisted, the agent refuses to touch its own processes, and responses never include env values.
 
-## Security model
+**Known limits:** any process running as the service account can read stored env (`pm2 jlist`, plaintext `dump.pm2`), and there is no built-in IP allowlist. Run the agent as a dedicated account and restrict `%USERPROFILE%\.pm2` ACLs.
 
-`POST /pm2/start` launches an arbitrary script as the service account — treat the agent as remote code execution by design and protect it accordingly.
-
-What the agent enforces:
-
-- `cwd` is required, absolute, free of `..` segments, never the agent's own directory, and inside `APP_ROOTS` when that allowlist is configured.
-- `exec_mode` is always `fork` with `instances: 1` — PM2 cluster workers fork from the daemon and would inherit its environment.
-- The child environment is exactly the payload `env` plus PM2 runtime metadata. Reserved PM2 keys and runtime loader options (`NODE_OPTIONS`, `BUN_OPTIONS`, `NODE_PATH`, `PYTHONSTARTUP`/`PYTHONPATH`, `PHPRC`, `PHP_INI_SCAN_DIR`, `LD_PRELOAD`) are rejected with `422`.
-- Interpreter executables must be an absolute path (for the declared `targetOs`) or `"none"` for bare binaries. The agent is runtime-agnostic: it does not validate the language, and optionally restricts executables to `INTERPRETER_ROOTS`.
-- `interpreter_args` are allowlisted by the server's configured interpreter flags (`INTERPRETER_FLAGS`); until an interpreter is configured, its `interpreter_args` are rejected. `path` rules must resolve inside `cwd`.
-- `name`/`namespace` are restricted to `^[A-Za-z0-9._-]{1,64}$`; the agent's own processes (`xpm-agent`/`xpm-client`/`xpm-server` in the `XPM` namespace) cannot be started, stopped, restarted, reloaded, or deleted. Read-only `describe`/`logs` and `flush` are allowed. If the guard cannot inspect a target on a mutating route, the request fails closed with `503`.
-- Responses never expose `pm2_env.env` or `filter_env`.
-
-These allowlists stop accidental inheritance and casual abuse — they are **not** a hard boundary. A caller who can run an arbitrary script as the same OS user can read the agent's files directly. When the port is reachable beyond localhost, the boundary is `AUTH_TOKEN` plus OS-level isolation.
-
-### Known limits
-
-- **Same-user isolation:** children run as the service account. On Linux they can read `/proc/<pid>/environ`; on any OS `pm2 jlist` and `%USERPROFILE%\.pm2\dump.pm2` expose stored env values to the same user.
-- **`dump.pm2` is plaintext:** the agent auto-saves after start/stop/delete and the dump stores each app's `env` values and `filter_env` key names. Restrict it to the service account, e.g. `icacls "%USERPROFILE%\.pm2" /inheritance:r /grant:r "%USERNAME%:(OI)(CI)F"`.
-- **Daemon environment:** fork children do not inherit the daemon's env (proven by `src/tests/integration/start-isolation.test.ts` against a daemon carrying an extra secret). The daemon itself still inherits the agent's env when the agent starts it, and daemon-side `PM2_NODE_OPTIONS` is appended to every fork child's interpreter args — keep it unset and run the daemon as the service account.
-- **No IP allowlist:** add a firewall or reverse-proxy rule when the agent is reachable beyond localhost.
+Full threat model: **[SECURITY.md](./docs/SECURITY.md)**.
 
 ## Documentation
 
-| File | What it covers |
+| Doc | Covers |
 |---|---|
-| [SETUP.md](./docs/SETUP.md) | Install, configure, and run the service under PM2 |
-| [ROUTES.md](./docs/ROUTES.md) | Full API reference — routes, envelopes, language recipes |
-| [PM2 REFERENCE](./docs/PM2_payload_reference.md) | Every field accepted by `POST /pm2/start` |
+| [SETUP.md](./docs/SETUP.md) | Install, configure, and run under PM2 |
+| [ROUTES.md](./docs/ROUTES.md) | API reference, response envelopes, language recipes |
+| [SECURITY.md](./docs/SECURITY.md) | Auth, enforcement, allowlists, known limits |
+| [PM2_payload_reference.md](./docs/PM2_payload_reference.md) | Every field accepted by `POST /pm2/start` |
+
+## Built with
+
+[PM2](https://pm2.io/) · [pm2-windows-startup](https://www.npmjs.com/package/pm2-windows-startup) · [ElysiaJS](https://elysiajs.com/) · [@elysiajs/swagger](https://github.com/elysiajs/documentation) · [systeminformation](https://systeminformation.io/)
