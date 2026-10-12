@@ -1,6 +1,32 @@
-import { HostOverviewResponse } from "./schemas";
+import { AgentStatusResponse, HostOverviewResponse } from "./schemas";
 
 const systemRouteMeta = {
+  root: {
+    detail: {
+      summary: "Agent liveness banner",
+      description:
+        "Root endpoint confirming the agent process is up and reporting its OS process id. Public — no `AUTH_TOKEN` required, unlike the `/pm2/*` routes.",
+      tags: ["System"],
+      operationId: "getAgentStatus",
+      responses: {
+        200: {
+          description: "Agent status with its process id.",
+          content: {
+            "application/json": {
+              schema: AgentStatusResponse,
+              example: {
+                success: true,
+                message: "XPM agent is running",
+                info: {
+                  pid: 12345,
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  },
   health: {
     detail: {
       summary: "API health check",
