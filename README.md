@@ -48,10 +48,11 @@ flowchart LR
 
 ## API
 
-All routes are prefixed with `/pm2`. Interactive docs are served at `/swagger`. Full request/response details are in **[ROUTES.md](./docs/ROUTES.md)**.
+All PM2 routes are prefixed with `/pm2`. `GET /` is a public liveness banner (no auth). Interactive docs are served at `/swagger`. Full request/response details are in **[ROUTES.md](./docs/ROUTES.md)**.
 
 | Route | Method | Purpose |
 |---|---|---|
+| `/` | GET | Public liveness banner with the agent's process id |
 | `/pm2/health` | GET | Liveness check |
 | `/pm2/list` | GET | All processes with live CPU/memory/restarts (`?overview=true`, `?logs=N`) |
 | `/pm2/system` | GET | Host-level metrics (CPU, memory) |
