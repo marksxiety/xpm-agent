@@ -14,6 +14,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `--env-file` / `--max-old-space-size=<n>` (Node) or `-u`/`-O`/`-B` (Python) now receives
   `422` until those flags are configured.
 - `windowsHide` now defaults to `true` (previously `false`).
+- `cwd` is now required, unknown payload keys are rejected with `422` (no silent
+  stripping), and `exec_mode: 'cluster'` / `instances > 1` are rejected. Update
+  xpm-client (send `cwd`, drop cluster, tolerate `422`) before upgrading an agent.
 
 ### Added
 
