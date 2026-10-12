@@ -145,6 +145,22 @@ export const ProcessOverviewResponse: OpenAPIV3.SchemaObject = {
   },
 };
 
+export const AgentStatusResponse: OpenAPIV3.SchemaObject = {
+  type: "object",
+  required: ["success", "message", "info"],
+  properties: {
+    success: { type: "boolean" },
+    message: { type: "string" },
+    info: {
+      type: "object",
+      required: ["pid"],
+      properties: {
+        pid: { type: "number", description: "OS process id of the agent" },
+      },
+    },
+  },
+};
+
 export const HostOverviewResponse: OpenAPIV3.SchemaObject = {
   type: "object",
   required: ["success", "message", "info"],
