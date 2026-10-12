@@ -4,15 +4,17 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { sanitizeProcessConfigAsync, type SanitizeInput } from "../../utils/sanitize";
 import { verifyStartPaths } from "../../utils/paths";
+import type { TargetOs } from "../../utils/inspect";
 
-const NODE = "C:\\Program Files\\nodejs\\node.exe";
+const HOST_OS = process.platform as TargetOs;
 
 function payloadFor(cwd: string, script: string) {
   return {
     name: "my-app",
     cwd,
     script,
-    interpreter: NODE,
+    interpreter: process.execPath,
+    targetOs: HOST_OS,
   } as unknown as SanitizeInput;
 }
 
@@ -20,8 +22,8 @@ describe("verifyStartPaths (cwd vs script distinction)", () => {
   test("missing cwd reports field cwd and skips the script check", async () => {
     const missing = join(tmpdir(), `xpm-missing-${Date.now()}`);
     const issues = await verifyStartPaths(
-      { cwd: missing, script: "server.js", targetOs: process.platform as "win32" | "linux" },
-      { platform: process.platform },
+      { cwd: missing, script: "server.js", targetOs: HOST_OS },
+      { platform: HOST_OS },
     );
 
     expect(issues).toHaveLength(1);
@@ -35,8 +37,8 @@ describe("verifyStartPaths (cwd vs script distinction)", () => {
     await writeFile(fileAsCwd, "x");
     try {
       const issues = await verifyStartPaths(
-        { cwd: fileAsCwd, script: "server.js", targetOs: process.platform as "win32" | "linux" },
-        { platform: process.platform },
+        { cwd: fileAsCwd, script: "server.js", targetOs: HOST_OS },
+        { platform: HOST_OS },
       );
 
       expect(issues).toHaveLength(1);
@@ -50,8 +52,8 @@ describe("verifyStartPaths (cwd vs script distinction)", () => {
     const dir = await mkdtemp(join(tmpdir(), "xpm-good-cwd-"));
     try {
       const issues = await verifyStartPaths(
-        { cwd: dir, script: "does-not-exist.js", targetOs: process.platform as "win32" | "linux" },
-        { platform: process.platform },
+        { cwd: dir, script: "does-not-exist.js", targetOs: HOST_OS },
+        { platform: HOST_OS },
       );
 
       expect(issues).toHaveLength(1);
@@ -67,8 +69,8 @@ describe("verifyStartPaths (cwd vs script distinction)", () => {
     await writeFile(join(dir, "server.js"), "console.log(1)");
     try {
       const issues = await verifyStartPaths(
-        { cwd: dir, script: "server.js", targetOs: process.platform as "win32" | "linux" },
-        { platform: process.platform },
+        { cwd: dir, script: "server.js", targetOs: HOST_OS },
+        { platform: HOST_OS },
       );
 
       expect(issues).toEqual([]);
@@ -82,8 +84,8 @@ describe("verifyStartPaths (cwd vs script distinction)", () => {
     await mkdir(join(dir, "subdir"));
     try {
       const issues = await verifyStartPaths(
-        { cwd: dir, script: "subdir", targetOs: process.platform as "win32" | "linux" },
-        { platform: process.platform },
+        { cwd: dir, script: "subdir", targetOs: HOST_OS },
+        { platform: HOST_OS },
       );
 
       expect(issues).toHaveLength(1);
@@ -94,10 +96,10 @@ describe("verifyStartPaths (cwd vs script distinction)", () => {
   });
 
   test("skips the check when targetOs differs from the host", async () => {
-    const other = process.platform === "win32" ? "linux" : "win32";
+    const other: TargetOs = HOST_OS === "win32" ? "linux" : "win32";
     const issues = await verifyStartPaths(
-      { cwd: "/nonexistent-cwd", script: "server.js", targetOs: other as "win32" | "linux" },
-      { platform: process.platform },
+      { cwd: "/nonexistent-cwd", script: "server.js", targetOs: other },
+      { platform: HOST_OS },
     );
 
     expect(issues).toEqual([]);
