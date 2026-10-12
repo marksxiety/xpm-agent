@@ -1,4 +1,7 @@
-import { describe, expect, mock, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { ProcessDescription, StartOptions, Proc } from "pm2";
 import type { ApiResponse, ProcessSummary } from "../../types";
 import { StartIssue } from "../../types/inspect";
@@ -40,29 +43,42 @@ mock.module("pm2", () => ({
     },
 }));
 
-// Filesystem existence checks hit the real disk; existing start tests use a
-// fixture cwd that does not exist, so stub the path phase here. Real
-// cwd-vs-script behavior is covered in paths.test.ts.
-mock.module("../../utils/paths", () => ({
-    verifyStartPaths: async () => [],
-}));
-
+// The paths phase stats the real filesystem, so route tests need a real cwd
+// with a real script. A global mock.module("../../utils/paths") leaked into
+// other test files, so the fixture below replaces it. Real cwd-vs-script
+// behavior is covered in paths.test.ts.
 const { processController } = await import("../../controller/process.controller");
 const { pm2Connection } = await import("../../pm2/client");
 const { createApp } = await import("../../index");
 
-const VALID_PAYLOAD: StartOptions = {
-    name: "my-app",
-    namespace: "example",
-    cwd: "C:\\Example\\Application",
-    script: ".output/server/index.mjs",
-    args: ["--port", "3000"],
-    interpreter: "C:\\Program Files\\nodejs\\node.exe",
-    exec_mode: "fork",
-    instances: 1,
-    autorestart: true,
-    watch: false,
-};
+let fixtureDir: string;
+let VALID_PAYLOAD: StartOptions;
+
+beforeAll(async () => {
+    // The suite's .env sets AUTH_TOKEN; the route tests post without one, so
+    // clear it here instead of relying on auth.test.ts running first.
+    delete process.env.AUTH_TOKEN;
+
+    fixtureDir = await mkdtemp(join(tmpdir(), "xpm-start-"));
+    await writeFile(join(fixtureDir, "server.js"), "console.log(1)");
+
+    VALID_PAYLOAD = {
+        name: "my-app",
+        namespace: "example",
+        cwd: fixtureDir,
+        script: "server.js",
+        args: ["--port", "3000"],
+        interpreter: "C:\\Program Files\\nodejs\\node.exe",
+        exec_mode: "fork",
+        instances: 1,
+        autorestart: true,
+        watch: false,
+    };
+});
+
+afterAll(async () => {
+    await rm(fixtureDir, { recursive: true, force: true });
+});
 
 function resetState() {
     state.started = [];
@@ -464,7 +480,14 @@ describe("pm2 start route", () => {
         state.started = [{ pm_id: 3, name: "my-app" }];
         state.listAfterStart = [{ pm_id: 3, name: "my-app" }];
 
-        const { status, body } = await postStart({ ...VALID_PAYLOAD, targetOs: "linux", cwd: "/srv/example", interpreter: "/usr/bin/node" });
+        const { status, body } = await postStart({
+            ...VALID_PAYLOAD,
+            targetOs: "linux",
+            // On Windows the check is skipped (foreign OS); on Linux it runs,
+            // so the cwd must exist there and stay POSIX-absolute.
+            cwd: process.platform === "win32" ? "/srv/example" : fixtureDir,
+            interpreter: "/usr/bin/node",
+        });
 
         expect(status).toBe(200);
         expect(body.success).toBe(true);
@@ -653,8 +676,8 @@ describe("pm2 start route", () => {
         const PAYLOAD: StartOptions = {
             name: "my-app",
             namespace: "example",
-            cwd: "C:\\Example\\Application",
-            script: ".output/server/index.mjs",
+            cwd: fixtureDir,
+            script: "server.js",
             interpreter: "C:\\Program Files\\nodejs\\node.exe"
         };
 
@@ -673,8 +696,8 @@ describe("pm2 start route", () => {
         const PAYLOAD: StartOptions = {
             name: "MY-APP",
             namespace: "example",
-            cwd: "C:\\Example\\Application",
-            script: ".output/server/index.mjs",
+            cwd: fixtureDir,
+            script: "server.js",
             interpreter: "C:\\Program Files\\nodejs\\node.exe",
         };
 
