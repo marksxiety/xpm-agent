@@ -73,6 +73,7 @@ export const createApp = () =>
         },
       }),
     )
+    .get("/", () => systemController.getRootStatus(), getSystemRouteMeta("root"))
     .use(pm2Routes);
 
 const normalizePath = (filePath: string) => filePath.replaceAll("\\", "/").toLowerCase();
