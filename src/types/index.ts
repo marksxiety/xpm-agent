@@ -69,6 +69,12 @@ export interface ApiResponse<T = unknown> {
     status: number;
 }
 
+export interface AgentStatusResponse {
+    success: boolean;
+    message: string;
+    info: { pid: number };
+}
+
 export interface SystemOverview {
     cpu: {
         usagePercent: number;
