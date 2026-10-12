@@ -25,6 +25,9 @@ export const pm2Routes = new Elysia({ prefix: "/pm2" })
   })
   .onError(({ code, error }) => formatElysiaErrorResponse(code, error))
   .onRequest(({ request, set }) => {
+    // onRequest from a used instance runs for every route on the app, so skip
+    // non-/pm2 paths explicitly to keep the public root route unauthenticated.
+    if (!new URL(request.url).pathname.startsWith("/pm2/")) return;
     if (config.AUTH_TOKEN && !isValidBearerToken(request.headers.get("Authorization"), config.AUTH_TOKEN)) {
       set.status = 401;
       return respond("Unauthorized: missing or invalid authentication token", null, {
