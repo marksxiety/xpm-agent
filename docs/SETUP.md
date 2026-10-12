@@ -116,4 +116,4 @@ After running, `pm2 save` (from step 4) ensures the process list is restored at 
   ```
 
 - Keep `PM2_NODE_OPTIONS` unset: PM2 appends it to every fork child's interpreter args. Fork children do not otherwise inherit the daemon's env — `src/tests/integration/start-isolation.test.ts` proves it with a canary secret.
-- See the README's [Security model](../README.md#security-model) for the full allowlist/threat-model description.
+- See [SECURITY.md](./SECURITY.md) for the full allowlist and threat model.
