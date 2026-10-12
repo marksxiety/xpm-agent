@@ -4,7 +4,7 @@ Base URL: `http://localhost:4000/pm2` (override port via `SERVER_PORT` env)
 
 Interactive docs: [Swagger UI](http://localhost:4000/swagger)
 
-> **Authentication:** when the `AUTH_TOKEN` env var is set, every request must include `Authorization: Bearer <AUTH_TOKEN>`. Missing or invalid tokens are rejected with `401` (`UNAUTHORIZED`). When `AUTH_TOKEN` is empty/omitted, auth is disabled.
+> **Authentication:** when the `AUTH_TOKEN` env var is set, every `/pm2/*` request must include `Authorization: Bearer <AUTH_TOKEN>`. Missing or invalid tokens are rejected with `401` (`UNAUTHORIZED`). When `AUTH_TOKEN` is empty/omitted, auth is disabled. `GET /` is public and never requires a token.
 
 ---
 
@@ -36,6 +36,26 @@ Every response — success or error — uses the same shape:
 ---
 
 ## Routes
+
+### GET /
+
+Public liveness banner for the agent itself (not the PM2 processes). Requires no authentication, even when `AUTH_TOKEN` is set.
+
+**Request:** no params, no body
+
+**Response `200`:**
+
+```json
+{
+  "success": true,
+  "message": "XPM agent is running",
+  "info": {
+    "pid": 12345
+  }
+}
+```
+
+---
 
 ### GET /list
 
