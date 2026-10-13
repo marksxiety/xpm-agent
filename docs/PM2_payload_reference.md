@@ -8,7 +8,7 @@ Reference for a PM2 ecosystem-style process payload. **`script`, `cwd`, and `int
 
 Identifies the process and defines how its entry script is invoked: the file path, display name, working directory, arguments, and interpreter.
 
-- `script` — **required** — entry file to run; must resolve inside `cwd`.
+- `script` — **required** — entry file to run. Relative paths resolve against `cwd`; absolute paths are accepted as-is and may live outside `cwd` (e.g. an interpreter binary such as `C:\php\php.exe`). A missing script is reported by PM2 as `400 SCRIPT_NOT_FOUND`.
 - `name` — process name shown in `pm2 list`; must match `^[A-Za-z0-9._-]{1,64}$`.
 - `cwd` — **required** — working directory for the process. **Must be an absolute path** matching `targetOs`, without `..` segments, not the agent's own directory, and inside `APP_ROOTS` when that allowlist is configured.
 - `args` — arguments passed to the script (array or string).
