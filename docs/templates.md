@@ -190,6 +190,7 @@ Run PHP's built-in web server (`php -S`) for a plain PHP app. For Laravel, see t
 - Why the inversion: PM2 always launches `interpreter <script> <args>`. With `interpreter: "php.exe"` and `script: "server.php"` the `-S` flag would land **after** the script (`php server.php -S ...`) and no server would start. Putting `php.exe` in `script` with `interpreter: "none"` yields the real `php -S 127.0.0.1:8080 -t public`.
 - Add a router as the last argument when needed: `["-S", "127.0.0.1:8080", "-t", "public", "server.php"]` (path relative to `cwd` or absolute).
 - `interpreter_args` is rejected for PHP — the config guide returns `422 INVALID_PROCESS_CONFIGURATION`.
+- `script` may be absolute and outside `cwd` (the `php.exe` path above is) — the agent accepts it as-is; PM2 resolves relative scripts against `cwd`.
 
 ---
 
