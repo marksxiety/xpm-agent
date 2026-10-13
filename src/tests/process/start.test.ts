@@ -116,6 +116,23 @@ describe("pm2 start service", () => {
         expect(state.startOpts?.time).toBe(true);
     });
 
+    test("accepts an absolute script outside cwd (interpreter-as-script recipe)", async () => {
+        resetState();
+        state.started = [{ name: "php-web" }];
+        const phpBinary = join(tmpdir(), "xpm-php.exe");
+
+        const response = await processController.startProcess({
+            ...VALID_PAYLOAD,
+            name: "php-web",
+            script: phpBinary,
+            interpreter: "none",
+        });
+
+        expect(response.success).toBe(true);
+        expect(state.startOpts?.script).toBe(phpBinary);
+        expect(state.startOpts?.interpreter).toBe("none");
+    });
+
     test("auto-saves (dump) the process list after a successful start", async () => {
         resetState();
         state.started = [{ name: "my-app" }];
@@ -746,7 +763,6 @@ describe("pm2 start route", () => {
         ["an invalid increment_var", { increment_var: "1BAD", env: { "1BAD": "1" } }],
         ["an increment_var missing from env", { increment_var: "PORT", env: { FOO: "bar" } }],
         ["a script with whitespace", { script: "my app.js" }],
-        ["a script outside cwd", { script: "..\\evil.js" }],
     ];
 
     for (const [label, extra] of REJECTED_CONFIGS) {
