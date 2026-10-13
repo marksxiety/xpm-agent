@@ -5,6 +5,26 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.2] - 2026-10-13
+
+### Fixed
+
+- `script` is no longer rejected for resolving outside `cwd`, unblocking the documented
+  interpreter-as-script recipes (`php -S` with `script: "C:\php\php.exe"`, `go run` with
+  `go.exe`). Absolute script paths are passed to PM2 as-is.
+
+### Changed
+
+- Removed the pre-flight script existence check. A missing script no longer returns `422`
+  with `field: "script"`; PM2's own `Script not found` is translated to
+  `400 SCRIPT_NOT_FOUND` as before. `cwd` existence is still validated and reported as
+  `422 field: "cwd"`.
+
+### Documentation
+
+- Updated `ROUTES.md`, `PM2_payload_reference.md`, `SECURITY.md`, and route metadata to
+  reflect that script resolution and existence are PM2's responsibility.
+
 ## [2.0.1] - 2026-10-12
 
 ### Added
@@ -299,6 +319,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Initial release: an ElysiaJS REST API exposing a PM2 service with `/pm2` CRUD routes for
   process management.
 
+[2.0.2]: https://github.com/marksxiety/xpm-agent/compare/v2.0.1...v2.0.2
 [2.0.1]: https://github.com/marksxiety/xpm-agent/compare/v2.0.0...v2.0.1
 [2.0.0]: https://github.com/marksxiety/xpm-agent/compare/v1.2.0...v2.0.0
 [1.2.0]: https://github.com/marksxiety/xpm-agent/compare/v1.1.7...v1.2.0
