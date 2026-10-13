@@ -68,10 +68,9 @@ export function sanitizeProcessConfig(
 
 /**
  * Async variant used by `POST /pm2/start`: runs the sync shape checks first,
- * then verifies `cwd` exists (directory) and the resolved `script` exists
- * (file). A missing `cwd` reports `field: "cwd"` and skips the script check;
- * otherwise a missing script reports `field: "script"`. Skipped on
- * `targetOs`/host mismatch (see `verifyStartPaths`).
+ * then verifies `cwd` exists as a directory. A missing `cwd` reports
+ * `field: "cwd"`. Skipped on `targetOs`/host mismatch (see
+ * `verifyStartPaths`). Script resolution and existence are left to PM2.
  */
 export async function sanitizeProcessConfigAsync(
   payload: StartPayloadType,
