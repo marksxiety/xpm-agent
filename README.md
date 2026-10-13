@@ -7,6 +7,9 @@
   <a href="https://github.com/marksxiety/xpm-agent/actions/workflows/lint.yml"><img src="https://github.com/marksxiety/xpm-agent/actions/workflows/lint.yml/badge.svg" alt="Lint"></a>
   <a href="https://github.com/marksxiety/xpm-agent/actions/workflows/build.yml"><img src="https://github.com/marksxiety/xpm-agent/actions/workflows/build.yml/badge.svg" alt="Build"></a>
   <a href="https://github.com/marksxiety/xpm-agent/releases/latest"><img src="https://img.shields.io/github/v/release/marksxiety/xpm-agent?label=release&include_prereleases" alt="Release"></a>
+</p>
+
+<p align="center">
   <img src="https://img.shields.io/badge/platform-Windows%20only-0078D6" alt="Platform: Windows only">
   <img src="https://img.shields.io/badge/Bun-1.3.14-black?logo=bun&logoColor=white" alt="Bun 1.3.14">
   <img src="https://img.shields.io/badge/PM2-7.0.4-2B037A?logo=pm2&logoColor=white" alt="PM2 7.0.4">
@@ -30,8 +33,8 @@ A small [Bun](https://bun.sh) + [Elysia](https://elysiajs.com/) service that run
 
 ## How it works
 
-The agent doesn't replace PM2. It connects to the PM2 daemon already running on the machine and relays your requests to it. PM2 still handles daemonization, restarts, log rotation, and persistence.
-> **Windows only, for now.** Boot-time startup relies on `pm2-windows-startup`. Linux/macOS is not yet supported.
+> **PM2 does the real work.** This agent does not reimplement process management — it connects to PM2's daemon and relays your HTTP commands to it. PM2 handles daemonization, restarts, log rotation, and persistence; the agent just makes PM2 callable over HTTP.
+
 
 ```mermaid
 flowchart LR
@@ -89,6 +92,4 @@ Full threat model: **[SECURITY.md](./docs/SECURITY.md)**.
 | [SECURITY.md](./docs/SECURITY.md) | Auth, enforcement, allowlists, known limits |
 | [PM2_payload_reference.md](./docs/PM2_payload_reference.md) | Every field accepted by `POST /pm2/start` |
 
-## Built with
-
-[PM2](https://pm2.io/) · [pm2-windows-startup](https://www.npmjs.com/package/pm2-windows-startup) · [ElysiaJS](https://elysiajs.com/) · [@elysiajs/swagger](https://github.com/elysiajs/documentation) · [systeminformation](https://systeminformation.io/)
+> **Windows only, for now.** Boot-time startup relies on `pm2-windows-startup`. Linux/macOS is not yet supported.
