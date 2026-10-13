@@ -79,8 +79,8 @@ export const StartPayload = t.Object({
   }),
   script: t.String({
     description:
-      "Path to the script to run. Can be a relative or absolute path; when `cwd` is omitted, it is resolved against the API server's working directory. Examples: a Node entry file (`.output/server/index.mjs`), an artisan binary (`artisan`), a PHP file, or a compiled binary.",
-    examples: ["C:\\apps\\my-service\\index.js", ".output/server/index.mjs", "artisan"],
+      "Path to the script to run. Relative paths are resolved against `cwd`; absolute paths are accepted as-is and may live outside `cwd` (e.g. an interpreter binary such as `C:\\php\\php.exe`). Examples: a Node entry file (`.output/server/index.mjs`), an artisan binary (`artisan`), a PHP file, or a compiled binary.",
+    examples: ["C:\\apps\\my-service\\index.js", ".output/server/index.mjs", "artisan", "C:\\php\\php.exe"],
   }),
   args: t.Optional(t.Union([t.String(), t.Array(t.String())], {
     description:
