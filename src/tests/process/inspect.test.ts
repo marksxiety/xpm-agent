@@ -366,14 +366,24 @@ describe("start inspection", () => {
     ).toEqual(["cwd"]);
   });
 
-  test("rejects a script that resolves outside cwd", () => {
+  test("accepts an absolute script that resolves outside cwd", () => {
+    const payload: Payload = {
+      name: "php-web",
+      script: "C:\\php\\php.exe",
+      cwd: CWD,
+      interpreter: "none",
+    };
+    expect(issues(payload)).toEqual([]);
+  });
+
+  test("accepts a relative script that escapes cwd", () => {
     const payload: Payload = {
       name: "api",
       script: "..\\evil.js",
       cwd: CWD,
       interpreter: NODE,
     };
-    expect(issues(payload)).toEqual(["script"]);
+    expect(issues(payload)).toEqual([]);
   });
 
   test("rejects a script with whitespace", () => {
