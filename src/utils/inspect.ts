@@ -57,7 +57,7 @@ function isInsideDirectory(parent: string, child: string, targetOs: TargetOs): b
   return rel !== "" && !rel.startsWith("..") && !api.isAbsolute(rel);
 }
 
-export function resolveStartScriptPath(cwd: string, script: string, targetOs: TargetOs): string {
+function resolveStartScriptPath(cwd: string, script: string, targetOs: TargetOs): string {
   const api = pathApiFor(targetOs);
   return api.isAbsolute(script) ? script : api.resolve(cwd, script);
 }
@@ -231,15 +231,6 @@ export function inspectStart(options: StartPayloadType, context: InspectContext 
       field: "name",
       message: `'${options.name}' in namespace '${AGENT_NAMESPACE}' is reserved for the agent`,
     });
-  }
-
-  if (cwd !== undefined && cwd.trim() !== "" && isAbsoluteForTarget(cwd, targetOs) && script.trim() !== "" && !/\s/.test(script)) {
-    if (!isResolvedInside(cwd, script, targetOs)) {
-      issues.push({
-        field: "script",
-        message: "script must resolve inside cwd",
-      });
-    }
   }
 
   // The schema only accepts "fork"/1, but the controller can be called
