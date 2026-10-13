@@ -1,7 +1,7 @@
 import { stat } from "node:fs/promises";
 import type { Static } from "elysia";
 import { StartPayload } from "../schemas/process";
-import { resolveStartScriptPath, type TargetOs } from "./inspect";
+import type { TargetOs } from "./inspect";
 import type { StartIssue } from "../types/inspect";
 
 type StartPayloadType = Static<typeof StartPayload>;
@@ -17,16 +17,16 @@ export interface PathCheckOverrides {
  * Filesystem existence phase for `POST /pm2/start`.
  *
  * Runs only after the shape checks in `inspectStart` pass, so `cwd` is
- * absolute and `script` resolves inside it here. Order matters: a missing
- * `cwd` reports `field: "cwd"` and skips the script check; otherwise a
- * missing script reports `field: "script"`.
+ * absolute here. Verifies `cwd` exists as a directory; the script's resolution
+ * and existence are PM2's responsibility (a missing script surfaces as
+ * `400 SCRIPT_NOT_FOUND`).
  *
  * Skipped when `targetOs` differs from the agent host OS — the agent cannot
  * stat a foreign filesystem. Unexpected `fs` errors fail open (return no
  * issues) so PM2 remains the final authority.
  */
 export async function verifyStartPaths(
-  payload: Pick<StartPayloadType, "cwd" | "script" | "targetOs">,
+  payload: Pick<StartPayloadType, "cwd" | "targetOs">,
   overrides: PathCheckOverrides = {},
 ): Promise<StartIssue[]> {
   const targetOs: TargetOs = payload.targetOs ?? "win32";
@@ -34,8 +34,7 @@ export async function verifyStartPaths(
   if (targetOs !== platform) return [];
 
   const cwd = payload.cwd;
-  const script = payload.script ?? "";
-  if (cwd === undefined || cwd.trim() === "" || script.trim() === "") return [];
+  if (cwd === undefined || cwd.trim() === "") return [];
 
   const statFn = overrides.statFn ?? stat;
 
@@ -52,24 +51,6 @@ export async function verifyStartPaths(
     if (code === undefined) return [];
     if (code === "ENOENT" || code === "ENOTDIR") {
       return [{ field: "cwd", message: `cwd '${cwd}' does not exist or is not a directory` }];
-    }
-    return [];
-  }
-
-  const resolved = resolveStartScriptPath(cwd, script, targetOs);
-  try {
-    const scriptStat = await statFn(resolved);
-    if (!scriptStat.isFile()) {
-      return [{ field: "script", message: `script '${script}' was not found inside cwd '${cwd}'` }];
-    }
-  } catch (error) {
-    const code = (error as NodeJS.ErrnoException).code;
-    if (code === "EACCES" || code === "EPERM") {
-      return [{ field: "script", message: `script '${script}' is not accessible by the agent` }];
-    }
-    if (code === undefined) return [];
-    if (code === "ENOENT" || code === "ENOTDIR" || code === "ENAMETOOLONG") {
-      return [{ field: "script", message: `script '${script}' was not found inside cwd '${cwd}'` }];
     }
     return [];
   }
