@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
+import { mkdtemp, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { sanitizeProcessConfigAsync, type SanitizeInput } from "../../utils/sanitize";
@@ -18,13 +18,10 @@ function payloadFor(cwd: string, script: string) {
   } as unknown as SanitizeInput;
 }
 
-describe("verifyStartPaths (cwd vs script distinction)", () => {
-  test("missing cwd reports field cwd and skips the script check", async () => {
+describe("verifyStartPaths (cwd existence)", () => {
+  test("missing cwd reports field cwd", async () => {
     const missing = join(tmpdir(), `xpm-missing-${Date.now()}`);
-    const issues = await verifyStartPaths(
-      { cwd: missing, script: "server.js", targetOs: HOST_OS },
-      { platform: HOST_OS },
-    );
+    const issues = await verifyStartPaths({ cwd: missing, targetOs: HOST_OS }, { platform: HOST_OS });
 
     expect(issues).toHaveLength(1);
     expect(issues[0]?.field).toBe("cwd");
@@ -36,10 +33,7 @@ describe("verifyStartPaths (cwd vs script distinction)", () => {
     const fileAsCwd = join(dir, "not-a-dir");
     await writeFile(fileAsCwd, "x");
     try {
-      const issues = await verifyStartPaths(
-        { cwd: fileAsCwd, script: "server.js", targetOs: HOST_OS },
-        { platform: HOST_OS },
-      );
+      const issues = await verifyStartPaths({ cwd: fileAsCwd, targetOs: HOST_OS }, { platform: HOST_OS });
 
       expect(issues).toHaveLength(1);
       expect(issues[0]?.field).toBe("cwd");
@@ -48,30 +42,10 @@ describe("verifyStartPaths (cwd vs script distinction)", () => {
     }
   });
 
-  test("existing cwd with missing script reports field script", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "xpm-good-cwd-"));
-    try {
-      const issues = await verifyStartPaths(
-        { cwd: dir, script: "does-not-exist.js", targetOs: HOST_OS },
-        { platform: HOST_OS },
-      );
-
-      expect(issues).toHaveLength(1);
-      expect(issues[0]?.field).toBe("script");
-      expect(issues[0]?.message).toContain("was not found inside cwd");
-    } finally {
-      await rm(dir, { recursive: true, force: true });
-    }
-  });
-
-  test("existing cwd with existing script reports no issues", async () => {
+  test("existing cwd reports no issues", async () => {
     const dir = await mkdtemp(join(tmpdir(), "xpm-ok-"));
-    await writeFile(join(dir, "server.js"), "console.log(1)");
     try {
-      const issues = await verifyStartPaths(
-        { cwd: dir, script: "server.js", targetOs: HOST_OS },
-        { platform: HOST_OS },
-      );
+      const issues = await verifyStartPaths({ cwd: dir, targetOs: HOST_OS }, { platform: HOST_OS });
 
       expect(issues).toEqual([]);
     } finally {
@@ -79,34 +53,15 @@ describe("verifyStartPaths (cwd vs script distinction)", () => {
     }
   });
 
-  test("script that is a directory reports field script", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "xpm-script-dir-"));
-    await mkdir(join(dir, "subdir"));
-    try {
-      const issues = await verifyStartPaths(
-        { cwd: dir, script: "subdir", targetOs: HOST_OS },
-        { platform: HOST_OS },
-      );
-
-      expect(issues).toHaveLength(1);
-      expect(issues[0]?.field).toBe("script");
-    } finally {
-      await rm(dir, { recursive: true, force: true });
-    }
-  });
-
   test("skips the check when targetOs differs from the host", async () => {
     const other: TargetOs = HOST_OS === "win32" ? "linux" : "win32";
-    const issues = await verifyStartPaths(
-      { cwd: "/nonexistent-cwd", script: "server.js", targetOs: other },
-      { platform: HOST_OS },
-    );
+    const issues = await verifyStartPaths({ cwd: "/nonexistent-cwd", targetOs: other }, { platform: HOST_OS });
 
     expect(issues).toEqual([]);
   });
 });
 
-describe("sanitizeProcessConfigAsync cwd vs script", () => {
+describe("sanitizeProcessConfigAsync cwd", () => {
   test("missing cwd returns 422-style cwd issue and null options", async () => {
     const missing = join(tmpdir(), `xpm-async-missing-${Date.now()}`);
     const { options, issues } = await sanitizeProcessConfigAsync(payloadFor(missing, "server.js"));
@@ -116,15 +71,13 @@ describe("sanitizeProcessConfigAsync cwd vs script", () => {
     expect(issues[0]?.field).toBe("cwd");
   });
 
-  test("existing cwd with missing script returns script issue", async () => {
+  test("existing cwd with a missing script still returns options (script check left to PM2)", async () => {
     const dir = await mkdtemp(join(tmpdir(), "xpm-async-script-"));
     try {
       const { options, issues } = await sanitizeProcessConfigAsync(payloadFor(dir, "missing.js"));
 
-      expect(options).toBeNull();
-      expect(issues).toHaveLength(1);
-      expect(issues[0]?.field).toBe("script");
-      expect(issues[0]?.message).toBe(`script 'missing.js' was not found inside cwd '${dir}'`);
+      expect(issues).toEqual([]);
+      expect(options?.script).toBe("missing.js");
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
