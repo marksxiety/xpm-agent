@@ -94,7 +94,7 @@ const routeMeta = {
     detail: {
       summary: "Get details of one process",
       description:
-        "Fetches detailed info for a single process by its `pm_id`. Returns a single object (not an array) with three keys: `summary` (the same shape used across all routes), `describe` (snake_case process-table fields mirroring `pm2 describe`; non-conditional keys are `null` when PM2 reports no value, and `entire_log_path`/`cron_restart`/`max_memory_restart` are included only when configured), and `metrics` (raw `pm2_env.axm_monitor` code metrics; `{}` for non-Node/Bun interpreters). Returns 404 if the id does not exist.",
+        "Fetches detailed info for a single process by its `pm_id`. Returns a single object (not an array) with three keys: `summary` (the same shape used across all routes), `describe` (snake_case process-table fields mirroring `pm2 describe`; non-conditional keys are `null` when PM2 reports no value, and the registration settings — `entire_log_path`, `cron_restart`, `max_memory_restart`, `max_restarts`, `min_uptime`, `restart_delay`, `kill_timeout`, `ignore_watch`, `watch_delay`, `windowsHide` — are included only when configured, so an absent key means PM2 applied its built-in default), and `metrics` (raw `pm2_env.axm_monitor` code metrics; `{}` for non-Node/Bun interpreters). Returns 404 if the id does not exist.",
       tags: ["Processes"],
       operationId: "describeProcess",
       responses: {
@@ -140,6 +140,11 @@ const routeMeta = {
                         node_version: "1.0.0",
                         node_env: "production",
                         created_at: "2026-01-01T00:00:00.000Z",
+                        max_restarts: 5,
+                        min_uptime: 1000,
+                        restart_delay: 0,
+                        kill_timeout: 1600,
+                        windowsHide: true,
                       },
                       metrics: {
                         "Heap Size": { value: "3.92", unit: "MiB" },
