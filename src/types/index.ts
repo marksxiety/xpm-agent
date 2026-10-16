@@ -53,6 +53,13 @@ export interface ProcessDescribeDetails {
     entire_log_path?: string;
     cron_restart?: string;
     max_memory_restart?: number | string;
+    max_restarts?: number;
+    min_uptime?: number | string;
+    restart_delay?: number | string;
+    kill_timeout?: number | string;
+    ignore_watch?: string[];
+    watch_delay?: number | string;
+    windowsHide?: boolean;
 }
 
 export interface ProcessDescriptionDetails {
