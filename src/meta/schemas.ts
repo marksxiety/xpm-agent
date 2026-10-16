@@ -77,7 +77,7 @@ export const ProcessMetrics: OpenAPIV3.SchemaObject = {
 export const ProcessDescribeDetails: OpenAPIV3.SchemaObject = {
   type: "object",
   description:
-    "Process-table fields mirroring `pm2 describe`. Non-conditional keys are always present (`null` when PM2 reports no value); `entire_log_path`, `cron_restart`, and `max_memory_restart` are included only when configured.",
+    "Process-table fields mirroring `pm2 describe`. Non-conditional keys are always present (`null` when PM2 reports no value); the registration settings (`entire_log_path`, `cron_restart`, `max_memory_restart`, `max_restarts`, `min_uptime`, `restart_delay`, `kill_timeout`, `ignore_watch`, `watch_delay`, `windowsHide`) are included only when configured — an absent key means PM2 applied its built-in default.",
   properties: {
     version: { type: "string", nullable: true, description: "App version as recorded by PM2" },
     script_path: { type: "string", nullable: true, description: "Resolved path of the launched script (`pm_exec_path`)" },
@@ -104,6 +104,29 @@ export const ProcessDescribeDetails: OpenAPIV3.SchemaObject = {
       description: "Max-memory restart threshold — only present when configured",
       oneOf: [{ type: "number" }, { type: "string" }],
     },
+    max_restarts: { type: "number", description: "Unstable-restart limit — only present when configured" },
+    min_uptime: {
+      description: "Minimum uptime before a start counts as stable, in milliseconds — only present when configured",
+      oneOf: [{ type: "number" }, { type: "string" }],
+    },
+    restart_delay: {
+      description: "Delay between restarts, in milliseconds — only present when configured",
+      oneOf: [{ type: "number" }, { type: "string" }],
+    },
+    kill_timeout: {
+      description: "Force-stop timeout, in milliseconds — only present when configured",
+      oneOf: [{ type: "number" }, { type: "string" }],
+    },
+    ignore_watch: {
+      type: "array",
+      items: { type: "string" },
+      description: "Watch-mode ignore list — only present when configured",
+    },
+    watch_delay: {
+      description: "Delay before a watch-triggered restart, in milliseconds — only present when configured",
+      oneOf: [{ type: "number" }, { type: "string" }],
+    },
+    windowsHide: { type: "boolean", description: "Windows console-window suppression — only present when set" },
   },
 };
 
