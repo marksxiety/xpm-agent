@@ -169,6 +169,13 @@ describe("describeProcessDetails", () => {
                 created_at: FIXED_CREATED_AT,
                 cron_restart: "0 2 * * *",
                 max_memory_restart: "500M",
+                max_restarts: 5,
+                min_uptime: 1000,
+                restart_delay: 0,
+                kill_timeout: 1600,
+                ignore_watch: ["logs", "tmp"],
+                watch_delay: 500,
+                windowsHide: true,
                 axm_monitor: { "Heap Size": { value: "3.92", unit: "MiB" } },
             } as ProcessDescription["pm2_env"],
         });
@@ -191,6 +198,13 @@ describe("describeProcessDetails", () => {
             entire_log_path: "C:\\logs\\client-combined.log",
             cron_restart: "0 2 * * *",
             max_memory_restart: "500M",
+            max_restarts: 5,
+            min_uptime: 1000,
+            restart_delay: 0,
+            kill_timeout: 1600,
+            ignore_watch: ["logs", "tmp"],
+            watch_delay: 500,
+            windowsHide: true,
         });
         expect(details.metrics).toEqual({ "Heap Size": { value: "3.92", unit: "MiB" } });
     });
@@ -211,6 +225,29 @@ describe("describeProcessDetails", () => {
             created_at: null,
         });
         expect(details.metrics).toEqual({});
+    });
+
+    test("passes registration settings through when set", () => {
+        const details = describeProcessDetails(onlineProcess({
+            pm2_env: {
+                status: "online",
+                max_restarts: 10,
+                min_uptime: 5000,
+                restart_delay: 300,
+                kill_timeout: 2000,
+                ignore_watch: ["logs"],
+                watch_delay: 1000,
+                windowsHide: false,
+            } as ProcessDescription["pm2_env"],
+        }));
+
+        expect(details.describe.max_restarts).toBe(10);
+        expect(details.describe.min_uptime).toBe(5000);
+        expect(details.describe.restart_delay).toBe(300);
+        expect(details.describe.kill_timeout).toBe(2000);
+        expect(details.describe.ignore_watch).toEqual(["logs"]);
+        expect(details.describe.watch_delay).toBe(1000);
+        expect(details.describe.windowsHide).toBe(false);
     });
 
     test("treats empty node_args and invalid created_at as null", () => {
