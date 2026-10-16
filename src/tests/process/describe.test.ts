@@ -64,6 +64,10 @@ describe("pm2 describe service", () => {
                 node_version: "26.3.0",
                 env: { NODE_ENV: "production" },
                 created_at: 1758246546651,
+                max_restarts: 5,
+                min_uptime: 1000,
+                kill_timeout: 1600,
+                windowsHide: true,
                 axm_monitor: { "Heap Size": { value: "3.92", unit: "MiB" } },
             } as ProcessDescription["pm2_env"],
         }];
@@ -81,6 +85,10 @@ describe("pm2 describe service", () => {
         expect(info.describe.node_version).toBe("26.3.0");
         expect(info.describe.node_env).toBe("production");
         expect(info.describe.created_at).toBe(new Date(1758246546651).toISOString());
+        expect(info.describe.max_restarts).toBe(5);
+        expect(info.describe.min_uptime).toBe(1000);
+        expect(info.describe.kill_timeout).toBe(1600);
+        expect(info.describe.windowsHide).toBe(true);
         expect(info.metrics).toEqual({ "Heap Size": { value: "3.92", unit: "MiB" } });
     });
 
@@ -101,6 +109,13 @@ describe("pm2 describe service", () => {
         expect(info.describe.entire_log_path).toBeUndefined();
         expect(info.describe.cron_restart).toBeUndefined();
         expect(info.describe.max_memory_restart).toBeUndefined();
+        expect(info.describe.max_restarts).toBeUndefined();
+        expect(info.describe.min_uptime).toBeUndefined();
+        expect(info.describe.restart_delay).toBeUndefined();
+        expect(info.describe.kill_timeout).toBeUndefined();
+        expect(info.describe.ignore_watch).toBeUndefined();
+        expect(info.describe.watch_delay).toBeUndefined();
+        expect(info.describe.windowsHide).toBeUndefined();
     });
 
     test("returns whatever node metadata pm2_env carries, regardless of interpreter", async () => {
@@ -157,6 +172,14 @@ describe("pm2 describe service", () => {
                 pm_log_path: "C:\\logs\\job-combined.log",
                 cron_restart: "*/5 * * * *",
                 max_memory_restart: "500M",
+                max_restarts: 3,
+                min_uptime: "10s",
+                restart_delay: 500,
+                kill_timeout: 2000,
+                ignore_watch: ["node_modules"],
+                watch_delay: 100,
+                windowsHide: false,
+                env: { NODE_ENV: "production" },
             } as ProcessDescription["pm2_env"],
         }];
 
@@ -166,6 +189,13 @@ describe("pm2 describe service", () => {
         expect(info.describe.entire_log_path).toBe("C:\\logs\\job-combined.log");
         expect(info.describe.cron_restart).toBe("*/5 * * * *");
         expect(info.describe.max_memory_restart).toBe("500M");
+        expect(info.describe.max_restarts).toBe(3);
+        expect(info.describe.min_uptime).toBe("10s");
+        expect(info.describe.restart_delay).toBe(500);
+        expect(info.describe.kill_timeout).toBe(2000);
+        expect(info.describe.ignore_watch).toEqual(["node_modules"]);
+        expect(info.describe.watch_delay).toBe(100);
+        expect(info.describe.windowsHide).toBe(false);
     });
 
     test("returns 404 when PM2 returns no descriptions", async () => {
