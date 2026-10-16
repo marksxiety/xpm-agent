@@ -247,7 +247,12 @@ Fetches detailed info for a single process by its `pm_id`. Returns a **single ob
       "interpreter_args": null,
       "node_version": "1.0.0",
       "node_env": "production",
-      "created_at": "2026-01-01T00:00:00.000Z"
+      "created_at": "2026-01-01T00:00:00.000Z",
+      "max_restarts": 5,
+      "min_uptime": 1000,
+      "restart_delay": 0,
+      "kill_timeout": 1600,
+      "windowsHide": true
     },
     "metrics": {
       "Heap Size": { "value": "3.92", "unit": "MiB" },
@@ -281,8 +286,15 @@ Fetches detailed info for a single process by its `pm_id`. Returns a **single ob
 | `entire_log_path` | string | Combined log path — **only present when configured** |
 | `cron_restart` | string | Cron restart expression — **only present when configured** |
 | `max_memory_restart` | number \| string | Max-memory restart threshold — **only present when configured** |
+| `max_restarts` | number | Unstable-restart limit — **only present when configured** |
+| `min_uptime` | number \| string | Minimum uptime before a start counts as stable, in milliseconds — **only present when configured** |
+| `restart_delay` | number \| string | Delay between restarts, in milliseconds — **only present when configured** |
+| `kill_timeout` | number \| string | Force-stop timeout, in milliseconds — **only present when configured** |
+| `ignore_watch` | string[] | Watch-mode ignore list — **only present when configured** |
+| `watch_delay` | number \| string | Delay before a watch-triggered restart, in milliseconds — **only present when configured** |
+| `windowsHide` | boolean | Windows console-window suppression — **only present when set** |
 
-> Non-conditional `describe` keys are always present and are `null` when PM2 reports no value. `entire_log_path`, `cron_restart`, and `max_memory_restart` are omitted entirely unless configured.
+> Non-conditional `describe` keys are always present and are `null` when PM2 reports no value. The registration settings (`entire_log_path`, `cron_restart`, `max_memory_restart`, `max_restarts`, `min_uptime`, `restart_delay`, `kill_timeout`, `ignore_watch`, `watch_delay`, `windowsHide`) are omitted entirely unless configured, so an absent key means PM2 applied its built-in default.
 
 **`metrics`** is the raw `pm2_env.axm_monitor` map passed through verbatim (keys are metric names such as `Heap Size`; values are whatever pmx reports, typically `{ value, unit }`). It is `{}` for processes without pmx instrumentation (e.g. Python, Go, binaries).
 
