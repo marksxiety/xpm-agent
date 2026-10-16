@@ -1,6 +1,6 @@
 import type { ProcessDescription, Proc } from "pm2";
-import type { ProcessDescriptionDetails, ProcessSummary } from "../types";
-import { getServerIpv4 } from "./network"
+import type { ProcessDescribeDetails, ProcessDescriptionDetails, ProcessSummary } from "../types";
+import { getServerIpv4 } from "./network";
 
 interface ProcessEnvironment {
   status?: string;
@@ -29,6 +29,13 @@ interface ProcessEnvironment {
   pm_log_path?: string;
   cron_restart?: string;
   max_memory_restart?: number | string;
+  max_restarts?: number;
+  min_uptime?: number | string;
+  restart_delay?: number | string;
+  kill_timeout?: number | string;
+  ignore_watch?: string[];
+  watch_delay?: number | string;
+  windowsHide?: boolean;
   env?: { NODE_ENV?: string };
   axm_monitor?: Record<string, unknown>;
 }
@@ -68,6 +75,27 @@ function toIsoString(createdAt: number | undefined): string | null {
   return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
 
+/**
+ * Registration settings PM2 stores in `pm2_env` only when they were set.
+ * Surfacing them lets the dashboard reconstruct how a process was registered;
+ * an absent key means PM2 applied its built-in default.
+ */
+function describeRegistrationSettings(
+  processEnvironment: ProcessEnvironment | undefined,
+): Partial<ProcessDescribeDetails> {
+  const settings: Partial<ProcessDescribeDetails> = {};
+
+  if (processEnvironment?.max_restarts !== undefined) settings.max_restarts = processEnvironment.max_restarts;
+  if (processEnvironment?.min_uptime !== undefined) settings.min_uptime = processEnvironment.min_uptime;
+  if (processEnvironment?.restart_delay !== undefined) settings.restart_delay = processEnvironment.restart_delay;
+  if (processEnvironment?.kill_timeout !== undefined) settings.kill_timeout = processEnvironment.kill_timeout;
+  if (processEnvironment?.ignore_watch !== undefined) settings.ignore_watch = processEnvironment.ignore_watch;
+  if (processEnvironment?.watch_delay !== undefined) settings.watch_delay = processEnvironment.watch_delay;
+  if (processEnvironment?.windowsHide !== undefined) settings.windowsHide = processEnvironment.windowsHide;
+
+  return settings;
+}
+
 export function describeProcessDetails(processDescription: ProcessDescription): ProcessDescriptionDetails {
   const processEnvironment = processDescription.pm2_env as ProcessEnvironment | undefined;
 
@@ -90,6 +118,7 @@ export function describeProcessDetails(processDescription: ProcessDescription): 
       ...(processEnvironment?.pm_log_path !== undefined ? { entire_log_path: processEnvironment.pm_log_path } : {}),
       ...(processEnvironment?.cron_restart !== undefined ? { cron_restart: processEnvironment.cron_restart } : {}),
       ...(processEnvironment?.max_memory_restart ? { max_memory_restart: processEnvironment.max_memory_restart } : {}),
+      ...describeRegistrationSettings(processEnvironment),
     },
     metrics: processEnvironment?.axm_monitor ?? {},
   };
