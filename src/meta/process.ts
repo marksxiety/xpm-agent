@@ -7,7 +7,7 @@ const routeMeta = {
     detail: {
       summary: "List all PM2 processes",
       description:
-        "Returns all PM2-managed processes with live CPU, memory, restart counts, and status. Use this first to discover the `pm_id` values required by other routes.\n\nPass `?logs=N` (1–500) to also attach the trailing N lines of each process's `out` and `error` log files as a `logs` field on every item. Omit it for a lightweight list without logs — there is no default line count.\n\nPass `?overview=true` to return an object with two keys: `overview` (host-level metrics: CPU utilization percentage and memory usage) and `processes` (the same process summaries). The `logs` param, if provided, still applies to each process summary.",
+        "Returns all PM2-managed processes with live CPU, memory, restart counts, and status. Use this first to discover the `pm_id` values required by other routes.\n\nPass `?logs=N` (1–500) to also attach the trailing N lines of each process's `out` and `error` log files as a `logs` field on every item, along with a `logs.size` object holding the raw byte footprint of each stream (current file plus every rotated sibling). Omit it for a lightweight list without logs — there is no default line count.\n\nPass `?overview=true` to return an object with two keys: `overview` (host-level metrics: CPU utilization percentage, memory usage, and the PM2 log-directory footprint under `logs`) and `processes` (the same process summaries). The `logs` param, if provided, still applies to each process summary.",
       tags: ["Processes"],
       operationId: "listProcesses",
       responses: {
@@ -58,6 +58,10 @@ const routeMeta = {
                           freeBytes: 6012954214,
                           usedBytes: 11166914970,
                           percentUsed: 65,
+                        },
+                        logs: {
+                          totalBytes: 48234496,
+                          fileCount: 128,
                         },
                       },
                       processes: [{
@@ -232,7 +236,7 @@ const routeMeta = {
     detail: {
       summary: "Get process logs",
       description:
-        "Returns the trailing lines of a process's stdout (`out`) and stderr (`error`) log files. `id` is the process's `pm_id`. `tail` caps the number of lines per stream (default 50, max 500). `type` selects the stream: `both` (default), `output`, or `error`. A log file that does not exist (or a stream the process does not write) returns an empty array.",
+        "Returns the trailing lines of a process's stdout (`out`) and stderr (`error`) log files, plus a `size` object with the raw byte footprint of each returned stream (current log file plus every rotated sibling produced by pm2-logrotate). `id` is the process's `pm_id`. `tail` caps the number of lines per stream (default 50, max 500). `type` selects the stream: `both` (default), `output`, or `error` — `size` follows the selection, so `output` returns only `size.out`. A log file that does not exist (or a stream the process does not write) returns an empty array and a size of `0`.",
       tags: ["Processes"],
       operationId: "getProcessLogs",
     },
