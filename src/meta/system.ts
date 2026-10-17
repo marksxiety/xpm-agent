@@ -40,7 +40,7 @@ const systemRouteMeta = {
     detail: {
       summary: "System overview",
       description:
-        "Host-level metrics only (CPU utilization percentage and memory usage). Does not include the process list — use GET /list?overview=true for a combined host + processes view.",
+        "Host-level metrics only (CPU utilization percentage, memory usage, and the PM2 log-directory footprint). Does not include the process list — use GET /list?overview=true for a combined host + processes view.",
       tags: ["System"],
       operationId: "getHostOverview",
       responses: {
@@ -62,6 +62,10 @@ const systemRouteMeta = {
                       freeBytes: 6012954214,
                       usedBytes: 11166914970,
                       percentUsed: 65,
+                    },
+                    logs: {
+                      totalBytes: 48234496,
+                      fileCount: 128,
                     },
                   },
                 },
