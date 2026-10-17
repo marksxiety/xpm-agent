@@ -1,9 +1,20 @@
 import type { OpenAPIV3 } from "openapi-types";
 
+export const LogDirMetrics: OpenAPIV3.SchemaObject = {
+  type: "object",
+  description:
+    "PM2 log-directory footprint across all namespaces: every `.log`/`.log.gz` file (current and rotated) in `~/.pm2/logs`. Intended for dashboard alerting/traceability.",
+  required: ["totalBytes", "fileCount"],
+  properties: {
+    totalBytes: { type: "number", description: "Total size in bytes of every log file" },
+    fileCount: { type: "number", description: "Number of log files (current + rotated)" },
+  },
+};
+
 export const HostMetrics: OpenAPIV3.SchemaObject = {
   type: "object",
   description: "Host-level (OS) metrics.",
-  required: ["cpu", "memory"],
+  required: ["cpu", "memory", "logs"],
   properties: {
     cpu: {
       type: "object",
@@ -22,6 +33,7 @@ export const HostMetrics: OpenAPIV3.SchemaObject = {
         percentUsed: { type: "number", description: "Used memory as a percentage (0-100, 2 decimal places)" },
       },
     },
+    logs: LogDirMetrics,
   },
 };
 
@@ -52,6 +64,14 @@ export const ProcessSummary: OpenAPIV3.SchemaObject = {
       properties: {
         out: { type: "array", items: { type: "string" }, description: "Trailing lines of the stdout log" },
         error: { type: "array", items: { type: "string" }, description: "Trailing lines of the stderr log" },
+        size: {
+          type: "object",
+          description: "Byte footprint of each stream: current log + all rotated siblings",
+          properties: {
+            out: { type: "number", description: "Total bytes of the stdout stream (current + rotated)" },
+            error: { type: "number", description: "Total bytes of the stderr stream (current + rotated)" },
+          },
+        },
       },
     },
   },
