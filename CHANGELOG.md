@@ -5,6 +5,32 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Log rotation via PM2's official `pm2-logrotate` module, installed once per host
+  with `bun run setup:logrotate` (pinned `2.7.0`; `max_size 10M`, `retain 30`,
+  `compress true`). See `SETUP.md`.
+- `GET /pm2/logs/:id` now returns a `size` object with the raw byte footprint of
+  each returned stream — the current log file plus every rotated sibling
+  (`<stem>__*.log` / `.log.gz`). `size` follows the `type` selection.
+- `GET /pm2/list?logs=N` now attaches the same `logs.size` object to each summary.
+- `GET /pm2/system` and `GET /pm2/list?overview=true` now include a `logs` object
+  in the host overview: `totalBytes` and `fileCount` across every `.log`/`.log.gz`
+  file in the PM2 logs directory (all namespaces, current and rotated), for
+  dashboard alerting/traceability.
+
+### Changed
+
+- `DELETE /pm2/delete/:id?delete_logs=true` now also removes a process's rotated
+  log siblings, so rotation no longer orphans files after a delete.
+
+### Documentation
+
+- Updated `SETUP.md`, `README.md`, `ROUTES.md`, and the OpenAPI schema/metadata for
+  log rotation and the new log-size fields.
+
 ## [2.1.0] - 2026-10-16
 
 ### Added
