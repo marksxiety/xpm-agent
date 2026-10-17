@@ -67,6 +67,7 @@ All PM2 routes are prefixed with `/pm2`. `GET /` is a public liveness banner (no
 | `/pm2/reload/:id` | POST | Graceful restart (fork mode falls back to restart) |
 | `/pm2/delete/:id` | DELETE | Stop and remove permanently |
 | `/pm2/logs/:id` | GET | Tail `out`/`error` logs (last N lines) with per-stream byte sizes |
+| `/pm2/logs/:id` | DELETE | Truncate active and/or delete rotated logs (`?stream=all\|out\|err`, `?scope=active\|rotated\|all`) |
 | `/pm2/flush/:id` | POST | Empty a process's log files |
 
 ## Security
