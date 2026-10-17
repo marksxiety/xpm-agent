@@ -1,5 +1,5 @@
-import { DeleteLogsQuery, FlushParams, ListQuery, LogsParams, LogsQuery, ProcessIdParams, StartPayload } from "../schemas/process";
-import { DescribeResponse, ProcessListResponse, ProcessOverviewResponse } from "./schemas";
+import { DeleteLogsQuery, FlushParams, ListQuery, LogClearQuery, LogsParams, LogsQuery, ProcessIdParams, StartPayload } from "../schemas/process";
+import { DescribeResponse, ProcessListResponse, ProcessLogsClearResponse, ProcessOverviewResponse } from "./schemas";
 
 const routeMeta = {
   list: {
@@ -239,6 +239,43 @@ const routeMeta = {
         "Returns the trailing lines of a process's stdout (`out`) and stderr (`error`) log files, plus a `size` object with the raw byte footprint of each returned stream (current log file plus every rotated sibling produced by pm2-logrotate). `id` is the process's `pm_id`. `tail` caps the number of lines per stream (default 50, max 500). `type` selects the stream: `both` (default), `output`, or `error` — `size` follows the selection, so `output` returns only `size.out`. A log file that does not exist (or a stream the process does not write) returns an empty array and a size of `0`.",
       tags: ["Processes"],
       operationId: "getProcessLogs",
+    },
+  },
+  clearLogs: {
+    params: LogsParams,
+    query: LogClearQuery,
+    detail: {
+      summary: "Clear a process's logs",
+      description:
+        "Truncates active log files in place and/or deletes historical rotated archives for one process. `id` is the process's `pm_id` (the agent's own process is refused with 409). `stream` selects `all` (default), `out`, or `err`; `scope` selects `active` (default — truncate the open file(s) to 0 bytes without unlinking), `rotated` (delete archive files matching the process/stream log stem), or `all` (both). Active files are never unlinked, so a running process keeps writing seamlessly. Missing files or directories are ignored (not an error). Invalid `stream`/`scope` values return 400 `INVALID_LOG_QUERY`; a filesystem failure returns 500 `LOG_IO_FAILED`.",
+      tags: ["Processes"],
+      operationId: "clearProcessLogs",
+      responses: {
+        200: {
+          description: "Summary of truncated bytes and deleted archives.",
+          content: {
+            "application/json": {
+              schema: ProcessLogsClearResponse,
+              example: {
+                success: true,
+                message: "Process 3 logs cleared successfully",
+                info: {
+                  pm_id: 3,
+                  name: "example-app",
+                  stream: "all",
+                  scope: "all",
+                  truncated: { out: 12800000, error: 4096 },
+                  deleted: {
+                    out: { count: 3, bytesFreed: 900000 },
+                    error: { count: 0, bytesFreed: 0 },
+                  },
+                  bytesFreed: 13704096,
+                },
+              },
+            },
+          },
+        },
+      },
     },
   },
 };
