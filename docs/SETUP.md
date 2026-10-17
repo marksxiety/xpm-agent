@@ -28,7 +28,31 @@ Copy the example into two files — one for the base config, one for production 
 copy .env.example .env & copy .env.example .env.production
 ```
 
-## 3. Configure the server
+## 3. Enable log rotation (one-time)
+
+PM2 never rotates logs on its own, so a long-running fleet fills `~/.pm2/logs` until the disk does. Install PM2's official rotation module once per host:
+
+```bash
+bun run setup:logrotate
+```
+
+This is a shortcut for:
+
+```bash
+pm2 install pm2-logrotate@2.7.0 && pm2 set pm2-logrotate:max_size 10M && pm2 set pm2-logrotate:retain 30 && pm2 set pm2-logrotate:compress true && pm2 save
+```
+
+- `pm2 install` (not `npm install`) registers `pm2-logrotate` as a **PM2 module**, not an app dependency — it is not in `package.json` and is version-pinned to `2.7.0`.
+- `max_size 10M` — rotate a file once it grows past 10 MB.
+- `retain 30` — keep the last 30 rotated files per stream.
+- `compress true` — gzip rotated files (`.log.gz`).
+- `pm2 save` persists the module so it survives a reboot alongside the agent.
+
+Rotated files are named `namespace-app-out__YYYY-MM-DD_HH-mm-ss.log` (or `.log.gz`) and are reported by the API: `GET /pm2/logs/:id` returns a `size` object per stream, and `GET /pm2/system` (and `GET /pm2/list?overview=true`) returns the total size and file count of every log file. Inspect the live config with `pm2 conf pm2-logrotate`.
+
+> `pm2-logrotate` is optional. Without it the agent still reports current-file sizes; the `logs` overview will simply stay near one file per stream.
+
+## 4. Configure the server
 
 Open `.env` and `.env.production` and set:
 
@@ -45,7 +69,7 @@ Open `.env` and `.env.production` and set:
 
 > **Authentication (optional):** set `AUTH_TOKEN` whenever the agent runs on a network that isn't strictly localhost. CORS only blocks browsers — curl, scripts, and other servers bypass it entirely. The token is the only access control, so pair it with OS-level isolation when the port is reachable beyond localhost.
 
-## 4. Run the service (production)
+## 5. Run the service (production)
 
 ```bash
 npm run start
@@ -59,7 +83,7 @@ bun --env-file=.env --env-file=.env.production src/check-port.ts && bun run buil
 
 - `bun --env-file=... src/check-port.ts` — preflight that resolves `SERVER_PORT` from the same env files the app uses and fails fast with a clear command-line error when the port is missing, invalid, or already in use. It inspects the OS TCP listener table (`netstat -ano`), so listeners on any interface or address family are detected and reported with their PID and process name. It skips the free-port check when `xpm-agent` is already online under PM2 (the reload path).
 - `bun run build` — bundles `src/index.ts` into `dist/index.js` (Bun target, minified). Production runs the compiled bundle, not the TypeScript source.
-- `pm2 startOrReload ecosystem.config.js --env production` — starts (or reloads) the API under PM2 with the `bun` interpreter from `ecosystem.config.js`. `--env production` applies the `env_production` block, setting `NODE_ENV=production`, which also makes Bun load `.env.production` on top of `.env` (see step 3). Fork mode, autorestart with `min_uptime: "10s"`, 100ms exponential backoff (PM2 caps it at 15s), effectively unlimited restarts (`max_restarts: 999999`), and `max_memory_restart: "250M"`.
+- `pm2 startOrReload ecosystem.config.js --env production` — starts (or reloads) the API under PM2 with the `bun` interpreter from `ecosystem.config.js`. `--env production` applies the `env_production` block, setting `NODE_ENV=production`, which also makes Bun load `.env.production` on top of `.env` (see step 4). Fork mode, autorestart with `min_uptime: "10s"`, 100ms exponential backoff (PM2 caps it at 15s), effectively unlimited restarts (`max_restarts: 999999`), and `max_memory_restart: "250M"`.
 - `pm2 save` — persists the current process list so it is restored on reboot.
 
 At startup the API checks the OS listener table for `SERVER_PORT` before binding — on Windows this is the only reliable guard, because Bun can still bind over a listener that does not set `SO_EXCLUSIVEADDRUSE`, even with port sharing disabled. Startup and configuration failures exit with code 2, which `stop_exit_codes` in `ecosystem.config.js` tells PM2 not to retry; check the message in the terminal or in `pm2 logs xpm-agent`.
@@ -80,7 +104,7 @@ curl http://localhost:4000/pm2/health
 
 Interactive docs: <http://localhost:4000/swagger>
 
-## 5. Development
+## 6. Development
 
 Production runs the compiled `dist/` bundle. During development, run the TypeScript source directly with hot reload instead:
 
@@ -93,7 +117,7 @@ bun run build      # produce dist/index.js, as CI and `npm run start` do
 
 Run `bun test`, `bun run typecheck`, and `bun run build` before deploying.
 
-## 6. Auto-start on boot (optional)
+## 7. Auto-start on boot (optional)
 
 PM2 is restored automatically on reboot thanks to `pm2-windows-startup` (already a project dependency). Register it once:
 
@@ -103,9 +127,9 @@ bunx pm2-startup install
 
 The installer writes an `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` entry that runs `pm2 resurrect` at user logon (with the logon user's environment), so keep the service account logged in or use a service manager for headless hosts.
 
-After running, `pm2 save` (from step 4) ensures the process list is restored at boot.
+After running, `pm2 save` (from step 5) ensures the process list is restored at boot.
 
-## 7. Security notes
+## 8. Security notes
 
 - `POST /pm2/start` is remote code execution by design: the child runs as the service account. Set `AUTH_TOKEN` and pair it with OS-level isolation when the port is reachable beyond localhost.
 - The agent pins `pm2` to an exact version (`package.json`) and ships a lockfile; PM2 internals (`filter_env`, `prepareAppConf`, `executeApp`, fork/cluster env handling) are security-relevant, so re-run `bun test` before bumping.
