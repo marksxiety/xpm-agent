@@ -217,8 +217,10 @@ describe("pm2 list with logs", () => {
     });
 
     test("attaches trailing lines from both log streams when tail is provided", async () => {
-        await fs.writeFile(OUT_LOG, buildContent(5), "utf8");
-        await fs.writeFile(ERROR_LOG, buildContent(4), "utf8");
+        const outContent = buildContent(5);
+        const errorContent = buildContent(4);
+        await fs.writeFile(OUT_LOG, outContent, "utf8");
+        await fs.writeFile(ERROR_LOG, errorContent, "utf8");
 
         const response = await processController.listProcesses(2);
 
@@ -226,11 +228,13 @@ describe("pm2 list with logs", () => {
         expect((response.info as ProcessSummary[])?.[0].logs).toEqual({
             out: ["list-log-4", "list-log-5"],
             error: ["list-log-3", "list-log-4"],
+            size: { out: Buffer.byteLength(outContent), error: Buffer.byteLength(errorContent) },
         });
     });
 
     test("attaches empty arrays for log files that do not exist", async () => {
-        await fs.writeFile(ERROR_LOG, buildContent(4), "utf8");
+        const errorContent = buildContent(4);
+        await fs.writeFile(ERROR_LOG, errorContent, "utf8");
 
         const response = await processController.listProcesses(2);
 
@@ -238,6 +242,7 @@ describe("pm2 list with logs", () => {
         expect((response.info as ProcessSummary[])?.[0].logs).toEqual({
             out: [],
             error: ["list-log-3", "list-log-4"],
+            size: { out: 0, error: Buffer.byteLength(errorContent) },
         });
     });
 
