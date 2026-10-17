@@ -5,7 +5,7 @@ import type { ApiResponse, ProcessDescriptionDetails, ProcessNameConflict, Proce
 import { respond } from "../utils/response";
 import { classifyPm2Error } from "../utils/errors";
 import { describeProcessDetails, summarizeProcess, toProcessDescriptions } from "../utils/process";
-import { resolveLogFiles, tailLines } from "../utils/log";
+import { resolveLogFiles, resolveRotatedLogFiles, tailLines, logStreamBytes, logMetricsSource, type LogMetricsSource } from "../utils/log";
 import { sanitizeProcessConfigAsync, type SanitizeInput } from "../utils/sanitize";
 import { StartIssue } from "../types/inspect";
 import { getHostMetrics, systemInformationSource, type HostMetricsSource } from "../utils/system";
@@ -18,6 +18,7 @@ export class ProcessController {
   constructor(
     private metricsSource: HostMetricsSource = systemInformationSource,
     private connection: Pm2Connection = pm2Connection,
+    private logSource: LogMetricsSource = logMetricsSource,
   ) { }
 
   private runExclusive<T>(operation: () => Promise<T>): Promise<T> {
@@ -75,17 +76,22 @@ export class ProcessController {
         const summariesWithLogs = await Promise.all(
           processSummaries.map(async (summary, index) => {
             const processEnvironment = processDescriptions[index].pm2_env;
-            const [out, error] = await Promise.all([
+            const [out, error, outBytes, errorBytes] = await Promise.all([
               this.readLogFile(processEnvironment?.pm_out_log_path, tail),
               this.readLogFile(processEnvironment?.pm_err_log_path, tail),
+              logStreamBytes(processEnvironment?.pm_out_log_path),
+              logStreamBytes(processEnvironment?.pm_err_log_path),
             ]);
-            return { ...summary, logs: { out, error } };
+            return { ...summary, logs: { out, error, size: { out: outBytes, error: errorBytes } } };
           }),
         );
         info = summariesWithLogs;
       }
       if (includeOverview) {
-        info = { overview: await getHostMetrics(this.metricsSource), processes: info as ProcessSummary[] };
+        info = {
+          overview: await getHostMetrics(this.metricsSource, this.logSource),
+          processes: info as ProcessSummary[],
+        };
       }
       return respond("PM2 process list retrieved successfully", info);
     } catch (error) {
@@ -266,11 +272,20 @@ export class ProcessController {
         const processDescriptions = await this.withPM2<ProcessDescription[]>((callback) =>
           pm2.describe(processId, callback),
         );
-        logFilePaths = processDescriptions.flatMap((process) => {
+        const baseLogPaths = processDescriptions.flatMap((process) => {
           const processEnvironment = process.pm2_env;
           return [processEnvironment?.pm_out_log_path, processEnvironment?.pm_err_log_path]
             .filter((filePath): filePath is string => typeof filePath === "string" && filePath.length > 0);
         });
+        // Include rotated siblings (`<stem>__*`) so log-rotated files are not orphaned.
+        logFilePaths = (
+          await Promise.all(
+            baseLogPaths.map(async (baseLogPath) => [
+              baseLogPath,
+              ...(await resolveRotatedLogFiles(baseLogPath)),
+            ]),
+          )
+        ).flat();
       }
       const processDescriptions = await this.withPM2<ProcessDescription[]>((callback) =>
         pm2.delete(processId, (deleteError, processes) =>
@@ -324,8 +339,14 @@ export class ProcessController {
         });
       const processEnvironment = processDescriptions[0].pm2_env;
       const info: ProcessLogs = {};
-      if (type === "both" || type === "output") info.out = await this.readLogFile(processEnvironment?.pm_out_log_path, tail);
-      if (type === "both" || type === "error") info.error = await this.readLogFile(processEnvironment?.pm_err_log_path, tail);
+      if (type === "both" || type === "output") {
+        info.out = await this.readLogFile(processEnvironment?.pm_out_log_path, tail);
+        info.size = { ...info.size, out: await logStreamBytes(processEnvironment?.pm_out_log_path) };
+      }
+      if (type === "both" || type === "error") {
+        info.error = await this.readLogFile(processEnvironment?.pm_err_log_path, tail);
+        info.size = { ...info.size, error: await logStreamBytes(processEnvironment?.pm_err_log_path) };
+      }
       return respond("PM2 process logs retrieved successfully", info);
     } catch (error) {
       return this.handleError(error);
