@@ -32,9 +32,17 @@ export interface ProcessNameConflict {
     namespace: string;
 }
 
+export interface ProcessLogSize {
+    /** Total bytes of the stdout stream: current `-out.log` plus every rotated sibling. */
+    out?: number;
+    /** Total bytes of the stderr stream: current `-error.log` plus every rotated sibling. */
+    error?: number;
+}
+
 export interface ProcessLogs {
     out?: string[];
     error?: string[];
+    size?: ProcessLogSize;
 }
 
 export type ProcessMetrics = Record<string, unknown>;
@@ -82,6 +90,13 @@ export interface AgentStatusResponse {
     info: { pid: number };
 }
 
+export interface LogDirMetrics {
+    /** Total bytes of every `.log`/`.log.gz` file in the PM2 logs directory (current + rotated). */
+    totalBytes: number;
+    /** Number of `.log`/`.log.gz` files in the PM2 logs directory. */
+    fileCount: number;
+}
+
 export interface SystemOverview {
     cpu: {
         usagePercent: number;
@@ -92,6 +107,7 @@ export interface SystemOverview {
         usedBytes: number;
         percentUsed: number;
     }
+    logs: LogDirMetrics;
 }
 
 export interface SystemOverviewWithProcesses {
