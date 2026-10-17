@@ -65,8 +65,8 @@ Returns all PM2-managed processes with live CPU, memory, restart counts, and sta
 
 | Param | Type | Required | Description |
 |---|---|---|---|
-| `logs` | integer | no | When present, attaches `logs: { out, error }` to each process summary with the trailing N lines of each stream (1–500). Omit the param entirely for a lightweight list without logs — there is no default line count here (the 50-line default applies only to `GET /logs/:id`). |
-| `overview` | boolean | no | When `true`, returns an object with two keys: `overview` (host-level metrics: CPU utilization percentage and memory usage) and `processes` (the process summaries). The `logs` param, if provided, still applies to each process summary. |
+| `logs` | integer | no | When present, attaches `logs: { out, error, size }` to each process summary with the trailing N lines of each stream (1–500) and the raw byte size of each stream (current file + all rotated siblings). Omit the param entirely for a lightweight list without logs — there is no default line count here (the 50-line default applies only to `GET /logs/:id`). |
+| `overview` | boolean | no | When `true`, returns an object with two keys: `overview` (host-level metrics: CPU utilization percentage, memory usage, and the total log-directory footprint under `logs`) and `processes` (the process summaries). The `logs` param, if provided, still applies to each process summary. |
 
 **Request:** `GET /pm2/list`, `GET /pm2/list?logs=5`, or `GET /pm2/list?logs=5&overview=true`
 
@@ -116,6 +116,10 @@ Returns all PM2-managed processes with live CPU, memory, restart counts, and sta
         "freeBytes": 6012954214,
         "usedBytes": 11166914970,
         "percentUsed": 65
+      },
+      "logs": {
+        "totalBytes": 48234496,
+        "fileCount": 128
       }
     },
     "processes": [
@@ -167,13 +171,17 @@ Host-level metrics only (CPU utilization percentage and memory usage). Does **no
         "freeBytes": 6012954214,
         "usedBytes": 11166914970,
         "percentUsed": 65
+      },
+      "logs": {
+        "totalBytes": 48234496,
+        "fileCount": 128
       }
     }
   }
 }
 ```
 
-> **Host metric notes:** `cpu.usagePercent` is measured between samples. The first sample after server start has no prior baseline, so systeminformation measures it over a short (~500 ms) window — that request may take slightly longer, and the server primes the baseline at startup. `memory.usedBytes` includes buffers/cache.
+> **Host metric notes:** `cpu.usagePercent` is measured between samples. The first sample after server start has no prior baseline, so systeminformation measures it over a short (~500 ms) window — that request may take slightly longer, and the server primes the baseline at startup. `memory.usedBytes` includes buffers/cache. `logs` totals **every** `.log`/`.log.gz` file in the PM2 logs directory (all namespaces, current and rotated) — the same footprint pm2-logrotate reports as "Global logs size" / "Files count", intended for dashboard alerting. It is `{ totalBytes: 0, fileCount: 0 }` when the logs directory does not exist.
 
 ---
 
@@ -674,7 +682,7 @@ Zero-downtime reload — restarts instances one at a time. Only meaningful for *
 
 Stops the process **and removes it from PM2's registry entirely**. The `pm_id` is freed and may be recycled by PM2 for future processes. Unlike stop, this cannot be undone via restart. Targeting the agent process itself (`xpm-agent` in namespace `XPM`) is rejected with `409 AGENT_SELF_MANAGEMENT_FORBIDDEN`.
 
-By default the process's log files (`-out.log` / `-error.log` in `~/.pm2/logs/`, or `$PM2_HOME/logs/` when `PM2_HOME` is set) are **left on disk** — PM2 never removes them. Pass `?delete_logs=true` to also delete them.
+By default the process's log files (`-out.log` / `-error.log` in `~/.pm2/logs/`, or `$PM2_HOME/logs/` when `PM2_HOME` is set) are **left on disk** — PM2 never removes them. Pass `?delete_logs=true` to also delete them, including any rotated siblings (`<stem>__*.log` / `.log.gz`).
 
 **Path params:**
 
@@ -686,7 +694,7 @@ By default the process's log files (`-out.log` / `-error.log` in `~/.pm2/logs/`,
 
 | Param | Type | Required | Description |
 |---|---|---|---|
-| `delete_logs` | boolean | no | When `true`, also deletes the process's `-out.log`/`-error.log` files from `~/.pm2/logs/` (or `$PM2_HOME/logs/`). Default `false`. |
+| `delete_logs` | boolean | no | When `true`, also deletes the process's `-out.log`/`-error.log` files and their rotated siblings from `~/.pm2/logs/` (or `$PM2_HOME/logs/`). Default `false`. |
 
 **Request:** `DELETE /pm2/delete/0` (keep logs) or `DELETE /pm2/delete/0?delete_logs=true` (also remove log files)
 
@@ -779,12 +787,18 @@ Returns the trailing lines of a process's stdout (`out`) and stderr (`error`) lo
   "message": "PM2 process logs retrieved successfully",
   "info": {
     "out": ["log line 1", "log line 2"],
-    "error": ["error line 1"]
+    "error": ["error line 1"],
+    "size": {
+      "out": 12800000,
+      "error": 4096
+    }
   }
 }
 ```
 
-The `out` and `error` arrays contain the last N lines of each respective log file. If a log file does not exist (or a stream the process does not write), that array is empty. Returns `404` if the process `pm_id` is not found.
+The `out` and `error` arrays contain the last N lines of each respective log file. If a log file does not exist (or a stream the process does not write), that array is empty. `size` holds the **raw byte footprint** of each returned stream — the current file plus every rotated sibling (`<stem>__*.log` / `.log.gz`) produced by pm2-logrotate (`0` when nothing exists). `size` follows `type`, so `?type=output` returns only `size.out` and an empty file reports `0`. Returns `404` if the process `pm_id` is not found.
+
+> Full byte sizes require log rotation to keep rotated siblings bounded; see `bun run setup:logrotate` in [SETUP.md](./SETUP.md).
 
 **Error `404`** (unknown pm_id):
 
@@ -828,7 +842,7 @@ The `info` payload for `/list`, `/start`, `/stop/:id`, `/restart/:id`, `/reload/
 | `memory` | number | Current memory usage (bytes) — `0` on operation responses |
 | `cwd` | string \| undefined | Working directory; omitted when PM2 does not report it |
 | `ip_address` | string | Server IPv4 address the process runs on (e.g. `192.168.1.10`; `127.0.0.1` when no external interface) — same value for every process on the server |
-| `logs` | object | `out` and `error` string arrays — only present when `?logs=N` is passed on `/list`; each stream capped at 500 lines. Omitted when no logs query |
+| `logs` | object | `out`/`error` string arrays plus a `size: { out, error }` object of raw bytes (current file + rotated siblings) — only present when `?logs=N` is passed on `/list`; each stream capped at 500 lines. Omitted when no logs query |
 | `watch` | boolean | File-watch enabled |
 | `autorestart` | boolean \| undefined | Auto-restart on crash enabled; omitted when PM2 does not report it |
 
