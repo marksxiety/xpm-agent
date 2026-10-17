@@ -188,6 +188,48 @@ export const ProcessOverviewResponse: OpenAPIV3.SchemaObject = {
   },
 };
 
+export const ProcessLogsClearResponse: OpenAPIV3.SchemaObject = {
+  type: "object",
+  required: ["success", "message", "info"],
+  properties: {
+    success: { type: "boolean" },
+    message: { type: "string" },
+    info: {
+      type: "object",
+      required: ["pm_id", "name", "stream", "scope", "truncated", "deleted", "bytesFreed"],
+      properties: {
+        pm_id: { type: "number", description: "PM2 internal id of the target process" },
+        name: { type: "string", description: "Process name" },
+        stream: { type: "string", enum: ["all", "out", "err"], description: "Stream selection used" },
+        scope: { type: "string", enum: ["active", "rotated", "all"], description: "Scope used" },
+        truncated: {
+          type: "object",
+          description: "Bytes truncated per stream (raw). Keys present only for streams included in `scope`.",
+          properties: {
+            out: { type: "number" },
+            error: { type: "number" },
+          },
+        },
+        deleted: {
+          type: "object",
+          description: "Rotated archives removed per stream. Keys present only for streams included in `scope`.",
+          properties: {
+            out: {
+              type: "object",
+              properties: { count: { type: "number" }, bytesFreed: { type: "number" } },
+            },
+            error: {
+              type: "object",
+              properties: { count: { type: "number" }, bytesFreed: { type: "number" } },
+            },
+          },
+        },
+        bytesFreed: { type: "number", description: "Sum of truncated and deleted bytes" },
+      },
+    },
+  },
+};
+
 export const AgentStatusResponse: OpenAPIV3.SchemaObject = {
   type: "object",
   required: ["success", "message", "info"],
