@@ -7,7 +7,8 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "build": "bun build --target bun --minify-whitespace --minify-syntax --outdir ./dist src/index.ts",
-    "start": "bun --env-file=.env --env-file=.env.production src/check-port.ts && bun run build && pm2 startOrReload ecosystem.config.js --env production && pm2 save"
+    "start": "bun --env-file=.env --env-file=.env.production src/check-port.ts && bun run build && pm2 startOrReload ecosystem.config.js --env production && pm2 save",
+    "setup:logrotate": "pm2 install pm2-logrotate@2.7.0 && pm2 set pm2-logrotate:max_size 10M && pm2 set pm2-logrotate:retain 30 && pm2 set pm2-logrotate:compress true && pm2 save"
   },
   "dependencies": {
     "@elysiajs/cors": "^1.4.2",
