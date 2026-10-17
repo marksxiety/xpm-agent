@@ -25,8 +25,9 @@ A small [Bun](https://bun.sh) + [Elysia](https://elysiajs.com/) service that run
 ## Features
 
 - **Full process lifecycle:** list, start, stop, restart, reload, delete
-- **Logs:** tail `out`/`error` logs and flush them
-- **Live metrics:** per-process CPU, memory, and restarts, plus host-level stats
+- **Logs:** tail `out`/`error` logs and flush them, with per-stream byte sizes (current + rotated)
+- **Log rotation:** one-time `pm2-logrotate` setup (`bun run setup:logrotate`) caps the log footprint
+- **Live metrics:** per-process CPU, memory, and restarts, plus host stats and the total log-directory size/count
 - **Safe by default:** optional bearer-token auth and guardrails on what can be launched
 - **Survives reboots:** runs under PM2 itself and registers with `pm2-windows-startup`
 - **Interactive API docs:** served at `/swagger`
@@ -58,14 +59,14 @@ All PM2 routes are prefixed with `/pm2`. `GET /` is a public liveness banner (no
 | `/` | GET | Public liveness banner with the agent's process id |
 | `/pm2/health` | GET | Liveness check |
 | `/pm2/list` | GET | All processes with live CPU/memory/restarts (`?overview=true`, `?logs=N`) |
-| `/pm2/system` | GET | Host-level metrics (CPU, memory) |
+| `/pm2/system` | GET | Host-level metrics (CPU, memory, total log-directory size/count) |
 | `/pm2/describe/:id` | GET | Details and code metrics for one process |
 | `/pm2/start` | POST | Register and launch a new process |
 | `/pm2/stop/:id` | POST | Stop, keeping it registered |
 | `/pm2/restart/:id` | POST | Kill and relaunch |
 | `/pm2/reload/:id` | POST | Graceful restart (fork mode falls back to restart) |
 | `/pm2/delete/:id` | DELETE | Stop and remove permanently |
-| `/pm2/logs/:id` | GET | Tail `out`/`error` logs (last N lines) |
+| `/pm2/logs/:id` | GET | Tail `out`/`error` logs (last N lines) with per-stream byte sizes |
 | `/pm2/flush/:id` | POST | Empty a process's log files |
 
 ## Security
