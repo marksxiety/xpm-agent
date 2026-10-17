@@ -1,5 +1,6 @@
 import { currentLoad, mem } from "systeminformation";
 import type { SystemOverview } from "../types";
+import { logMetricsSource, type LogMetricsSource } from "./log";
 
 export interface HostMetricsSource {
   currentLoad(): Promise<{ currentLoad: number }>;
@@ -15,8 +16,11 @@ export function toPercent(part: number, total: number): number {
   return clampPercent((part / total) * 100);
 }
 
-export async function getHostMetrics(source: HostMetricsSource = systemInformationSource): Promise<SystemOverview> {
-  const [load, memory] = await Promise.all([source.currentLoad(), source.mem()]);
+export async function getHostMetrics(
+  source: HostMetricsSource = systemInformationSource,
+  logSource: LogMetricsSource = logMetricsSource,
+): Promise<SystemOverview> {
+  const [load, memory, logs] = await Promise.all([source.currentLoad(), source.mem(), logSource.logDirMetrics()]);
 
   return {
     cpu: {
@@ -28,5 +32,6 @@ export async function getHostMetrics(source: HostMetricsSource = systemInformati
       usedBytes: memory.used,
       percentUsed: toPercent(memory.used, memory.total),
     },
+    logs,
   };
 }
