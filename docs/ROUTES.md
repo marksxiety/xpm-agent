@@ -821,6 +821,64 @@ The `out` and `error` arrays contain the last N lines of each respective log fil
 
 ---
 
+### DELETE /logs/:id
+
+Truncates active log files in place and/or deletes historical rotated archive files for one process. `id` is the process's `pm_id`. The agent's own process is refused with `409`.
+
+**Path params:**
+
+| Param | Type | Required | Description |
+|---|---|---|---|
+| `id` | number | yes | `pm_id` of the process (from `GET /list`) |
+
+**Query params:**
+
+| Param | Type | Required | Description |
+|---|---|---|---|
+| `stream` | string | no | Target stream: `"all"` (default), `"out"`, or `"err"`. Any other value → `400 INVALID_LOG_QUERY`. |
+| `scope` | string | no | `"active"` (default) truncates the open log file(s) to 0 bytes in place (never unlinked); `"rotated"` deletes archive files matching the process/stream log stem; `"all"` does both. Any other value → `400 INVALID_LOG_QUERY`. |
+
+**Request:** `DELETE /pm2/logs/0` or `DELETE /pm2/logs/0?stream=out&scope=all`
+
+**Response `200`:**
+
+```json
+{
+  "success": true,
+  "message": "Process 3 logs cleared successfully",
+  "info": {
+    "pm_id": 3,
+    "name": "example-app",
+    "stream": "all",
+    "scope": "all",
+    "truncated": { "out": 12800000, "error": 4096 },
+    "deleted": {
+      "out": { "count": 3, "bytesFreed": 900000 },
+      "error": { "count": 0, "bytesFreed": 0 }
+    },
+    "bytesFreed": 13704096
+  }
+}
+```
+
+- `truncated` holds the raw bytes freed per stream by truncation; `deleted` holds the archive count and bytes removed per stream. Keys appear only for streams included in `scope` (`stream=out` → only the `out` key).
+- Active files are **truncated, never unlinked**, so a running process keeps writing through its open descriptor. Rotated archives match the stream stem: `<stem>__<date>.log`, `<stem>__<date>.log.gz`, `<stem>.log.<n>`, and `<stem>.log.gz` (the active `<stem>.log` is never deleted).
+- Missing files or a missing log directory are a no-op success (zeros), not an error.
+
+**Error `400`** (invalid `stream`/`scope`):
+
+```json
+{ "success": false, "message": "Invalid stream 'stdout' — expected one of: all, out, err", "code": "INVALID_LOG_QUERY", "info": null }
+```
+
+**Error `409`** (agent's own process) / **`404`** (unknown pm_id) / **`500`** (disk I/O failure):
+
+```json
+{ "success": false, "message": "Log file operation failed: EBUSY: resource busy or locked, truncate '...'", "code": "LOG_IO_FAILED", "info": null }
+```
+
+---
+
 ## ProcessSummary Fields
 
 The `info` payload for `/list`, `/start`, `/stop/:id`, `/restart/:id`, `/reload/:id`, and `/delete/:id` — always an array of summaries. `GET /describe/:id` returns a **single object** with `summary` (this shape), `describe`, and `metrics` — see [GET /describe/:id](#get-describeid).
