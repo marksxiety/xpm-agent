@@ -1,7 +1,18 @@
-import { describe, expect, test, beforeEach } from "bun:test";
+import { describe, expect, test, beforeEach, afterAll } from "bun:test";
 import path from "node:path";
+import os from "node:os";
+import fs from "node:fs/promises";
 
-import { pm2LogsDir, resolveLogFiles, tailLines, DEFAULT_TAIL_LINES, MAX_TAIL_LINES } from "../../utils/log";
+import {
+  pm2LogsDir,
+  resolveLogFiles,
+  tailLines,
+  logStreamBytes,
+  resolveRotatedLogFiles,
+  logDirMetrics,
+  DEFAULT_TAIL_LINES,
+  MAX_TAIL_LINES,
+} from "../../utils/log";
 
 const FIXED_PM2_HOME = "C:\\Apps\\.pm2";
 
@@ -107,5 +118,91 @@ describe("tailLines", () => {
 
     expect(lines).toHaveLength(DEFAULT_TAIL_LINES);
     expect(lines[0]).toBe("line11");
+  });
+});
+
+const SIZE_ROOT = path.join(os.tmpdir(), `xpm-log-size-${Date.now()}`);
+const SIZE_LOGS = path.join(SIZE_ROOT, "logs");
+const SIZE_OUT = path.join(SIZE_LOGS, "default-my-app-out.log");
+const SIZE_OUT_ROTATED = path.join(SIZE_LOGS, "default-my-app-out__2026-01-01_00-00-00.log");
+const SIZE_OUT_ROTATED_GZ = path.join(SIZE_LOGS, "default-my-app-out__2026-01-02_00-00-00.log.gz");
+const SIZE_ERR = path.join(SIZE_LOGS, "default-my-app-error.log");
+
+describe("logStreamBytes", () => {
+  beforeEach(async () => {
+    await fs.mkdir(SIZE_LOGS, { recursive: true });
+    await fs.writeFile(SIZE_OUT, "a".repeat(100), "utf8");
+    await fs.writeFile(SIZE_OUT_ROTATED, "b".repeat(40), "utf8");
+    await fs.writeFile(SIZE_OUT_ROTATED_GZ, "c".repeat(10), "utf8");
+    await fs.writeFile(SIZE_ERR, "d".repeat(5), "utf8");
+  });
+
+  afterAll(async () => {
+    await fs.rm(SIZE_ROOT, { recursive: true, force: true });
+  });
+
+  test("sums the current file with all rotated siblings (including .gz)", async () => {
+    expect(await logStreamBytes(SIZE_OUT)).toBe(150);
+  });
+
+  test("sums only the matching stream", async () => {
+    expect(await logStreamBytes(SIZE_ERR)).toBe(5);
+  });
+
+  test("returns 0 for a missing path or undefined input", async () => {
+    expect(await logStreamBytes(path.join(SIZE_LOGS, "does-not-exist.log"))).toBe(0);
+    expect(await logStreamBytes(undefined)).toBe(0);
+  });
+});
+
+describe("resolveRotatedLogFiles", () => {
+  beforeEach(async () => {
+    await fs.mkdir(SIZE_LOGS, { recursive: true });
+    await fs.writeFile(SIZE_OUT, "a".repeat(100), "utf8");
+    await fs.writeFile(SIZE_OUT_ROTATED, "b".repeat(40), "utf8");
+    await fs.writeFile(SIZE_OUT_ROTATED_GZ, "c".repeat(10), "utf8");
+  });
+
+  afterAll(async () => {
+    await fs.rm(SIZE_ROOT, { recursive: true, force: true });
+  });
+
+  test("returns rotated siblings but not the current file", async () => {
+    const rotated = (await resolveRotatedLogFiles(SIZE_OUT)).map((file) => path.basename(file)).sort();
+
+    expect(rotated).toEqual([
+      "default-my-app-out__2026-01-01_00-00-00.log",
+      "default-my-app-out__2026-01-02_00-00-00.log.gz",
+    ]);
+  });
+
+  test("returns an empty list when the directory does not exist", async () => {
+    expect(await resolveRotatedLogFiles(path.join(SIZE_LOGS, "nope", "x.log"))).toEqual([]);
+  });
+});
+
+describe("logDirMetrics", () => {
+  afterAll(async () => {
+    await fs.rm(SIZE_ROOT, { recursive: true, force: true });
+  });
+
+  test("totals every .log/.log.gz file in the PM2 logs directory", async () => {
+    await fs.mkdir(SIZE_LOGS, { recursive: true });
+    await fs.writeFile(SIZE_OUT, "a".repeat(100), "utf8");
+    await fs.writeFile(SIZE_OUT_ROTATED, "b".repeat(40), "utf8");
+    await fs.writeFile(SIZE_OUT_ROTATED_GZ, "c".repeat(10), "utf8");
+    await fs.writeFile(SIZE_ERR, "d".repeat(5), "utf8");
+    await fs.writeFile(path.join(SIZE_LOGS, "not-a-log.txt"), "x".repeat(999), "utf8");
+    process.env.PM2_HOME = SIZE_ROOT;
+
+    const metrics = await logDirMetrics();
+
+    expect(metrics).toEqual({ totalBytes: 155, fileCount: 4 });
+  });
+
+  test("returns zeros when the logs directory does not exist", async () => {
+    process.env.PM2_HOME = path.join(SIZE_ROOT, "missing-home");
+
+    expect(await logDirMetrics()).toEqual({ totalBytes: 0, fileCount: 0 });
   });
 });
