@@ -27,6 +27,10 @@ const stubSource = {
     mem: async () => ({ total: 1000, used: 600, free: 400 }),
 };
 
+const stubLogSource = {
+    logDirMetrics: async () => ({ totalBytes: 4096, fileCount: 2 }),
+};
+
 function resetState() {
     state.listed = [];
     state.listError = null;
@@ -36,7 +40,7 @@ function resetState() {
 describe("system host overview controller", () => {
     test("returns host cpu usage and memory metrics only", async () => {
         resetState();
-        const controller = new SystemController(stubSource);
+        const controller = new SystemController(stubSource, stubLogSource);
 
         const response = await controller.getHostOverview();
 
@@ -47,6 +51,7 @@ describe("system host overview controller", () => {
         expect(response.info?.host.memory.freeBytes).toBe(400);
         expect(response.info?.host.memory.usedBytes).toBe(600);
         expect(response.info?.host.memory.percentUsed).toBe(60);
+        expect(response.info?.host.logs).toEqual({ totalBytes: 4096, fileCount: 2 });
         expect("processes" in (response.info as Record<string, unknown>)).toBe(false);
     });
 });
@@ -55,7 +60,7 @@ describe("process list with overview", () => {
     test("returns host metrics and process summaries", async () => {
         resetState();
         state.listed = [{ pm_id: 3, name: "my-app", pm2_env: {} }];
-        const controller = new ProcessController(stubSource);
+        const controller = new ProcessController(stubSource, undefined, stubLogSource);
 
         const response = await controller.listProcesses(undefined, true);
 
@@ -65,6 +70,7 @@ describe("process list with overview", () => {
         expect(response.info?.overview.memory.freeBytes).toBe(400);
         expect(response.info?.overview.memory.usedBytes).toBe(600);
         expect(response.info?.overview.memory.percentUsed).toBe(60);
+        expect(response.info?.overview.logs).toEqual({ totalBytes: 4096, fileCount: 2 });
         expect(response.info?.processes).toHaveLength(1);
         expect(response.info?.processes[0].name).toBe("my-app");
     });
@@ -72,7 +78,7 @@ describe("process list with overview", () => {
     test("propagates the process list failure", async () => {
         resetState();
         state.listError = new Error("Process or namespace not found");
-        const controller = new ProcessController(stubSource);
+        const controller = new ProcessController(stubSource, undefined, stubLogSource);
 
         const response = await controller.listProcesses(undefined, true);
 
