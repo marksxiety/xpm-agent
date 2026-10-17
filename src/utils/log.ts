@@ -1,4 +1,4 @@
-import { readdir, stat } from "node:fs/promises";
+import { readdir, stat, truncate, unlink } from "node:fs/promises";
 import type { Dirent } from "node:fs";
 import path from "node:path";
 import { config } from "../config";
@@ -86,13 +86,28 @@ export async function logStreamBytes(logPath: string | undefined): Promise<numbe
 }
 
 /**
- * Resolves the rotated siblings of one log file (e.g. `foo-out__2026-01-01_00-00-00.log`
- * and its `.gz` form) by matching the `<stem>__` prefix pm2-logrotate uses. The
- * current file is not included. A missing directory yields an empty list.
+ * True when `fileName` is an archived sibling of the active `<stem>.log` file.
+ *
+ * Covers pm2-logrotate's `<stem>__<date>.log` / `.log.gz` naming as well as the
+ * common `<stem>.log.<n>` / `<stem>.log.gz` / `<stem>.log.<date>` archives. The
+ * active `<stem>.log` itself is never considered rotated.
+ */
+function isRotatedLogFile(fileName: string, stem: string): boolean {
+  if (fileName === `${stem}${LOG_EXTENSION}`) return false;
+  if (fileName.startsWith(`${stem}__`)) return true;
+  if (fileName.startsWith(`${stem}${LOG_EXTENSION}.`)) return true;
+  return false;
+}
+
+/**
+ * Resolves the rotated archive files belonging to one stream (e.g.
+ * `foo-out__2026-01-01_00-00-00.log`, `foo-out.log.1`, `foo-out.log.gz`) by
+ * matching the stream stem. The active file is not included. A missing
+ * directory yields an empty list.
  */
 export async function resolveRotatedLogFiles(logPath: string): Promise<string[]> {
   const dir = path.dirname(logPath);
-  const rotatedPrefix = `${path.basename(logPath, LOG_EXTENSION)}__`;
+  const stem = path.basename(logPath, LOG_EXTENSION);
 
   let entries: Dirent[];
   try {
@@ -103,8 +118,56 @@ export async function resolveRotatedLogFiles(logPath: string): Promise<string[]>
   }
 
   return entries
-    .filter((entry) => entry.isFile() && entry.name.startsWith(rotatedPrefix))
+    .filter((entry) => entry.isFile() && isRotatedLogFile(entry.name, stem))
     .map((entry) => path.join(dir, entry.name));
+}
+
+/**
+ * Truncates an active log file to 0 bytes in place, so a running process keeps
+ * writing through its existing descriptor. Returns the bytes freed. A missing
+ * file (or non-file path) is a no-op returning 0.
+ */
+export async function truncateLogFile(logPath: string | undefined): Promise<number> {
+  if (!logPath) return 0;
+  try {
+    const fileStat = await stat(logPath);
+    if (!fileStat.isFile()) return 0;
+    await truncate(logPath, 0);
+    return fileStat.size;
+  } catch (error) {
+    if (isEnoent(error)) return 0;
+    throw error;
+  }
+}
+
+export interface RotatedLogsDeleted {
+  files: string[];
+  bytesFreed: number;
+}
+
+/**
+ * Deletes every rotated archive file belonging to one stream. Missing files are
+ * skipped, so a concurrently-rotated or already-removed archive is not an error.
+ */
+export async function deleteRotatedLogFiles(logPath: string | undefined): Promise<RotatedLogsDeleted> {
+  if (!logPath) return { files: [], bytesFreed: 0 };
+  const rotated = await resolveRotatedLogFiles(logPath);
+  const files: string[] = [];
+  let bytesFreed = 0;
+
+  for (const file of rotated) {
+    try {
+      const fileStat = await stat(file);
+      await unlink(file);
+      files.push(file);
+      bytesFreed += fileStat.size;
+    } catch (error) {
+      if (isEnoent(error)) continue;
+      throw error;
+    }
+  }
+
+  return { files, bytesFreed };
 }
 
 /**
