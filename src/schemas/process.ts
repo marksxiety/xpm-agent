@@ -19,6 +19,19 @@ export const LogsQuery = t.Object({
   )),
 });
 
+export const LogClearQuery = t.Object({
+  stream: t.Optional(t.String({
+    description:
+      "Target output stream: 'all' (default), 'out', or 'err'. Any other value returns 400 `INVALID_LOG_QUERY`.",
+    examples: ["all", "out", "err"],
+  })),
+  scope: t.Optional(t.String({
+    description:
+      "What to clear: 'active' truncates the open log file(s) to 0 bytes in place (default), 'rotated' deletes historical archive files, 'all' does both. Any other value returns 400 `INVALID_LOG_QUERY`.",
+    examples: ["active", "rotated", "all"],
+  })),
+});
+
 export const ListQuery = t.Object({
   logs: t.Optional(t.Integer({
     description:
