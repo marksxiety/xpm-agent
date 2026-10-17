@@ -47,7 +47,8 @@ export const pm2Routes = new Elysia({ prefix: "/pm2" })
   .post("/reload/:id", ({ params }) => processController.reloadProcess(params.id), getRouteMeta("reload"))
   .delete("/delete/:id", ({ params, query }) => processController.deleteProcess(params.id, query.delete_logs ?? false), getRouteMeta("delete"))
   .post("/flush/:id", ({ params }) => processController.flushLogs(params.id), getRouteMeta("flush"))
-  .get("/logs/:id", ({ params, query }) => processController.getLogs(params.id, query.tail, query.type), getRouteMeta("logs"));
+  .get("/logs/:id", ({ params, query }) => processController.getLogs(params.id, query.tail, query.type), getRouteMeta("logs"))
+  .delete("/logs/:id", ({ params, query }) => processController.clearLogs(params.id, query.stream, query.scope), getRouteMeta("clearLogs"));
 
 export const createApp = () =>
   // normalize: false keeps unknown body/query keys as validation errors (422)
