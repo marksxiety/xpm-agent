@@ -20,6 +20,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   in the host overview: `totalBytes` and `fileCount` across every `.log`/`.log.gz`
   file in the PM2 logs directory (all namespaces, current and rotated), for
   dashboard alerting/traceability.
+- `DELETE /pm2/logs/:id` clears a process's logs: `?stream=all|out|err`
+  (default `all`) and `?scope=active|rotated|all` (default `active`).
+  `active` truncates the open file(s) to 0 bytes in place (never unlinked, so the
+  running process keeps writing), `rotated` deletes archive files
+  (`<stem>__<date>.log[.gz]`, `<stem>.log.<n>`, `<stem>.log.gz`), and `all` does
+  both. Responds with per-stream `truncated`/`deleted` byte counts and a total
+  `bytesFreed`. Invalid `stream`/`scope` values return `400 INVALID_LOG_QUERY`;
+  disk I/O failures return `500 LOG_IO_FAILED`; the agent's own process is refused
+  with `409`.
 
 ### Changed
 
