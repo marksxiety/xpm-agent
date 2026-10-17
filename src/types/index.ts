@@ -45,6 +45,31 @@ export interface ProcessLogs {
     size?: ProcessLogSize;
 }
 
+export type LogStreamSelection = "all" | "out" | "err";
+
+export type LogClearScope = "active" | "rotated" | "all";
+
+export interface RotatedLogsCleared {
+    count: number;
+    bytesFreed: number;
+}
+
+export interface ProcessLogsClearResult {
+    pm_id: number;
+    name: string;
+    stream: LogStreamSelection;
+    scope: LogClearScope;
+    /** Bytes truncated per stream — present only for streams included in `scope`. */
+    truncated: ProcessLogSize;
+    /** Rotated archives removed per stream — present only for streams included in `scope`. */
+    deleted: {
+        out?: RotatedLogsCleared;
+        error?: RotatedLogsCleared;
+    };
+    /** Sum of all truncated bytes and deleted archive bytes. */
+    bytesFreed: number;
+}
+
 export type ProcessMetrics = Record<string, unknown>;
 
 export interface ProcessDescribeDetails {
