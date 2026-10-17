@@ -1,17 +1,21 @@
 import { promises as fs } from "node:fs";
 import pm2 from "pm2";
 import type { ProcessDescription, StartOptions } from "pm2";
-import type { ApiResponse, ProcessDescriptionDetails, ProcessNameConflict, ProcessSummary, ProcessLogs, LogStreamType, SystemOverviewWithProcesses } from "../types";
+import type { ApiResponse, ProcessDescriptionDetails, ProcessNameConflict, ProcessSummary, ProcessLogs, ProcessLogsClearResult, ProcessLogSize, LogClearScope, LogStreamSelection, LogStreamType, SystemOverviewWithProcesses } from "../types";
 import { respond } from "../utils/response";
 import { classifyPm2Error } from "../utils/errors";
 import { describeProcessDetails, summarizeProcess, toProcessDescriptions } from "../utils/process";
-import { resolveLogFiles, resolveRotatedLogFiles, tailLines, logStreamBytes, logMetricsSource, type LogMetricsSource } from "../utils/log";
+import { resolveLogFiles, resolveRotatedLogFiles, tailLines, logStreamBytes, logMetricsSource, truncateLogFile, deleteRotatedLogFiles, type LogMetricsSource } from "../utils/log";
 import { sanitizeProcessConfigAsync, type SanitizeInput } from "../utils/sanitize";
 import { StartIssue } from "../types/inspect";
 import { getHostMetrics, systemInformationSource, type HostMetricsSource } from "../utils/system";
 import { pm2Connection, type Pm2Connection } from "../pm2/client";
 import { AGENT_NAME, AGENT_NAMESPACE } from "../pm2/cli";
 import { config } from "../config";
+
+const LOG_STREAM_SELECTIONS: readonly LogStreamSelection[] = ["all", "out", "err"];
+const LOG_CLEAR_SCOPES: readonly LogClearScope[] = ["active", "rotated", "all"];
+
 export class ProcessController {
   private startChain: Promise<void> = Promise.resolve();
 
@@ -318,6 +322,105 @@ export class ProcessController {
     } catch (error) {
       return this.handleError(error);
     }
+  };
+
+  /**
+   * Truncates active log files in place and/or deletes rotated archives for a
+   * process. Active files are truncated (never unlinked) so the running process
+   * keeps writing through its open descriptor.
+   */
+  clearLogs = async (
+    processId: number,
+    stream?: string,
+    scope?: string,
+  ): Promise<ApiResponse<ProcessLogsClearResult>> => {
+    const selectedStream = stream ?? "all";
+    const selectedScope = scope ?? "active";
+    if (!LOG_STREAM_SELECTIONS.includes(selectedStream as LogStreamSelection))
+      return respond<ProcessLogsClearResult>(
+        `Invalid stream '${selectedStream}' — expected one of: ${LOG_STREAM_SELECTIONS.join(", ")}`,
+        null,
+        { success: false, status: 400, code: "INVALID_LOG_QUERY" },
+      );
+    if (!LOG_CLEAR_SCOPES.includes(selectedScope as LogClearScope))
+      return respond<ProcessLogsClearResult>(
+        `Invalid scope '${selectedScope}' — expected one of: ${LOG_CLEAR_SCOPES.join(", ")}`,
+        null,
+        { success: false, status: 400, code: "INVALID_LOG_QUERY" },
+      );
+
+    const streamSelection = selectedStream as LogStreamSelection;
+    const clearScope = selectedScope as LogClearScope;
+
+    let processDescriptions: ProcessDescription[];
+    try {
+      processDescriptions = await this.withPM2<ProcessDescription[]>((callback) =>
+        pm2.describe(processId, (describeError, descriptions) => callback(describeError, descriptions ?? [])),
+      );
+    } catch (error) {
+      return this.handleError(error);
+    }
+
+    const processDescription = processDescriptions[0];
+    if (!processDescription)
+      return respond<ProcessLogsClearResult>(`Process ${processId} not found`, null, {
+        success: false,
+        status: 404,
+        code: "PROCESS_NOT_FOUND",
+      });
+    if (this.isAgentProcess(processDescription))
+      return respond<ProcessLogsClearResult>("Refusing to manage the xpm-agent process itself", null, {
+        success: false,
+        status: 409,
+        code: "AGENT_SELF_MANAGEMENT_FORBIDDEN",
+      });
+
+    const processEnvironment = processDescription.pm2_env;
+    const targets: Array<{ key: "out" | "error"; path: string | undefined }> =
+      streamSelection === "out"
+        ? [{ key: "out", path: processEnvironment?.pm_out_log_path }]
+        : streamSelection === "err"
+          ? [{ key: "error", path: processEnvironment?.pm_err_log_path }]
+          : [
+              { key: "out", path: processEnvironment?.pm_out_log_path },
+              { key: "error", path: processEnvironment?.pm_err_log_path },
+            ];
+
+    const truncated: ProcessLogSize = {};
+    const deleted: ProcessLogsClearResult["deleted"] = {};
+    let bytesFreed = 0;
+    try {
+      for (const { key, path: logPath } of targets) {
+        if (clearScope === "active" || clearScope === "all") {
+          const freed = await truncateLogFile(logPath);
+          truncated[key] = freed;
+          bytesFreed += freed;
+        }
+        if (clearScope === "rotated" || clearScope === "all") {
+          const removed = await deleteRotatedLogFiles(logPath);
+          deleted[key] = { count: removed.files.length, bytesFreed: removed.bytesFreed };
+          bytesFreed += removed.bytesFreed;
+        }
+      }
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      return respond<ProcessLogsClearResult>(`Log file operation failed: ${detail}`, null, {
+        success: false,
+        status: 500,
+        code: "LOG_IO_FAILED",
+      });
+    }
+
+    const summary = summarizeProcess(processDescription);
+    return respond(`Process ${processId} logs cleared successfully`, {
+      pm_id: summary.pm_id,
+      name: summary.name,
+      stream: streamSelection,
+      scope: clearScope,
+      truncated,
+      deleted,
+      bytesFreed,
+    });
   };
 
   getLogs = async (
