@@ -8,6 +8,8 @@ export type ErrorCode =
   | "PM2_OPERATION_FAILED"
   | "INVALID_PROCESS_ID"
   | "INVALID_PROCESS_CONFIGURATION"
+  | "INVALID_LOG_QUERY"
+  | "LOG_IO_FAILED"
   | "VALIDATION_FAILED"
   | "UNAUTHORIZED"
   | "NOT_FOUND"
@@ -37,6 +39,8 @@ export const ERROR_CODES: Record<ErrorCode, ApiErrorDescriptor> = {
   PM2_OPERATION_FAILED: { status: 500, message: "PM2 operation failed" },
   INVALID_PROCESS_ID: { status: 400, message: "Invalid process id" },
   INVALID_PROCESS_CONFIGURATION: { status: 422, message: "Invalid process configuration" },
+  INVALID_LOG_QUERY: { status: 400, message: "Invalid log query" },
+  LOG_IO_FAILED: { status: 500, message: "Log file operation failed" },
   VALIDATION_FAILED: { status: 422, message: "Validation failed" },
   UNAUTHORIZED: { status: 401, message: "Unauthorized" },
   NOT_FOUND: { status: 404, message: "Route not found" },
