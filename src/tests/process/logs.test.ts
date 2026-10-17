@@ -9,6 +9,7 @@ import { DEFAULT_TAIL_LINES, MAX_TAIL_LINES } from "../../utils/log";
 const TEMP_DIR = path.join(os.tmpdir(), `pm2-logs-test-${Date.now()}`);
 const OUT_LOG = path.join(TEMP_DIR, "out.log");
 const ERROR_LOG = path.join(TEMP_DIR, "error.log");
+const ROTATED_OUT_LOG = path.join(TEMP_DIR, "out__2026-01-01_00-00-00.log");
 
 const state = {
   described: [] as ProcessDescription[],
@@ -58,6 +59,7 @@ describe("pm2 logs service", () => {
     await fs.mkdir(TEMP_DIR, { recursive: true });
     await fs.rm(OUT_LOG, { force: true });
     await fs.rm(ERROR_LOG, { force: true });
+    await fs.rm(ROTATED_OUT_LOG, { force: true });
     state.described = [
       {
         pm_id: 3,
@@ -81,6 +83,30 @@ describe("pm2 logs service", () => {
     expect(response.message).toBe("PM2 process logs retrieved successfully");
     expect((response.info as ProcessLogs).out).toEqual(["log-line-4", "log-line-5"]);
     expect((response.info as ProcessLogs).error).toEqual(["log-line-3", "log-line-4"]);
+  });
+
+  test("includes raw byte sizes for each stream, counting rotated files", async () => {
+    const outContent = buildContent(5);
+    const errorContent = buildContent(4);
+    await fs.writeFile(OUT_LOG, outContent, "utf8");
+    await fs.writeFile(ERROR_LOG, errorContent, "utf8");
+    await fs.writeFile(ROTATED_OUT_LOG, "r".repeat(100), "utf8");
+
+    const response = await processController.getLogs(3, 2);
+
+    expect((response.info as ProcessLogs).size).toEqual({
+      out: Buffer.byteLength(outContent) + 100,
+      error: Buffer.byteLength(errorContent),
+    });
+  });
+
+  test("returns a size for only the requested stream", async () => {
+    await fs.writeFile(OUT_LOG, buildContent(5), "utf8");
+
+    const response = await processController.getLogs(3, 2, "output");
+
+    expect((response.info as ProcessLogs).size).toEqual({ out: Buffer.byteLength(buildContent(5)) });
+    expect((response.info as ProcessLogs).size?.error).toBeUndefined();
   });
 
   test("returns only the output stream when type is output", async () => {
@@ -195,6 +221,7 @@ describe("pm2 logs route", () => {
     await fs.mkdir(TEMP_DIR, { recursive: true });
     await fs.rm(OUT_LOG, { force: true });
     await fs.rm(ERROR_LOG, { force: true });
+    await fs.rm(ROTATED_OUT_LOG, { force: true });
     state.described = [
       {
         pm_id: 3,
