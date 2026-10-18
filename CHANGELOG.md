@@ -5,6 +5,21 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- `exporter/` — standalone Prometheus exporter (`xpm-exporter`) for PM2 process
+  metrics. Runs under Node/PM2, serves `GET /metrics` on port `9209`, reads
+  per-server settings from its own `.env`, and shares no code with the agent.
+- GitHub Actions job running the exporter test suite.
+
+### Documentation
+
+- `exporter/README.md` documents the response contract, metrics, status codes,
+  label uniqueness, and a sample scrape; `exporter/docs/SETUP.md` covers
+  installation, environment configuration, and running under PM2.
+
 ## [2.2.0]
 
 ### Added
@@ -374,6 +389,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Initial release: an ElysiaJS REST API exposing a PM2 service with `/pm2` CRUD routes for
   process management.
 
+[2.3.0]: https://github.com/marksxiety/xpm-agent/compare/v2.2.0...v2.3.0
+[2.2.0]: https://github.com/marksxiety/xpm-agent/compare/v2.1.0...v2.2.0
 [2.1.0]: https://github.com/marksxiety/xpm-agent/compare/v2.0.2...v2.1.0
 [2.0.2]: https://github.com/marksxiety/xpm-agent/compare/v2.0.1...v2.0.2
 [2.0.1]: https://github.com/marksxiety/xpm-agent/compare/v2.0.0...v2.0.1
