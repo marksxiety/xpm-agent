@@ -1,0 +1,3 @@
+# Standalone test config so `bun test` inside exporter/ does not inherit the
+# root bunfig.toml (which preloads src/tests/preload.ts).
+[test]
