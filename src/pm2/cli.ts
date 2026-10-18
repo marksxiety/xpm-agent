@@ -1,4 +1,4 @@
-export const AGENT_NAME = new Set(["xpm-agent", "xpm-client", "xpm-server"]); // process name for agent, client (frontend), and server (backend) processes
+export const AGENT_NAME = new Set(["xpm-agent", "xpm-client", "xpm-server", "xpm-exporter"]); // process name for agent, client (frontend), and server (backend) processes
 export const AGENT_NAMESPACE = "XPM";
 const INACTIVE_STATUSES = new Set(["stopped", "errored"]);
 const DEFAULT_STDIO = { stdin: "ignore", stdout: "pipe", stderr: "ignore" } as const;
