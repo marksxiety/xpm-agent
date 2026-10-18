@@ -1,0 +1,72 @@
+[
+  {
+    "name": "errored",
+    "input": { "status": "errored", "autorestart": true, "exit_code": 1 },
+    "expected": 1
+  },
+  {
+    "name": "stopped service, autorestart true, exit 0",
+    "input": { "status": "stopped", "autorestart": true, "exit_code": 0 },
+    "expected": 3
+  },
+  {
+    "name": "stopped service, autorestart omitted",
+    "input": { "status": "stopped" },
+    "expected": 3
+  },
+  {
+    "name": "stopped one-shot, exit 0",
+    "input": { "status": "stopped", "autorestart": false, "exit_code": 0 },
+    "expected": 6
+  },
+  {
+    "name": "stopped one-shot, exit null",
+    "input": { "status": "stopped", "autorestart": false, "exit_code": null },
+    "expected": 6
+  },
+  {
+    "name": "stopped one-shot, exit omitted (undefined)",
+    "input": { "status": "stopped", "autorestart": false },
+    "expected": 6
+  },
+  {
+    "name": "stopped one-shot, exit 1",
+    "input": { "status": "stopped", "autorestart": false, "exit_code": 1 },
+    "expected": 2
+  },
+  {
+    "name": "stopped service with cron_restart, autorestart true",
+    "input": { "status": "stopped", "autorestart": true, "cron_restart": "0 * * * *", "exit_code": 0 },
+    "expected": 3
+  },
+  {
+    "name": "waiting restart",
+    "input": { "status": "waiting restart", "autorestart": true },
+    "expected": 4
+  },
+  {
+    "name": "stopping",
+    "input": { "status": "stopping", "autorestart": true },
+    "expected": 5
+  },
+  {
+    "name": "launching",
+    "input": { "status": "launching", "autorestart": true },
+    "expected": 5
+  },
+  {
+    "name": "online",
+    "input": { "status": "online", "autorestart": true },
+    "expected": 6
+  },
+  {
+    "name": "one-launch-status",
+    "input": { "status": "one-launch-status", "autorestart": true },
+    "expected": 6
+  },
+  {
+    "name": "unknown status",
+    "input": { "status": "frobnicating", "autorestart": true },
+    "expected": 5
+  }
+]
