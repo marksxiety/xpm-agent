@@ -6,7 +6,7 @@
   <a href="https://github.com/marksxiety/xpm-agent/actions/workflows/tests.yml"><img src="https://github.com/marksxiety/xpm-agent/actions/workflows/tests.yml/badge.svg" alt="Tests"></a>
   <a href="https://github.com/marksxiety/xpm-agent/actions/workflows/lint.yml"><img src="https://github.com/marksxiety/xpm-agent/actions/workflows/lint.yml/badge.svg" alt="Lint"></a>
   <a href="https://github.com/marksxiety/xpm-agent/actions/workflows/build.yml"><img src="https://github.com/marksxiety/xpm-agent/actions/workflows/build.yml/badge.svg" alt="Build"></a>
-  <a href="https://github.com/marksxiety/xpm-agent/releases/latest"><img src="https://img.shields.io/github/v/release/marksxiety/xpm-agent?label=release&include_prereleases" alt="Release"></a>
+  <a href="https://github.com/marksxiety/xpm-agent/tags"><img src="https://img.shields.io/github/v/tag/marksxiety/xpm-agent?label=release&sort=semver" alt="Release"></a>
 </p>
 
 <p align="center">
@@ -28,6 +28,7 @@ A small [Bun](https://bun.sh) + [Elysia](https://elysiajs.com/) service that run
 - **Logs:** tail `out`/`error` logs and flush them, with per-stream byte sizes (current + rotated)
 - **Log rotation:** one-time `pm2-logrotate` setup (`bun run setup:logrotate`) caps the log footprint
 - **Live metrics:** per-process CPU, memory, and restarts, plus host stats and the total log-directory size/count
+- **Prometheus metrics:** optional `xpm-exporter` sidecar serving PM2 process metrics at `GET /metrics`
 - **Safe by default:** optional bearer-token auth and guardrails on what can be launched
 - **Survives reboots:** runs under PM2 itself and registers with `pm2-windows-startup`
 - **Interactive API docs:** served at `/swagger`
@@ -90,6 +91,7 @@ Full threat model: **[SECURITY.md](./docs/SECURITY.md)**.
 | Doc | Covers |
 |---|---|
 | [SETUP.md](./docs/SETUP.md) | Install, configure, and run under PM2 |
+| [exporter/README.md](./exporter/README.md) | Prometheus exporter: metrics, status codes, and sample response |
 | [ROUTES.md](./docs/ROUTES.md) | API reference, response envelopes, language recipes |
 | [SECURITY.md](./docs/SECURITY.md) | Auth, enforcement, allowlists, known limits |
 | [PM2_payload_reference.md](./docs/PM2_payload_reference.md) | Every field accepted by `POST /pm2/start` |
