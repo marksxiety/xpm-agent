@@ -25,4 +25,25 @@ export default tseslint.config(
       sourceType: "module",
     },
   },
+  {
+    // Standalone Node/CommonJS package: unrelated to the Bun + TypeScript app.
+    files: ["exporter/**/*.js"],
+    languageOptions: {
+      ecmaVersion: "latest",
+      sourceType: "commonjs",
+      globals: {
+        require: "readonly",
+        module: "readonly",
+        __dirname: "readonly",
+        process: "readonly",
+        console: "readonly",
+        setTimeout: "readonly",
+        clearTimeout: "readonly",
+        fetch: "readonly",
+      },
+    },
+    rules: {
+      "@typescript-eslint/no-require-imports": "off",
+    },
+  },
 );
