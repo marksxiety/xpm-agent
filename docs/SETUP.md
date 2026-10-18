@@ -129,7 +129,23 @@ The installer writes an `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` ent
 
 After running, `pm2 save` (from step 5) ensures the process list is restored at boot.
 
-## 8. Security notes
+## 8. Prometheus exporter (optional)
+
+`exporter/` contains `xpm-exporter`, a standalone Prometheus exporter for PM2 process metrics. It runs as a separate PM2 app under Node and shares no code with the agent; host CPU/RAM is not included.
+
+Requirements: Node.js 20.12 or newer and PM2. The exporter has its own dependencies, `.env`, and PM2 ecosystem file, so install and run it from its directory:
+
+```cmd
+cd exporter
+npm install
+copy .env.example .env
+pm2 start ecosystem.config.js
+pm2 save
+```
+
+It serves metrics at <http://localhost:9209/metrics> by default. See [exporter/docs/SETUP.md](../exporter/docs/SETUP.md) for the full install, environment, and PM2 guide, and [exporter/README.md](../exporter/README.md) for the metrics and response contract.
+
+## 9. Security notes
 
 - `POST /pm2/start` is remote code execution by design: the child runs as the service account. Set `AUTH_TOKEN` and pair it with OS-level isolation when the port is reachable beyond localhost.
 - The agent pins `pm2` to an exact version (`package.json`) and ships a lockfile; PM2 internals (`filter_env`, `prepareAppConf`, `executeApp`, fork/cluster env handling) are security-relevant, so re-run `bun test` before bumping.
