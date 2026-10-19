@@ -14,11 +14,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   per-server settings from its own `.env`, and shares no code with the agent.
 - GitHub Actions job running the exporter test suite.
 
+### Changed
+
+- The root `ecosystem.config.js` now starts `xpm-exporter` by composing its own
+  config (`exporter/ecosystem.config.js`), so `npm run start` runs the agent and
+  the exporter together.
+- `xpm-exporter` now requires `EXPORTER_PORT`, `EXPORTER_HOST`, and
+  `EXPORTER_TIMEOUT_MS` (no defaults), checks the Windows listener table before
+  binding, and exits with code `2` naming the owning PID/process on a port
+  conflict. `stop_exit_codes: [2]` keeps PM2 from retrying these failures.
+
 ### Documentation
 
 - `exporter/README.md` documents the response contract, metrics, status codes,
   label uniqueness, and a sample scrape; `exporter/docs/SETUP.md` covers
   installation, environment configuration, and running under PM2.
+- Setup docs cover the bundled exporter startup flow, the required environment
+  variables, and the port-conflict failure mode.
 
 ## [2.2.0]
 
