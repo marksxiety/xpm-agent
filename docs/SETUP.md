@@ -20,6 +20,8 @@ bun install -g pm2
 
 > PM2 stays a project dependency too — `npm run start` invokes the local binary. The global install only puts `pm2` and `bunx pm2` on your `PATH`.
 
+> **Bundled exporter:** `exporter/` is its own Node package and is started together with the agent by the root `ecosystem.config.js`. Before the first `npm run start`, `cd exporter && npm install` and copy its env file — see step 8.
+
 ## 2. Copy the environment files
 
 Copy the example into two files — one for the base config, one for production (single command, Command Prompt):
@@ -83,7 +85,7 @@ bun --env-file=.env --env-file=.env.production src/check-port.ts && bun run buil
 
 - `bun --env-file=... src/check-port.ts` — preflight that resolves `SERVER_PORT` from the same env files the app uses and fails fast with a clear command-line error when the port is missing, invalid, or already in use. It inspects the OS TCP listener table (`netstat -ano`), so listeners on any interface or address family are detected and reported with their PID and process name. It skips the free-port check when `xpm-agent` is already online under PM2 (the reload path).
 - `bun run build` — bundles `src/index.ts` into `dist/index.js` (Bun target, minified). Production runs the compiled bundle, not the TypeScript source.
-- `pm2 startOrReload ecosystem.config.js --env production` — starts (or reloads) the API under PM2 with the `bun` interpreter from `ecosystem.config.js`. `--env production` applies the `env_production` block, setting `NODE_ENV=production`, which also makes Bun load `.env.production` on top of `.env` (see step 4). Fork mode, autorestart with `min_uptime: "10s"`, 100ms exponential backoff (PM2 caps it at 15s), effectively unlimited restarts (`max_restarts: 999999`), and `max_memory_restart: "250M"`.
+- `pm2 startOrReload ecosystem.config.js --env production` — starts (or reloads) the API under PM2 with the `bun` interpreter from `ecosystem.config.js`. `--env production` applies the `env_production` block, setting `NODE_ENV=production`, which also makes Bun load `.env.production` on top of `.env` (see step 4). Fork mode, autorestart with `min_uptime: "10s"`, 100ms exponential backoff (PM2 caps it at 15s), effectively unlimited restarts (`max_restarts: 999999`), and `max_memory_restart: "250M"`. The same command also starts (or reloads) the bundled `xpm-exporter`, composed from `exporter/ecosystem.config.js`; `--env production` applies only to the agent, while the exporter reads its own `exporter/.env` at startup (step 8).
 - `pm2 save` — persists the current process list so it is restored on reboot.
 
 At startup the API checks the OS listener table for `SERVER_PORT` before binding — on Windows this is the only reliable guard, because Bun can still bind over a listener that does not set `SO_EXCLUSIVEADDRUSE`, even with port sharing disabled. Startup and configuration failures exit with code 2, which `stop_exit_codes` in `ecosystem.config.js` tells PM2 not to retry; check the message in the terminal or in `pm2 logs xpm-agent`.
@@ -96,7 +98,7 @@ Verify it is running:
 pm2 list
 ```
 
-You should see `xpm-agent` with status `online`. Then hit the health check:
+You should see `xpm-agent` with status `online` (and `xpm-exporter`, once its dependencies and `.env` are set up). Then hit the health check:
 
 ```bash
 curl http://localhost:4000/pm2/health
@@ -129,21 +131,23 @@ The installer writes an `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` ent
 
 After running, `pm2 save` (from step 5) ensures the process list is restored at boot.
 
-## 8. Prometheus exporter (optional)
+## 8. Prometheus exporter (bundled)
 
-`exporter/` contains `xpm-exporter`, a standalone Prometheus exporter for PM2 process metrics. It runs as a separate PM2 app under Node and shares no code with the agent; host CPU/RAM is not included.
+`exporter/` contains `xpm-exporter`, a standalone Prometheus exporter for PM2 process metrics. It runs as its own PM2 app under Node, with its own `package.json` and `.env`, and shares no code with the agent; host CPU/RAM is not included.
 
-Requirements: Node.js 20.12 or newer and PM2. The exporter has its own dependencies, `.env`, and PM2 ecosystem file, so install and run it from its directory:
+The root `ecosystem.config.js` composes `exporter/ecosystem.config.js`, so `npm run start` starts and reloads `xpm-exporter` together with the agent. Before the first start (and after dependency changes), install it from its directory:
 
 ```cmd
 cd exporter
 npm install
 copy .env.example .env
-pm2 start ecosystem.config.js
-pm2 save
 ```
 
-It serves metrics at <http://localhost:9209/metrics> by default. See [exporter/docs/SETUP.md](../exporter/docs/SETUP.md) for the full install, environment, and PM2 guide, and [exporter/README.md](../exporter/README.md) for the metrics and response contract.
+`exporter/.env` is required: `EXPORTER_PORT`, `EXPORTER_HOST`, and `EXPORTER_TIMEOUT_MS` have no defaults, and the exporter exits with code `2` when one is missing or `EXPORTER_PORT` is already in use (the startup check names the owning PID and process). `stop_exit_codes: [2]` keeps PM2 from retrying these failures. The file is read once at startup, so run `pm2 restart xpm-exporter` after editing it.
+
+To run the exporter independently instead, start it from its directory with `pm2 start ecosystem.config.js` — PM2 matches apps by name and namespace, so this never duplicates the root-managed app.
+
+It serves metrics at <http://localhost:9209/metrics> with the example configuration. See [exporter/docs/SETUP.md](../exporter/docs/SETUP.md) for the full install, environment, and PM2 guide, and [exporter/README.md](../exporter/README.md) for the metrics and response contract.
 
 ## 9. Security notes
 
