@@ -44,6 +44,7 @@ function makeProc(overrides = {}) {
       unstable_restarts: 0,
       autorestart: true,
       exit_code: 0,
+      unique_id: "00000000-0000-4000-8000-000000000000",
       // Fields that must never surface as labels: prove they are ignored.
       version: "9.9.9",
       exec_interpreter: "/secret/node",
@@ -57,11 +58,11 @@ function makeProc(overrides = {}) {
   };
 }
 
-test("buildSamples emits one series per process per metric with name/namespace/pm_id", () => {
+test("buildSamples emits one series per process per metric with name/namespace", () => {
   const samples = buildSamples([makeProc({ pm_id: 7, name: "api" })], 1_000_000);
   expect(samples).toHaveLength(EXPECTED_METRICS.length);
   for (const s of samples) {
-    expect(s.labels).toEqual({ name: "api", namespace: "default", pm_id: "7" });
+    expect(s.labels).toEqual({ name: "api", namespace: "default" });
   }
   expect(samples.map((s) => s.name).sort()).toEqual(EXPECTED_METRICS);
 });
@@ -128,10 +129,10 @@ test("start_time_seconds handles missing pm_uptime and is emitted for every stat
 
 test("no metric value is NaN across statuses, and counters are typed in the text output", () => {
   const list = [
-    makeProc({ pm_id: 1, pm2_env: { status: "online", pm_uptime: 0 } }),
-    makeProc({ pm_id: 2, pm2_env: { status: "errored", pm_uptime: undefined } }),
-    makeProc({ pm_id: 3, pm2_env: { status: "stopped", autorestart: false, exit_code: 1 } }),
-    makeProc({ pm_id: 4, pm2_env: { status: "waiting restart" } }),
+    makeProc({ pm_id: 1, pm2_env: { status: "online", pm_uptime: 0, unique_id: "u1" } }),
+    makeProc({ pm_id: 2, pm2_env: { status: "errored", pm_uptime: undefined, unique_id: "u2" } }),
+    makeProc({ pm_id: 3, pm2_env: { status: "stopped", autorestart: false, exit_code: 1, unique_id: "u3" } }),
+    makeProc({ pm_id: 4, pm2_env: { status: "waiting restart", unique_id: "u4" } }),
   ];
   const body = render(buildSamples(list, 1_700_000_000_000));
   expect(body).not.toContain("NaN");
@@ -143,17 +144,46 @@ test("no metric value is NaN across statuses, and counters are typed in the text
   for (const s of buildSamples(list, 1_700_000_000_000)) expect(Number.isFinite(s.value)).toBe(true);
 });
 
-test("two processes with the same name/namespace and different pm_id are distinct series", () => {
+test("two live processes with the same name/namespace are disambiguated with unique_id", () => {
   const list = [
-    makeProc({ pm_id: 3, name: "worker", pm2_env: { namespace: "XPM" } }),
-    makeProc({ pm_id: 8, name: "worker", pm2_env: { namespace: "XPM" } }),
+    makeProc({ pm_id: 3, name: "worker", pm2_env: { namespace: "XPM", unique_id: "uuid-a" } }),
+    makeProc({ pm_id: 8, name: "worker", pm2_env: { namespace: "XPM", unique_id: "uuid-b" } }),
   ];
   const body = render(buildSamples(list));
   const cpu = body.split("\n").filter((l) => l.startsWith("pm2_cpu{"));
   expect(cpu).toHaveLength(2);
-  expect(cpu.some((l) => l.includes('pm_id="3"'))).toBe(true);
-  expect(cpu.some((l) => l.includes('pm_id="8"'))).toBe(true);
+  expect(cpu.some((l) => l.includes('unique_id="uuid-a"'))).toBe(true);
+  expect(cpu.some((l) => l.includes('unique_id="uuid-b"'))).toBe(true);
   expect(new Set(cpu).size).toBe(2);
+});
+
+test("colliding names fall back to pm_id when unique_id is missing", () => {
+  const list = [
+    makeProc({ pm_id: 3, name: "worker", pm2_env: { unique_id: undefined } }),
+    makeProc({ pm_id: 8, name: "worker", pm2_env: { unique_id: undefined } }),
+  ];
+  const body = render(buildSamples(list));
+  expect(body).toContain('pm2_status{name="worker",namespace="default",unique_id="3"} 1');
+  expect(body).toContain('pm2_status{name="worker",namespace="default",unique_id="8"} 1');
+});
+
+test("the same name in different namespaces does not collide", () => {
+  const list = [
+    makeProc({ pm_id: 1, name: "worker", pm2_env: { namespace: "XPM" } }),
+    makeProc({ pm_id: 2, name: "worker", pm2_env: { namespace: "other" } }),
+  ];
+  const body = render(buildSamples(list));
+  const cpu = body.split("\n").filter((l) => l.startsWith("pm2_cpu{"));
+  expect(cpu).toHaveLength(2);
+  expect(cpu.some((l) => l.includes("unique_id"))).toBe(false);
+});
+
+test("delete + re-register keeps the same series for the same name/namespace", () => {
+  const before = render(buildSamples([makeProc({ pm_id: 1, name: "test-process-1", pm2_env: { unique_id: "uuid-old" } })]));
+  const after = render(buildSamples([makeProc({ pm_id: 7, name: "test-process-1", pm2_env: { unique_id: "uuid-new" } })]));
+  const statusLine = (body) => body.split("\n").find((l) => l.startsWith("pm2_status{"));
+  expect(statusLine(before)).toBe('pm2_status{name="test-process-1",namespace="default"} 1');
+  expect(statusLine(after)).toBe(statusLine(before));
 });
 
 test("namespace defaults to 'default' when absent", () => {
@@ -242,7 +272,7 @@ test("formatPortInUseError names the owning process when known", () => {
 test("collect uses the injected pm2 adapter", async () => {
   const pm2 = { list: (cb) => cb(null, [makeProc({ name: "injected" })]) };
   const body = await collect({ pm2, now: 5_000 });
-  expect(body).toContain('pm2_status{name="injected",namespace="default",pm_id="0"} 1');
+  expect(body).toContain('pm2_status{name="injected",namespace="default"} 1');
 });
 
 test("mocks the pm2 module (callback -> promise)", async () => {
@@ -252,7 +282,7 @@ test("mocks the pm2 module (callback -> promise)", async () => {
   const pm2 = require("pm2");
   const body = await collect({ pm2 });
   expect(body).toContain('name="mocked"');
-  expect(body).toContain('pm_id="42"');
+  expect(body).not.toContain("unique_id");
 });
 
 async function request(server, path) {
