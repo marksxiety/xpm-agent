@@ -4,12 +4,19 @@
   "private": true,
   "description": "Standalone Prometheus exporter for PM2 process metrics. Isolated from the xpm-agent API.",
   "license": "ISC",
-  "main": "exporter.js",
+  "main": "dist/index.js",
   "scripts": {
-    "start": "node exporter.js",
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "start": "node dist/index.js",
     "test": "bun test"
   },
   "dependencies": {
     "pm2": "7.0.4"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "bun-types": "latest",
+    "typescript": "~6.0.0"
   }
 }
