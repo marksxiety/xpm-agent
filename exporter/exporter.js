@@ -3,16 +3,20 @@
 const fs = require("fs");
 const http = require("http");
 const path = require("path");
+const { execFileSync } = require("child_process");
 
 const ENV_FILE = path.join(__dirname, ".env");
 
 const PREFIX = "pm2";
 const LABEL_NAMES = ["name", "namespace", "pm_id"];
 const DEFAULT_NAMESPACE = "default";
-const DEFAULT_PORT = 9209;
-const DEFAULT_HOST = "0.0.0.0";
+// Library-level fallback for callers that omit timeoutMs. The environment
+// variable is required, so a PM2-managed run never relies on this.
 const DEFAULT_TIMEOUT_MS = 5000;
 const CONTENT_TYPE = "text/plain; version=0.0.4; charset=utf-8";
+
+const NETSTAT_COMMAND = "netstat";
+const TASKLIST_COMMAND = "tasklist";
 
 // [suffix, help, type]. All prefixed with `pm2_` to match the original.
 // Exactly one series per process per entry, labelled name/namespace/pm_id.
@@ -182,10 +186,12 @@ function render(samples) {
 
 function parseConfig(env = process.env) {
   const rawPort = env.EXPORTER_PORT;
-  const portText =
-    rawPort === undefined || String(rawPort).trim() === ""
-      ? String(DEFAULT_PORT)
-      : String(rawPort).trim();
+  const portText = rawPort === undefined ? "" : String(rawPort).trim();
+  if (portText === "") {
+    throw new Error(
+      "EXPORTER_PORT is not set — define it in exporter/.env (e.g. EXPORTER_PORT=9209)",
+    );
+  }
   const port = Number(portText);
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
     throw new Error(
@@ -194,16 +200,21 @@ function parseConfig(env = process.env) {
   }
 
   const rawHost = env.EXPORTER_HOST;
-  const host =
-    rawHost === undefined || String(rawHost).trim() === ""
-      ? DEFAULT_HOST
-      : String(rawHost).trim();
+  const host = rawHost === undefined ? "" : String(rawHost).trim();
+  if (host === "") {
+    throw new Error(
+      "EXPORTER_HOST is not set — define it in exporter/.env (e.g. EXPORTER_HOST=0.0.0.0)",
+    );
+  }
 
   const rawTimeout = env.EXPORTER_TIMEOUT_MS;
   const timeoutText =
-    rawTimeout === undefined || String(rawTimeout).trim() === ""
-      ? String(DEFAULT_TIMEOUT_MS)
-      : String(rawTimeout).trim();
+    rawTimeout === undefined ? "" : String(rawTimeout).trim();
+  if (timeoutText === "") {
+    throw new Error(
+      "EXPORTER_TIMEOUT_MS is not set — define it in exporter/.env (e.g. EXPORTER_TIMEOUT_MS=5000)",
+    );
+  }
   const timeoutMs = Number(timeoutText);
   if (!Number.isInteger(timeoutMs) || timeoutMs < 1) {
     throw new Error(
@@ -212,6 +223,83 @@ function parseConfig(env = process.env) {
   }
 
   return { port, host, timeoutMs };
+}
+
+// Same listener-detection rules as the agent's src/utils/port.ts: Windows
+// reports listeners on the port regardless of interface (0.0.0.0, [::], a
+// specific NIC address) with the foreign address ending in ":0". Established
+// and TIME_WAIT rows have a real foreign port and are ignored, so restarts on
+// a port with lingering connections are not flagged as conflicts.
+function findListeningPids(netstatOutput, port) {
+  const portSuffix = `:${port}`;
+  const pids = new Set();
+  for (const line of netstatOutput.split(/\r?\n/)) {
+    const columns = line.trim().split(/\s+/);
+    if (columns.length < 5) continue;
+    const protocol = String(columns[0] || "").toUpperCase();
+    if (protocol !== "TCP" && protocol !== "TCPV6") continue;
+    const localAddress = columns[1] || "";
+    const foreignAddress = columns[2] || "";
+    if (!localAddress.endsWith(portSuffix)) continue;
+    if (!foreignAddress.endsWith(":0")) continue;
+    const pid = Number(columns[4]);
+    if (!Number.isInteger(pid) || pid <= 0) continue;
+    pids.add(pid);
+  }
+  return [...pids];
+}
+
+function parseTasklistImageName(tasklistOutput) {
+  return tasklistOutput.match(/^"([^"]+)"/m)?.[1];
+}
+
+// Returns the PIDs listening on the port, or undefined when the OS listener
+// table is unavailable (non-Windows, command failure) so main() can fall back
+// to the bind error reported by the server.
+function findListeningPidsOnHost(port) {
+  if (process.platform !== "win32") return undefined;
+  try {
+    const output = execFileSync(NETSTAT_COMMAND, ["-ano"], {
+      encoding: "utf8",
+      windowsHide: true,
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+    return findListeningPids(output, port);
+  } catch {
+    return undefined;
+  }
+}
+
+function findProcessName(pid) {
+  if (process.platform !== "win32") return undefined;
+  try {
+    const output = execFileSync(
+      TASKLIST_COMMAND,
+      ["/FI", `PID eq ${pid}`, "/FO", "CSV", "/NH"],
+      { encoding: "utf8", windowsHide: true, stdio: ["ignore", "pipe", "ignore"] },
+    );
+    return parseTasklistImageName(output);
+  } catch {
+    return undefined;
+  }
+}
+
+function formatPortInUseError(port, pid, processName) {
+  if (pid === undefined) {
+    return `port ${port} is already in use — stop the process using it or set a different EXPORTER_PORT`;
+  }
+  const owner = processName ? `PID ${pid} (${processName})` : `PID ${pid}`;
+  return `port ${port} is already in use by ${owner} — stop that process or set a different EXPORTER_PORT`;
+}
+
+// Throws when a listener already owns the port. The check is skipped when the
+// OS listener table is unavailable; binding still fails safely in that case.
+function assertPortAvailable(port) {
+  const pids = findListeningPidsOnHost(port);
+  if (pids === undefined || pids.length === 0) return;
+  const [pid] = pids;
+  const processName = pid === undefined ? undefined : findProcessName(pid);
+  throw new Error(formatPortInUseError(port, pid, processName));
 }
 
 // Callback-style pm2.list -> Promise, bounded by a timeout. When the PM2
@@ -306,6 +394,13 @@ function main() {
     process.exit(2);
   }
 
+  try {
+    assertPortAvailable(config.port);
+  } catch (err) {
+    console.error(`[xpm-exporter] ${err.message}`);
+    process.exit(2);
+  }
+
   const pm2 = require("pm2");
   const server = createServer({ pm2, timeoutMs: config.timeoutMs });
 
@@ -334,8 +429,6 @@ module.exports = {
   METRICS,
   STATUS_CODES,
   DEFAULT_NAMESPACE,
-  DEFAULT_PORT,
-  DEFAULT_HOST,
   DEFAULT_TIMEOUT_MS,
   toNumber,
   statusCode,
@@ -345,6 +438,9 @@ module.exports = {
   buildSamples,
   render,
   parseConfig,
+  findListeningPids,
+  parseTasklistImageName,
+  formatPortInUseError,
   pm2List,
   collect,
   createRequestHandler,
