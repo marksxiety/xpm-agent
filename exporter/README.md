@@ -1,6 +1,6 @@
 # xpm-exporter
 
-A small Prometheus exporter for PM2 process metrics. It runs next to `xpm-agent` on each server, as its own PM2 app (`xpm-exporter`) under Node, with its own `package.json`. It shares no code with the agent.
+A small Prometheus exporter for PM2 process metrics. It runs next to `xpm-agent` on each server, as its own PM2 app (`xpm-exporter`) under Node, with its own `package.json`. Sources are TypeScript in `src/`, compiled to `dist/` with `npm run build`. It shares no code with the agent.
 
 It only serves `GET /metrics`, makes no outbound calls, and exposes no process env, args or cwd. Host CPU/RAM is not included (use `windows_exporter`). Derived from [`pm2-metrics`](https://github.com/saikatharryc/pm2-prometheus-exporter).
 
