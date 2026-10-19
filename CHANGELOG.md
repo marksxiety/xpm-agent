@@ -23,6 +23,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `EXPORTER_TIMEOUT_MS` (no defaults), checks the Windows listener table before
   binding, and exits with code `2` naming the owning PID/process on a port
   conflict. `stop_exit_codes: [2]` keeps PM2 from retrying these failures.
+- `xpm-exporter` metric labels changed: a series is now identified by
+  `(metric, name, namespace)` instead of including `pm_id`, so restarts and
+  delete + re-register of an app keep the same series. `pm_id` and `unique_id`
+  are deliberately not labels; two live processes sharing a name get a
+  `unique_id` disambiguator on their colliding series only.
 
 ### Documentation
 
