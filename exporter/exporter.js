@@ -8,7 +8,7 @@ const { execFileSync } = require("child_process");
 const ENV_FILE = path.join(__dirname, ".env");
 
 const PREFIX = "pm2";
-const LABEL_NAMES = ["name", "namespace", "pm_id"];
+const LABEL_NAMES = ["name", "namespace"];
 const DEFAULT_NAMESPACE = "default";
 // Library-level fallback for callers that omit timeoutMs. The environment
 // variable is required, so a PM2-managed run never relies on this.
@@ -19,7 +19,8 @@ const NETSTAT_COMMAND = "netstat";
 const TASKLIST_COMMAND = "tasklist";
 
 // [suffix, help, type]. All prefixed with `pm2_` to match the original.
-// Exactly one series per process per entry, labelled name/namespace/pm_id.
+// Exactly one series per process per entry, labelled name/namespace, plus
+// unique_id on the colliding series when two live processes share both.
 const METRICS = [
   ["cpu", "PM2 process CPU usage in percent (0 when unknown)", "gauge"],
   ["memory", "PM2 process memory usage in bytes (0 when unknown)", "gauge"],
@@ -117,16 +118,31 @@ function renderLabelSet(labels) {
 // Pure: PM2 list entries -> one sample per (metric, process).
 function buildSamples(list, now = Date.now()) {
   const samples = [];
-  for (const proc of list || []) {
+  const processes = list || [];
+
+  // Series identity is (metric, name, namespace): stable across restarts and
+  // across delete + re-create of the same app, unlike pm_id (a daemon slot that
+  // can move between processes). Two live processes sharing a name/namespace
+  // would collide, so those get PM2's per-process unique_id added (pm_id as a
+  // last resort), keeping the scrape valid.
+  const nameCounts = new Map();
+  for (const proc of processes) {
+    const env = proc.pm2_env || {};
+    const key = `${String(proc.name)}\0${String(env.namespace || DEFAULT_NAMESPACE)}`;
+    nameCounts.set(key, (nameCounts.get(key) || 0) + 1);
+  }
+
+  for (const proc of processes) {
     const env = proc.pm2_env || {};
     const monit = proc.monit || {};
     const online = env.status === "online";
 
-    const labels = {
-      name: String(proc.name),
-      namespace: String(env.namespace || DEFAULT_NAMESPACE),
-      pm_id: String(proc.pm_id),
-    };
+    const name = String(proc.name);
+    const namespace = String(env.namespace || DEFAULT_NAMESPACE);
+    const labels = { name, namespace };
+    if ((nameCounts.get(`${name}\0${namespace}`) || 0) > 1) {
+      labels.unique_id = String(env.unique_id || proc.pm_id);
+    }
 
     const startedAtMs = toNumber(env.pm_uptime);
     const uptime =
