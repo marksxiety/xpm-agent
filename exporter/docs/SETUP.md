@@ -9,12 +9,15 @@ The exporter runs next to `xpm-agent`, but as its own PM2 app (`xpm-exporter`) u
 - **Node.js 20.12 or newer** — the exporter uses `process.loadEnvFile` to read its `.env`.
 - **PM2** — the exporter is designed to run as a long-lived PM2 app.
 
-## 1. Install dependencies
+## 1. Install dependencies and build
 
 ```bash
 cd exporter
 npm install
+npm run build
 ```
+
+Sources are TypeScript in `src/`; `npm run build` compiles them to `dist/` — the directory the PM2 app runs. Re-run the build after every source change. `npm run typecheck` checks `src/` and `test/` without emitting.
 
 ## 2. Configure the environment
 
@@ -25,7 +28,7 @@ copy .env.example .env
 ```
 
 ```bash
-cp .env.example .env
+copy .env.example .env
 ```
 
 `exporter.js` loads `.env` from the exporter directory at startup, so each server can keep its own settings. The file is gitignored; shell environment variables take precedence over it.
@@ -77,4 +80,5 @@ pm2 restart xpm-exporter
 - **`port <n> is already in use by PID <pid> (<name>)`** — the startup check found a listener on `EXPORTER_PORT`. Stop that process or pick another port, then `pm2 restart xpm-exporter`.
 - **`EADDRINUSE` / bind error** — fallback when the OS listener table is unavailable (non-Windows, or a race after the check): another process owns `EXPORTER_PORT`; change it in `.env` and restart.
 - **Missing or invalid `EXPORTER_*` value** — the exporter exits with code `2`; the log line names the variable and the expected format, and `stop_exit_codes: [2]` keeps PM2 from retrying.
-- **`.env` ignored when PM2 starts** — confirm the file is `exporter/.env` (next to `exporter.js`), not the repository root.
+- **Code changes not taking effect** — the PM2 app runs the compiled `dist/`; run `npm run build` and `pm2 restart xpm-exporter`.
+- **`.env` ignored when PM2 starts** — confirm the file is `exporter/.env` (in the exporter directory), not the repository root.
