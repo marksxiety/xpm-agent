@@ -28,7 +28,7 @@ A small [Bun](https://bun.sh) + [Elysia](https://elysiajs.com/) service that run
 - **Logs:** tail `out`/`error` logs and flush them, with per-stream byte sizes (current + rotated)
 - **Log rotation:** one-time `pm2-logrotate` setup (`bun run setup:logrotate`) caps the log footprint
 - **Live metrics:** per-process CPU, memory, and restarts, plus host stats and the total log-directory size/count
-- **Prometheus metrics:** optional `xpm-exporter` sidecar serving PM2 process metrics at `GET /metrics`
+- **Prometheus metrics:** bundled `xpm-exporter` sidecar serving PM2 process metrics at `GET /metrics`, started by the root PM2 config
 - **Safe by default:** optional bearer-token auth and guardrails on what can be launched
 - **Survives reboots:** runs under PM2 itself and registers with `pm2-windows-startup`
 - **Interactive API docs:** served at `/swagger`
