@@ -20,7 +20,7 @@ bun install -g pm2
 
 > PM2 stays a project dependency too — `npm run start` invokes the local binary. The global install only puts `pm2` and `bunx pm2` on your `PATH`.
 
-> **Bundled exporter:** `exporter/` is its own Node package and is started together with the agent by the root `ecosystem.config.js`. Before the first `npm run start`, `cd exporter && npm install` and copy its env file — see step 8.
+> **Bundled exporter:** `exporter/` is its own Node package (TypeScript compiled to `dist/`) and is started together with the agent by the root `ecosystem.config.js`. Before the first `npm run start`, `cd exporter && npm install && npm run build` and copy its env file — see step 8.
 
 ## 2. Copy the environment files
 
@@ -135,13 +135,16 @@ After running, `pm2 save` (from step 5) ensures the process list is restored at 
 
 `exporter/` contains `xpm-exporter`, a standalone Prometheus exporter for PM2 process metrics. It runs as its own PM2 app under Node, with its own `package.json` and `.env`, and shares no code with the agent; host CPU/RAM is not included.
 
-The root `ecosystem.config.js` composes `exporter/ecosystem.config.js`, so `npm run start` starts and reloads `xpm-exporter` together with the agent. Before the first start (and after dependency changes), install it from its directory:
+The root `ecosystem.config.js` composes `exporter/ecosystem.config.js`, so `npm run start` starts and reloads `xpm-exporter` together with the agent. Before the first start (and after dependency or source changes), install and build it from its directory:
 
 ```cmd
 cd exporter
 npm install
+npm run build
 copy .env.example .env
 ```
+
+The exporter runs the compiled `exporter/dist/`, so re-run `npm run build` after exporter source changes — the root `npm run start` does not rebuild it.
 
 `exporter/.env` is required: `EXPORTER_PORT`, `EXPORTER_HOST`, and `EXPORTER_TIMEOUT_MS` have no defaults, and the exporter exits with code `2` when one is missing or `EXPORTER_PORT` is already in use (the startup check names the owning PID and process). `stop_exit_codes: [2]` keeps PM2 from retrying these failures. The file is read once at startup, so run `pm2 restart xpm-exporter` after editing it.
 
