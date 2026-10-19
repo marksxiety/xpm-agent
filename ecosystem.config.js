@@ -1,3 +1,7 @@
+// The exporter's PM2 settings live in exporter/ecosystem.config.js; composing
+// them here keeps that file the single source of truth for both entry points.
+const exporter = require("./exporter/ecosystem.config.js");
+
 module.exports = {
   apps: [
     {
@@ -25,5 +29,7 @@ module.exports = {
       // Environment
       env_production: { NODE_ENV: "production" }, // --env production → Bun loads .env + .env.production
     },
+
+    ...exporter.apps,
   ],
 };
