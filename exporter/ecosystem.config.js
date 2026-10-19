@@ -4,7 +4,7 @@ module.exports = {
       name: "xpm-exporter",
       namespace: "XPM",
       cwd: __dirname,
-      script: "exporter.js",
+      script: "./dist/index.js",
       interpreter: "node",
       exec_mode: "fork",
       instances: 1,
