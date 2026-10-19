@@ -10,6 +10,7 @@ module.exports = {
       instances: 1,
 
       autorestart: true,
+      stop_exit_codes: [2], // missing EXPORTER_* vars or a busy port → stop, don't retry
       min_uptime: "10s",
       max_restarts: 999999,
       exp_backoff_restart_delay: 100,
