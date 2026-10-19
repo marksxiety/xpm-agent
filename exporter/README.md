@@ -61,11 +61,11 @@ Never renumber or reuse these.
 
 ## Access
 
-With the default configuration the exporter listens on port `9209`:
+The exporter listens on `EXPORTER_HOST:EXPORTER_PORT` from `.env` — both are required, and startup exits with code `2` when one is missing or `EXPORTER_PORT` is already in use by another process. The example configuration uses port `9209`:
 
 <http://localhost:9209/metrics>
 
-The address follows `EXPORTER_HOST` and `EXPORTER_PORT` from `.env`; see [docs/SETUP.md](./docs/SETUP.md).
+See [docs/SETUP.md](./docs/SETUP.md) for setup and troubleshooting.
 
 ### Sample response
 
