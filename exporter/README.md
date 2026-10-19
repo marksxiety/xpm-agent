@@ -23,7 +23,7 @@ Setup (install, environment, and running under PM2) is in **[docs/SETUP.md](./do
 
 ## Metrics
 
-Every series has three labels: `name` (PM2 process name), `namespace` (PM2 namespace, `default` if none) and `pm_id` (PM2 numeric id).
+Every series has two labels: `name` (PM2 process name) and `namespace` (PM2 namespace, `default` if none). If two live processes share both, a `unique_id` label is added to those colliding series only.
 
 | Metric | Type | Meaning |
 |---|---|---|
@@ -54,10 +54,11 @@ Never renumber or reuse these.
 
 ## Labels and uniqueness
 
-- The id label is `pm_id`, not `instance`, because Prometheus already uses `instance` for the scrape target address.
-- Same-named processes get separate series because their `pm_id` differs.
-- A series is identified by `(metric, name, namespace, pm_id)`; no two processes share a series.
-- HELP and TYPE are emitted once per metric.
+Every series has two labels — `name` (PM2 process name) and `namespace` (PM2 namespace, `default` if none) — and is identified by `(metric, name, namespace)`. Restarting an app, or deleting and re-registering it with the same name, keeps the same series; Prometheus handles the counter resets.
+
+If two live processes share the same `name` and `namespace`, a `unique_id` label is added to just those colliding series so the scrape stays valid. Same-named processes in different namespaces never collide.
+
+HELP and TYPE are emitted once per metric.
 
 ## Access
 
@@ -74,23 +75,23 @@ One online process in the `XPM` namespace. Values and timestamps are examples; t
 ```text
 # HELP pm2_cpu PM2 process CPU usage in percent (0 when unknown)
 # TYPE pm2_cpu gauge
-pm2_cpu{name="xpm-agent",namespace="XPM",pm_id="0"} 0.4
+pm2_cpu{name="xpm-agent",namespace="XPM"} 0.4
 # HELP pm2_memory PM2 process memory usage in bytes (0 when unknown)
 # TYPE pm2_memory gauge
-pm2_memory{name="xpm-agent",namespace="XPM",pm_id="0"} 73400320
+pm2_memory{name="xpm-agent",namespace="XPM"} 73400320
 # HELP pm2_restarts_total Total number of PM2 restarts (pm2_env.restart_time)
 # TYPE pm2_restarts_total counter
-pm2_restarts_total{name="xpm-agent",namespace="XPM",pm_id="0"} 2
+pm2_restarts_total{name="xpm-agent",namespace="XPM"} 2
 # HELP pm2_start_time_seconds Process start time as a Unix timestamp in seconds (pm2_env.pm_uptime / 1000; 0 when unknown)
 # TYPE pm2_start_time_seconds gauge
-pm2_start_time_seconds{name="xpm-agent",namespace="XPM",pm_id="0"} 1792304400
+pm2_start_time_seconds{name="xpm-agent",namespace="XPM"} 1792304400
 # HELP pm2_status Fixed code for pm2_env.status (see README; must never be renumbered or reused)
 # TYPE pm2_status gauge
-pm2_status{name="xpm-agent",namespace="XPM",pm_id="0"} 1
+pm2_status{name="xpm-agent",namespace="XPM"} 1
 # HELP pm2_unstable_restarts_total Total number of PM2 unstable restarts (pm2_env.unstable_restarts)
 # TYPE pm2_unstable_restarts_total counter
-pm2_unstable_restarts_total{name="xpm-agent",namespace="XPM",pm_id="0"} 0
+pm2_unstable_restarts_total{name="xpm-agent",namespace="XPM"} 0
 # HELP pm2_uptime Seconds since the process started, when online; 0 otherwise
 # TYPE pm2_uptime gauge
-pm2_uptime{name="xpm-agent",namespace="XPM",pm_id="0"} 3600
+pm2_uptime{name="xpm-agent",namespace="XPM"} 3600
 ```
