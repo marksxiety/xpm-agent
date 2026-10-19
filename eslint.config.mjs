@@ -17,6 +17,10 @@ export default tseslint.config(
         process: "readonly",
       },
     },
+    rules: {
+      // PM2 ecosystem files are CommonJS by design (module.exports + require).
+      "@typescript-eslint/no-require-imports": "off",
+    },
   },
   {
     files: ["**/*.ts"],
