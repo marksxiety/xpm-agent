@@ -13,9 +13,9 @@ const {
   statusCode,
   getSeverityRank,
   STATUS_CODES,
-  DEFAULT_PORT,
-  DEFAULT_HOST,
-  DEFAULT_TIMEOUT_MS,
+  findListeningPids,
+  parseTasklistImageName,
+  formatPortInUseError,
 } = require("../exporter.js");
 
 const severityCases = require("./severity-cases.json");
@@ -185,16 +185,58 @@ test("renderLabelSet is empty for no labels", () => {
   expect(renderLabelSet({})).toBe("");
 });
 
-test("parseConfig uses defaults and reads env overrides", () => {
-  expect(parseConfig({})).toEqual({ port: DEFAULT_PORT, host: DEFAULT_HOST, timeoutMs: DEFAULT_TIMEOUT_MS });
-  expect(parseConfig({ EXPORTER_PORT: "9300", EXPORTER_HOST: "127.0.0.1", EXPORTER_TIMEOUT_MS: "2500" })).toEqual({
-    port: 9300,
-    host: "127.0.0.1",
-    timeoutMs: 2500,
-  });
-  expect(() => parseConfig({ EXPORTER_PORT: "abc" })).toThrow(/Invalid EXPORTER_PORT/);
-  expect(() => parseConfig({ EXPORTER_PORT: "70000" })).toThrow(/Invalid EXPORTER_PORT/);
-  expect(() => parseConfig({ EXPORTER_TIMEOUT_MS: "0" })).toThrow(/Invalid EXPORTER_TIMEOUT_MS/);
+test("parseConfig requires every EXPORTER_* variable", () => {
+  expect(() => parseConfig({})).toThrow(/EXPORTER_PORT is not set/);
+  expect(() => parseConfig({ EXPORTER_PORT: "   " })).toThrow(/EXPORTER_PORT is not set/);
+  expect(() => parseConfig({ EXPORTER_PORT: "9209" })).toThrow(/EXPORTER_HOST is not set/);
+  expect(() => parseConfig({ EXPORTER_PORT: "9209", EXPORTER_HOST: "" })).toThrow(/EXPORTER_HOST is not set/);
+  expect(() => parseConfig({ EXPORTER_PORT: "9209", EXPORTER_HOST: "0.0.0.0" })).toThrow(/EXPORTER_TIMEOUT_MS is not set/);
+});
+
+test("parseConfig reads the required env values and rejects invalid ones", () => {
+  expect(
+    parseConfig({ EXPORTER_PORT: "9300", EXPORTER_HOST: "127.0.0.1", EXPORTER_TIMEOUT_MS: "2500" }),
+  ).toEqual({ port: 9300, host: "127.0.0.1", timeoutMs: 2500 });
+
+  const valid = { EXPORTER_HOST: "0.0.0.0", EXPORTER_TIMEOUT_MS: "5000" };
+  expect(() => parseConfig({ ...valid, EXPORTER_PORT: "abc" })).toThrow(/Invalid EXPORTER_PORT/);
+  expect(() => parseConfig({ ...valid, EXPORTER_PORT: "70000" })).toThrow(/Invalid EXPORTER_PORT/);
+  expect(() => parseConfig({ EXPORTER_PORT: "9209", EXPORTER_HOST: "0.0.0.0", EXPORTER_TIMEOUT_MS: "0" })).toThrow(
+    /Invalid EXPORTER_TIMEOUT_MS/,
+  );
+});
+
+test("findListeningPids flags TCP/TCPV6 listeners on any interface and ignores non-listeners", () => {
+  const netstatOutput = [
+    "  TCP    0.0.0.0:9209           0.0.0.0:0              LISTENING       1234",
+    "  TCP    127.0.0.1:9209         0.0.0.0:0              LISTENING       1234",
+    "  TCP    [::]:9209              [::]:0                 LISTENING       5678",
+    "  TCP    192.168.1.5:9209       10.0.0.9:52344         ESTABLISHED     1234",
+    "  TCP    10.0.0.9:9209          10.0.0.9:59877         TIME_WAIT       0",
+    "  TCP    0.0.0.0:9210           0.0.0.0:0              LISTENING       9999",
+    "  TCP    0.0.0.0:19209          0.0.0.0:0              LISTENING       8888",
+    "",
+  ].join("\r\n");
+  expect(findListeningPids(netstatOutput, 9209).sort((a, b) => a - b)).toEqual([1234, 5678]);
+});
+
+test("findListeningPids ignores UDP rows and malformed lines", () => {
+  const netstatOutput = [
+    "  UDP    0.0.0.0:9209           *:*                                    1234",
+    "  TCP    0.0.0.0:9209",
+  ].join("\r\n");
+  expect(findListeningPids(netstatOutput, 9209)).toEqual([]);
+});
+
+test("parseTasklistImageName extracts the image name and tolerates 'no tasks' output", () => {
+  expect(parseTasklistImageName('"node.exe","1234","Console","1","20,000 K"\r\n')).toBe("node.exe");
+  expect(parseTasklistImageName("INFO: No tasks are running which match the specified criteria.\r\n")).toBeUndefined();
+});
+
+test("formatPortInUseError names the owning process when known", () => {
+  expect(formatPortInUseError(9209)).toContain("port 9209 is already in use");
+  expect(formatPortInUseError(9209, 1234, "node.exe")).toContain("PID 1234 (node.exe)");
+  expect(formatPortInUseError(9209, 1234)).toContain("PID 1234");
 });
 
 test("collect uses the injected pm2 adapter", async () => {
