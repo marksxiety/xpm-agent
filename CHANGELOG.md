@@ -9,33 +9,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- `exporter/` — standalone Prometheus exporter (`xpm-exporter`) for PM2 process
-  metrics. Runs under Node/PM2, serves `GET /metrics` on port `9209`, reads
-  per-server settings from its own `.env`, and shares no code with the agent.
-- GitHub Actions job running the exporter test suite.
+- `exporter/` — bundled Prometheus exporter (`xpm-exporter`) for PM2 process
+  metrics. Runs under Node/PM2 as its own app and shares no code with the agent;
+  TypeScript sources in `exporter/src/` compile with `npm run build` to
+  `exporter/dist/`, which PM2 runs.
+- `xpm-exporter` serves `GET /metrics` with series labelled `name`/`namespace`.
+  A series keeps its identity across restarts and delete + re-register; a
+  `unique_id` label is added only when two live processes share a name.
+  `EXPORTER_PORT`, `EXPORTER_HOST`, and `EXPORTER_TIMEOUT_MS` are required (no
+  defaults); startup exits with code `2` when one is missing or the configured
+  port is already in use, naming the owning PID/process.
+- GitHub Actions job running the exporter typecheck, build, and test suite.
 
 ### Changed
 
-- The root `ecosystem.config.js` now starts `xpm-exporter` by composing its own
-  config (`exporter/ecosystem.config.js`), so `npm run start` runs the agent and
-  the exporter together.
-- `xpm-exporter` now requires `EXPORTER_PORT`, `EXPORTER_HOST`, and
-  `EXPORTER_TIMEOUT_MS` (no defaults), checks the Windows listener table before
-  binding, and exits with code `2` naming the owning PID/process on a port
-  conflict. `stop_exit_codes: [2]` keeps PM2 from retrying these failures.
-- `xpm-exporter` metric labels changed: a series is now identified by
-  `(metric, name, namespace)` instead of including `pm_id`, so restarts and
-  delete + re-register of an app keep the same series. `pm_id` and `unique_id`
-  are deliberately not labels; two live processes sharing a name get a
-  `unique_id` disambiguator on their colliding series only.
+- The root `ecosystem.config.js` now also starts `xpm-exporter`, composed from
+  `exporter/ecosystem.config.js`, so `npm run start` reloads both apps.
+- Lint config allows CommonJS `require()` in `.js` files so ecosystem configs
+  can be composed.
 
 ### Documentation
 
 - `exporter/README.md` documents the response contract, metrics, status codes,
-  label uniqueness, and a sample scrape; `exporter/docs/SETUP.md` covers
-  installation, environment configuration, and running under PM2.
-- Setup docs cover the bundled exporter startup flow, the required environment
-  variables, and the port-conflict failure mode.
+  label uniqueness, and a sample scrape; `exporter/docs/SETUP.md` covers install,
+  build, environment configuration, and running under PM2.
+- Setup docs cover the bundled exporter startup flow, required environment
+  variables, the build step, and the port-conflict failure mode.
 
 ## [2.2.0]
 
@@ -406,6 +405,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Initial release: an ElysiaJS REST API exposing a PM2 service with `/pm2` CRUD routes for
   process management.
 
+[Unreleased]: https://github.com/marksxiety/xpm-agent/compare/v2.2.0...HEAD
 [2.3.0]: https://github.com/marksxiety/xpm-agent/compare/v2.2.0...v2.3.0
 [2.2.0]: https://github.com/marksxiety/xpm-agent/compare/v2.1.0...v2.2.0
 [2.1.0]: https://github.com/marksxiety/xpm-agent/compare/v2.0.2...v2.1.0
