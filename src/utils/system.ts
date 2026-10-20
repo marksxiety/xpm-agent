@@ -1,3 +1,4 @@
+import { cpus } from "node:os";
 import { currentLoad, mem } from "systeminformation";
 import type { SystemOverview } from "../types";
 import { logMetricsSource, type LogMetricsSource } from "./log";
@@ -5,9 +6,14 @@ import { logMetricsSource, type LogMetricsSource } from "./log";
 export interface HostMetricsSource {
   currentLoad(): Promise<{ currentLoad: number }>;
   mem(): Promise<{ total: number; used: number; free: number }>;
+  cores(): number;
 }
 
-export const systemInformationSource: HostMetricsSource = { currentLoad, mem };
+export const systemInformationSource: HostMetricsSource = {
+  currentLoad,
+  mem,
+  cores: () => cpus().length,
+};
 
 const clampPercent = (value: number): number => Number(Math.min(100, Math.max(0, value)).toFixed(2));
 
@@ -25,6 +31,7 @@ export async function getHostMetrics(
   return {
     cpu: {
       usagePercent: clampPercent(load.currentLoad),
+      cores: source.cores(),
     },
     memory: {
       totalBytes: memory.total,
