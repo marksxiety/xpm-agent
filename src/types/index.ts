@@ -125,6 +125,7 @@ export interface LogDirMetrics {
 export interface SystemOverview {
     cpu: {
         usagePercent: number;
+        cores: number;
     },
     memory: {
         totalBytes: number;
