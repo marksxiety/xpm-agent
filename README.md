@@ -60,7 +60,7 @@ All PM2 routes are prefixed with `/pm2`. `GET /` is a public liveness banner (no
 | `/` | GET | Public liveness banner with the agent's process id |
 | `/pm2/health` | GET | Liveness check |
 | `/pm2/list` | GET | All processes with live CPU/memory/restarts (`?overview=true`, `?logs=N`) |
-| `/pm2/system` | GET | Host-level metrics (CPU, memory, total log-directory size/count) |
+| `/pm2/system` | GET | Host-level metrics (CPU usage/core count, memory, total log-directory size/count) |
 | `/pm2/describe/:id` | GET | Details and code metrics for one process |
 | `/pm2/start` | POST | Register and launch a new process |
 | `/pm2/stop/:id` | POST | Stop, keeping it registered |
