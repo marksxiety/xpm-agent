@@ -25,6 +25,7 @@ const { createApp } = await import("../../index");
 const stubSource = {
     currentLoad: async () => ({ currentLoad: 12.5 }),
     mem: async () => ({ total: 1000, used: 600, free: 400 }),
+    cores: () => 8,
 };
 
 const stubLogSource = {
@@ -47,6 +48,7 @@ describe("system host overview controller", () => {
         expect(response.success).toBe(true);
         expect(response.message).toBe("System overview retrieved successfully");
         expect(response.info?.host.cpu.usagePercent).toBe(12.5);
+        expect(response.info?.host.cpu.cores).toBe(8);
         expect(response.info?.host.memory.totalBytes).toBe(1000);
         expect(response.info?.host.memory.freeBytes).toBe(400);
         expect(response.info?.host.memory.usedBytes).toBe(600);
@@ -66,6 +68,7 @@ describe("process list with overview", () => {
 
         expect(response.success).toBe(true);
         expect(response.info?.overview.cpu.usagePercent).toBe(12.5);
+        expect(response.info?.overview.cpu.cores).toBe(8);
         expect(response.info?.overview.memory.totalBytes).toBe(1000);
         expect(response.info?.overview.memory.freeBytes).toBe(400);
         expect(response.info?.overview.memory.usedBytes).toBe(600);
