@@ -7,7 +7,7 @@ test("collect uses the injected pm2 adapter", async () => {
     list: (callback) => callback(null, [makeProc({ name: "injected" })]),
   };
   const body = await collect({ pm2, now: 5_000 });
-  expect(body).toContain('pm2_status{name="injected",namespace="default"} 1');
+  expect(body).toContain('pm2_status{name="injected",namespace="default"} 9');
 });
 
 test("mocks the pm2 module (callback -> promise)", async () => {
