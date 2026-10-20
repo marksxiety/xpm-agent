@@ -109,7 +109,8 @@ Returns all PM2-managed processes with live CPU, memory, restart counts, and sta
   "info": {
     "overview": {
       "cpu": {
-        "usagePercent": 12.5
+        "usagePercent": 12.5,
+        "cores": 8
       },
       "memory": {
         "totalBytes": 17179869184,
@@ -151,7 +152,7 @@ Returns all PM2-managed processes with live CPU, memory, restart counts, and sta
 
 ### GET /system
 
-Host-level metrics only (CPU utilization percentage and memory usage). Does **not** include the process list — use `GET /list?overview=true` for a combined host + processes view. Works even when the PM2 daemon is unavailable.
+Host-level metrics only (CPU utilization, logical core count, and memory usage). Does **not** include the process list — use `GET /list?overview=true` for a combined host + processes view. Works even when the PM2 daemon is unavailable.
 
 **Request:** no params, no body
 
@@ -164,7 +165,8 @@ Host-level metrics only (CPU utilization percentage and memory usage). Does **no
   "info": {
     "host": {
       "cpu": {
-        "usagePercent": 12.5
+        "usagePercent": 12.5,
+        "cores": 8
       },
       "memory": {
         "totalBytes": 17179869184,
@@ -181,7 +183,7 @@ Host-level metrics only (CPU utilization percentage and memory usage). Does **no
 }
 ```
 
-> **Host metric notes:** `cpu.usagePercent` is measured between samples. The first sample after server start has no prior baseline, so systeminformation measures it over a short (~500 ms) window — that request may take slightly longer, and the server primes the baseline at startup. `memory.usedBytes` includes buffers/cache. `logs` totals **every** `.log`/`.log.gz` file in the PM2 logs directory (all namespaces, current and rotated) — the same footprint pm2-logrotate reports as "Global logs size" / "Files count", intended for dashboard alerting. It is `{ totalBytes: 0, fileCount: 0 }` when the logs directory does not exist.
+> **Host metric notes:** `cpu.cores` is the number of logical CPU cores reported by the host OS. `cpu.usagePercent` is measured between samples. The first sample after server start has no prior baseline, so systeminformation measures it over a short (~500 ms) window — that request may take slightly longer, and the server primes the baseline at startup. `memory.usedBytes` includes buffers/cache. `logs` totals **every** `.log`/`.log.gz` file in the PM2 logs directory (all namespaces, current and rotated) — the same footprint pm2-logrotate reports as "Global logs size" / "Files count", intended for dashboard alerting. It is `{ totalBytes: 0, fileCount: 0 }` when the logs directory does not exist.
 
 ---
 
