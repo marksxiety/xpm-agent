@@ -33,22 +33,27 @@ Every series has two labels: `name` (PM2 process name) and `namespace` (PM2 name
 | `pm2_start_time_seconds` | gauge | Start time as a Unix timestamp. Changes on every (re)start |
 | `pm2_restarts_total` | counter | Total restarts |
 | `pm2_unstable_restarts_total` | counter | Restarts that happened too soon after a start |
-| `pm2_status` | gauge | Status code (table below) |
+| `pm2_status` | gauge | Detailed status code (table below) |
 
 ### Status codes
 
-Never renumber or reuse these.
+These values are shared with the web Dashboard and charts. Keep them in sync
+with `web/src/lib/status-catalog.ts`.
 
 | Code | Status |
 |---|---|
 | `0` | unknown / other |
-| `1` | online |
-| `2` | launching |
-| `3` | stopping |
+| `1` | errored |
+| `2` | failed (exit ≠ 0) |
+| `3` | degraded |
 | `4` | waiting restart |
-| `5` | stopped |
-| `6` | errored |
-| `7` | one-launch-status |
+| `5` | launching / stopping |
+| `6` | stopped |
+| `7` | scheduled (idle) |
+| `8` | completed |
+| `9` | online |
+
+`one-launch-status` is grouped with `launching`/`stopping` as code `5`.
 
 `stopped` is not always a problem (for example, a cron job that finished cleanly).
 
@@ -85,9 +90,9 @@ pm2_restarts_total{name="xpm-agent",namespace="XPM"} 2
 # HELP pm2_start_time_seconds Process start time as a Unix timestamp in seconds (pm2_env.pm_uptime / 1000; 0 when unknown)
 # TYPE pm2_start_time_seconds gauge
 pm2_start_time_seconds{name="xpm-agent",namespace="XPM"} 1792304400
-# HELP pm2_status Fixed code for pm2_env.status (see README; must never be renumbered or reused)
+# HELP pm2_status Detailed status code shared with the web UI (0 unknown, 1 errored, 2 failed, 3 degraded, 4 waiting restart, 5 launching/stopping, 6 stopped, 7 scheduled, 8 completed, 9 online)
 # TYPE pm2_status gauge
-pm2_status{name="xpm-agent",namespace="XPM"} 1
+pm2_status{name="xpm-agent",namespace="XPM"} 9
 # HELP pm2_unstable_restarts_total Total number of PM2 unstable restarts (pm2_env.unstable_restarts)
 # TYPE pm2_unstable_restarts_total counter
 pm2_unstable_restarts_total{name="xpm-agent",namespace="XPM"} 0
