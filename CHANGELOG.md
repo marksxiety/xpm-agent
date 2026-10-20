@@ -7,8 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.3.0] - 2026-10-20
+
 ### Added
 
+- Host overview responses (`GET /pm2/system`, `GET /pm2/list?overview=true`) now
+  include `cpu.cores`, the host's logical CPU core count reported by `node:os`.
 - `exporter/` — bundled Prometheus exporter (`xpm-exporter`) for PM2 process
   metrics. Runs under Node/PM2 as its own app and shares no code with the agent;
   TypeScript sources in `exporter/src/` compile with `npm run build` to
@@ -27,14 +31,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `exporter/ecosystem.config.js`, so `npm run start` reloads both apps.
 - Lint config allows CommonJS `require()` in `.js` files so ecosystem configs
   can be composed.
+- `xpm-exporter`'s `pm2_status` now emits detailed status codes shared with the
+  web Dashboard (`web/src/lib/status-catalog.ts`): `0` unknown, `1` errored,
+  `2` failed (non-zero exit), `3` degraded, `4` waiting restart,
+  `5` launching/stopping, `6` stopped, `7` scheduled, `8` completed, `9` online.
+  Stopped processes are classified using `autorestart`, `exit_code`, and
+  `cron_restart`.
 
 ### Documentation
 
-- `exporter/README.md` documents the response contract, metrics, status codes,
-  label uniqueness, and a sample scrape; `exporter/docs/SETUP.md` covers install,
-  build, environment configuration, and running under PM2.
+- `exporter/README.md` documents the response contract, metrics, the detailed
+  status-code table shared with the web Dashboard, label uniqueness, and a sample
+  scrape; `exporter/docs/SETUP.md` covers install, build, environment
+  configuration, and running under PM2.
 - Setup docs cover the bundled exporter startup flow, required environment
   variables, the build step, and the port-conflict failure mode.
+- `ROUTES.md`, `README.md`, and the OpenAPI schema/metadata document `cpu.cores`
+  in host overview responses.
 
 ## [2.2.0]
 
@@ -405,7 +418,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Initial release: an ElysiaJS REST API exposing a PM2 service with `/pm2` CRUD routes for
   process management.
 
-[Unreleased]: https://github.com/marksxiety/xpm-agent/compare/v2.2.0...HEAD
+[Unreleased]: https://github.com/marksxiety/xpm-agent/compare/v2.3.0...HEAD
 [2.3.0]: https://github.com/marksxiety/xpm-agent/compare/v2.2.0...v2.3.0
 [2.2.0]: https://github.com/marksxiety/xpm-agent/compare/v2.1.0...v2.2.0
 [2.1.0]: https://github.com/marksxiety/xpm-agent/compare/v2.0.2...v2.1.0
