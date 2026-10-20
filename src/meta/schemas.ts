@@ -18,9 +18,10 @@ export const HostMetrics: OpenAPIV3.SchemaObject = {
   properties: {
     cpu: {
       type: "object",
-      required: ["usagePercent"],
+      required: ["usagePercent", "cores"],
       properties: {
         usagePercent: { type: "number", description: "CPU utilization percentage (0-100, 2 decimal places)" },
+        cores: { type: "number", description: "Logical CPU core count on the host" },
       },
     },
     memory: {
