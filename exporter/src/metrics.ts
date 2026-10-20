@@ -31,28 +31,18 @@ export const METRICS: ReadonlyArray<readonly [string, string, string]> = [
   ],
   [
     "status",
-    "Fixed code for pm2_env.status (see README; must never be renumbered or reused)",
+    "Detailed status code shared with the web UI (0 unknown, 1 errored, 2 failed, 3 degraded, 4 waiting restart, 5 launching/stopping, 6 stopped, 7 scheduled, 8 completed, 9 online)",
     "gauge",
   ],
 ];
 
-// Fixed mapping from pm2_env.status to pm2_status. These numbers are part
-// of the metric's contract: never renumber or reuse them. Any status not listed
-// here (including "unknown") maps to 0.
-export const STATUS_CODES: Readonly<Record<string, number>> = Object.freeze({
-  online: 1,
-  launching: 2,
-  stopping: 3,
-  "waiting restart": 4,
-  stopped: 5,
-  errored: 6,
-  "one-launch-status": 7,
-});
-
-export type SeverityEnvironment = {
+// Detailed status codes emitted as pm2_status. Keep in sync with
+// web/src/lib/status-catalog.ts so the Dashboard and charts agree.
+export type StatusEnvironment = {
   status?: unknown;
   autorestart?: unknown;
   exit_code?: unknown;
+  cron_restart?: unknown;
 };
 
 export type ProcessMonit = {
@@ -67,6 +57,9 @@ export type ProcessEnvironment = {
   restart_time?: unknown;
   unstable_restarts?: unknown;
   unique_id?: unknown;
+  autorestart?: unknown;
+  exit_code?: unknown;
+  cron_restart?: unknown;
 };
 
 // The subset of a PM2 process entry this exporter reads. Fields are `unknown`
@@ -87,36 +80,43 @@ export type MetricSample = {
   value: number;
 };
 
-export function statusCode(status: unknown): number {
-  const code = STATUS_CODES[String(status)];
-  return code === undefined ? 0 : code;
+function hasNonZeroExitCode(value: unknown): boolean {
+  return value !== undefined && value !== null && Number(value) !== 0;
 }
 
-// Lower is worse; 6 is "healthy or idle". Unknown statuses deliberately fall
-// through to 5 so they surface as unhealthy rather than being treated as fine.
-export function getSeverityRank(env: SeverityEnvironment): number {
+export function statusCode(env: StatusEnvironment): number {
   const status = env.status;
 
   if (status === "errored") return 1;
+  if (status === "degraded") return 3;
+  if (status === "waiting restart") return 4;
+  if (
+    status === "stopping" ||
+    status === "launching" ||
+    status === "one-launch-status"
+  ) {
+    return 5;
+  }
+  if (status === "online") return 9;
 
   if (status === "stopped") {
-    const isOneShot = env.autorestart === false;
-    if (isOneShot) {
-      const failed =
-        env.exit_code !== undefined &&
-        env.exit_code !== null &&
-        env.exit_code !== 0;
-      return failed ? 2 : 6;
+    const isCronOrOneShot =
+      env.autorestart === false || Boolean(env.cron_restart);
+
+    if (isCronOrOneShot && hasNonZeroExitCode(env.exit_code)) return 2;
+    if (env.cron_restart) return 7;
+    if (
+      isCronOrOneShot &&
+      env.exit_code !== undefined &&
+      env.exit_code !== null &&
+      Number(env.exit_code) === 0
+    ) {
+      return 8;
     }
-    return 3;
+    return 6;
   }
 
-  if (status === "waiting restart") return 4;
-  if (status === "stopping" || status === "launching") return 5;
-  if (status === "online") return 6;
-  if (status === "one-launch-status") return 6;
-
-  return 5;
+  return 0;
 }
 
 export function toNumber(value: unknown): number {
@@ -187,7 +187,7 @@ export function buildSamples(
       start_time_seconds: startTimeSeconds,
       restarts_total: toNumber(env.restart_time),
       unstable_restarts_total: toNumber(env.unstable_restarts),
-      status: statusCode(env.status),
+      status: statusCode(env),
     };
 
     for (const [suffix, help, type] of METRICS) {
