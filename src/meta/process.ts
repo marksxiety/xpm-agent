@@ -52,6 +52,7 @@ const routeMeta = {
                       overview: {
                         cpu: {
                           usagePercent: 12.5,
+                          cores: 8,
                         },
                         memory: {
                           totalBytes: 17179869184,
