@@ -5,11 +5,9 @@ import {
   renderLabelSet,
   escapeLabel,
   statusCode,
-  getSeverityRank,
-  STATUS_CODES,
 } from "../src/metrics";
 import { makeProc } from "./support/make-proc";
-import severityCases from "./severity-cases.json";
+import statusCases from "./status-cases.json";
 
 const EXPECTED_METRICS = [
   "pm2_cpu",
@@ -40,29 +38,21 @@ test("metric types: the two _total metrics are counters, the rest are gauges", (
 });
 
 test("pm2_status maps every known status; unknown/other maps to 0", () => {
-  expect(STATUS_CODES).toEqual({
-    online: 1,
-    launching: 2,
-    stopping: 3,
-    "waiting restart": 4,
-    stopped: 5,
-    errored: 6,
-    "one-launch-status": 7,
-  });
-  expect(statusCode("online")).toBe(1);
-  expect(statusCode("launching")).toBe(2);
-  expect(statusCode("stopping")).toBe(3);
-  expect(statusCode("waiting restart")).toBe(4);
-  expect(statusCode("stopped")).toBe(5);
-  expect(statusCode("errored")).toBe(6);
-  expect(statusCode("one-launch-status")).toBe(7);
-  expect(statusCode("frobnicating")).toBe(0);
-  expect(statusCode(undefined)).toBe(0);
+  expect(statusCode({ status: "errored" })).toBe(1);
+  expect(statusCode({ status: "degraded" })).toBe(3);
+  expect(statusCode({ status: "waiting restart" })).toBe(4);
+  expect(statusCode({ status: "launching" })).toBe(5);
+  expect(statusCode({ status: "stopping" })).toBe(5);
+  expect(statusCode({ status: "one-launch-status" })).toBe(5);
+  expect(statusCode({ status: "online" })).toBe(9);
+  expect(statusCode({ status: "stopped" })).toBe(6);
+  expect(statusCode({ status: "frobnicating" })).toBe(0);
+  expect(statusCode({})).toBe(0);
 });
 
-for (const c of severityCases) {
-  test(`severity rank: ${c.name}`, () => {
-    expect(getSeverityRank(c.input)).toBe(c.expected);
+for (const c of statusCases) {
+  test(`status code: ${c.name}`, () => {
+    expect(statusCode(c.input)).toBe(c.expected);
   });
 }
 
@@ -126,8 +116,8 @@ test("colliding names fall back to pm_id when unique_id is missing", () => {
     makeProc({ pm_id: 8, name: "worker", pm2_env: { unique_id: undefined } }),
   ];
   const body = render(buildSamples(list));
-  expect(body).toContain('pm2_status{name="worker",namespace="default",unique_id="3"} 1');
-  expect(body).toContain('pm2_status{name="worker",namespace="default",unique_id="8"} 1');
+  expect(body).toContain('pm2_status{name="worker",namespace="default",unique_id="3"} 9');
+  expect(body).toContain('pm2_status{name="worker",namespace="default",unique_id="8"} 9');
 });
 
 test("the same name in different namespaces does not collide", () => {
@@ -145,7 +135,7 @@ test("delete + re-register keeps the same series for the same name/namespace", (
   const before = render(buildSamples([makeProc({ pm_id: 1, name: "test-process-1", pm2_env: { unique_id: "uuid-old" } })]));
   const after = render(buildSamples([makeProc({ pm_id: 7, name: "test-process-1", pm2_env: { unique_id: "uuid-new" } })]));
   const statusLine = (body: string) => body.split("\n").find((l) => l.startsWith("pm2_status{"));
-  expect(statusLine(before)).toBe('pm2_status{name="test-process-1",namespace="default"} 1');
+  expect(statusLine(before)).toBe('pm2_status{name="test-process-1",namespace="default"} 9');
   expect(statusLine(after)).toBe(statusLine(before));
 });
 
