@@ -5,6 +5,7 @@ function buildSource(overrides: Partial<HostMetricsSource> = {}): HostMetricsSou
   return {
     currentLoad: async () => ({ currentLoad: 12.5 }),
     mem: async () => ({ total: 1000, used: 600, free: 400 }),
+    cores: () => 8,
     ...overrides,
   };
 }
@@ -30,6 +31,7 @@ describe("getHostMetrics", () => {
     const metrics = await getHostMetrics(buildSource());
 
     expect(metrics.cpu.usagePercent).toBe(12.5);
+    expect(metrics.cpu.cores).toBe(8);
     expect(metrics.memory).toEqual({
       totalBytes: 1000,
       freeBytes: 400,
