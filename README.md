@@ -12,7 +12,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/platform-Windows%20only-0078D6" alt="Platform: Windows only">
   <img src="https://img.shields.io/badge/Bun-1.3.14-black?logo=bun&logoColor=white" alt="Bun 1.3.14">
-  <img src="https://img.shields.io/badge/PM2-7.0.4-2B037A?logo=pm2&logoColor=white" alt="PM2 7.0.4">
+  <img src="https://img.shields.io/badge/PM2-7.1.1-2B037A?logo=pm2&logoColor=white" alt="PM2 7.1.1">
 </p>
 
 A small [Bun](https://bun.sh) + [Elysia](https://elysiajs.com/) service that runs next to PM2 on each machine and exposes it over HTTP. Install one on every server and manage your whole fleet with plain HTTP requests, with no SSH sessions needed.
