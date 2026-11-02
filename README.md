@@ -26,16 +26,16 @@ A small [Bun](https://bun.sh) + [Elysia](https://elysiajs.com/) service that run
 
 - **Full process lifecycle:** list, start, stop, restart, reload, delete
 - **Logs:** tail `out`/`error` logs and flush them, with per-stream byte sizes (current + rotated)
-- **Log rotation:** one-time `pm2-logrotate` setup (`bun run setup:logrotate`) caps the log footprint
+- **Log rotation:** optional one-time `pm2-logrotate` module; the agent hides the module from its API
 - **Live metrics:** per-process CPU, memory, and restarts, plus host stats and the total log-directory size/count
-- **Prometheus metrics:** bundled `xpm-exporter` sidecar serving PM2 process metrics at `GET /metrics`, started by the root PM2 config
+- **Prometheus metrics:** bundled `xpm-exporter` sidecar serving PM2 process metrics at `GET /metrics`, built and started by `npm run start`
 - **Safe by default:** optional bearer-token auth and guardrails on what can be launched
-- **Survives reboots:** runs under PM2 itself and registers with `pm2-windows-startup`
+- **Survives reboots:** `npm run start` registers with `pm2-windows-startup` and saves the process list
 - **Interactive API docs:** served at `/swagger`
 
 ## How it works
 
-> **PM2 does the real work.** This agent does not reimplement process management — it connects to PM2's daemon and relays your HTTP commands to it. PM2 handles daemonization, restarts, log rotation, and persistence; the agent just makes PM2 callable over HTTP.
+> **PM2 does the real work.** This agent does not reimplement process management — it connects to PM2's daemon and relays your HTTP commands to it. PM2 handles daemonization, restarts, and persistence; the optional `pm2-logrotate` module handles log rotation; the agent just makes PM2 callable over HTTP.
 
 
 ```mermaid
@@ -70,6 +70,8 @@ All PM2 routes are prefixed with `/pm2`. `GET /` is a public liveness banner (no
 | `/pm2/logs/:id` | GET | Tail `out`/`error` logs (last N lines) with per-stream byte sizes |
 | `/pm2/logs/:id` | DELETE | Truncate active and/or delete rotated logs (`?stream=all\|out\|err`, `?scope=active\|rotated\|all`) |
 | `/pm2/flush/:id` | POST | Empty a process's log files |
+
+> The optional `pm2-logrotate` module is hidden from the API: it is omitted from `/pm2/list`, and routes that target it return `404`.
 
 ## Security
 
