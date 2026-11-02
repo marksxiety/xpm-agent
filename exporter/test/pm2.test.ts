@@ -21,6 +21,16 @@ test("mocks the pm2 module (callback -> promise)", async () => {
   expect(body).not.toContain("unique_id");
 });
 
+test("collect hides the pm2-logrotate module", async () => {
+  const pm2: Pm2ListAdapter = {
+    list: (callback) =>
+      callback(null, [makeProc({ name: "app" }), makeProc({ name: "pm2-logrotate" })]),
+  };
+  const body = await collect({ pm2, now: 5_000 });
+  expect(body).toContain('name="app"');
+  expect(body).not.toContain('name="pm2-logrotate"');
+});
+
 test("collect rejects when pm2.list never calls back (bounded by timeout)", async () => {
   const pm2: Pm2ListAdapter = { list: () => {} };
   await expect(collect({ pm2, timeoutMs: 30 })).rejects.toThrow(/did not respond within 30ms/);
