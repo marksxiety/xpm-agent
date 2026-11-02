@@ -10,7 +10,7 @@ import { sanitizeProcessConfigAsync, type SanitizeInput } from "../utils/sanitiz
 import { StartIssue } from "../types/inspect";
 import { getHostMetrics, systemInformationSource, type HostMetricsSource } from "../utils/system";
 import { pm2Connection, type Pm2Connection } from "../pm2/client";
-import { AGENT_NAME, AGENT_NAMESPACE } from "../pm2/cli";
+import { AGENT_NAME, AGENT_NAMESPACE, isHiddenPm2Process } from "../pm2/cli";
 import { config } from "../config";
 
 const LOG_STREAM_SELECTIONS: readonly LogStreamSelection[] = ["all", "out", "err"];
@@ -71,9 +71,11 @@ export class ProcessController {
   listProcesses(tail?: number, includeOverview?: boolean): Promise<ApiResponse<ProcessSummary[] | SystemOverviewWithProcesses>>;
   async listProcesses(tail?: number, includeOverview = false): Promise<ApiResponse<ProcessSummary[] | SystemOverviewWithProcesses>> {
     try {
-      const processDescriptions = await this.withPM2<ProcessDescription[]>((callback) =>
-        pm2.list((listError, list) => callback(listError, list ?? [])),
-      );
+      const processDescriptions = (
+        await this.withPM2<ProcessDescription[]>((callback) =>
+          pm2.list((listError, list) => callback(listError, list ?? [])),
+        )
+      ).filter((process) => !isHiddenPm2Process(process));
       const processSummaries = processDescriptions.map(summarizeProcess);
       let info: ProcessSummary[] | SystemOverviewWithProcesses = processSummaries;
       if (tail !== undefined) {
@@ -110,7 +112,7 @@ export class ProcessController {
           callback(describeError, descriptions ?? []),
         ),
       );
-      if (processDescriptions.length === 0)
+      if (processDescriptions.length === 0 || isHiddenPm2Process(processDescriptions[0]))
         return respond<ProcessDescriptionDetails>(`Process ${processId} not found`, null, {
           success: false,
           status: 404,
@@ -123,9 +125,11 @@ export class ProcessController {
   };
 
   private async findProcessByName(name: string): Promise<ProcessNameConflict | null> {
-    const processDescriptions = await this.withPM2<ProcessDescription[]>((callback) =>
-      pm2.list((listError, list) => callback(listError, list ?? [])),
-    );
+    const processDescriptions = (
+      await this.withPM2<ProcessDescription[]>((callback) =>
+        pm2.list((listError, list) => callback(listError, list ?? [])),
+      )
+    ).filter((process) => !isHiddenPm2Process(process));
 
     // PM2's default is case-insensitive for process names, so we normalize the name to lowercase for comparison.
     // Note that this may not be the same behavior as PM2's internal name matching, but it is a safety precaution because PM2 accepts name
@@ -153,7 +157,15 @@ export class ProcessController {
     const processDescriptions = await this.withPM2<ProcessDescription[]>((callback) =>
       pm2.describe(processId, (describeError, descriptions) => callback(describeError, descriptions ?? [])),
     );
-    if (this.isAgentProcess(processDescriptions[0])) {
+    const target = processDescriptions[0];
+    if (isHiddenPm2Process(target)) {
+      return respond(`Process ${processId} not found`, null, {
+        success: false,
+        status: 404,
+        code: "PROCESS_NOT_FOUND",
+      }) as ApiResponse<T>;
+    }
+    if (this.isAgentProcess(target)) {
       return respond("Refusing to manage the xpm-agent process itself", null, {
         success: false,
         status: 409,
@@ -317,6 +329,15 @@ export class ProcessController {
       const parsedProcessId = Number(processId);
       if (Number.isNaN(parsedProcessId))
         return respond("Invalid process id", null, { success: false, status: 400, code: "INVALID_PROCESS_ID" });
+      const processDescriptions = await this.withPM2<ProcessDescription[]>((callback) =>
+        pm2.describe(parsedProcessId, (describeError, descriptions) => callback(describeError, descriptions ?? [])),
+      );
+      if (isHiddenPm2Process(processDescriptions[0]))
+        return respond(`Process ${parsedProcessId} not found`, null, {
+          success: false,
+          status: 404,
+          code: "PROCESS_NOT_FOUND",
+        });
       await this.withPM2<void>((callback) => pm2.flush(parsedProcessId, callback));
       return respond(`Logs for process ${parsedProcessId} flushed successfully`, null);
     } catch (error) {
@@ -362,7 +383,7 @@ export class ProcessController {
     }
 
     const processDescription = processDescriptions[0];
-    if (!processDescription)
+    if (!processDescription || isHiddenPm2Process(processDescription))
       return respond<ProcessLogsClearResult>(`Process ${processId} not found`, null, {
         success: false,
         status: 404,
@@ -434,7 +455,7 @@ export class ProcessController {
           callback(describeError, descriptions ?? []),
         ),
       );
-      if (processDescriptions.length === 0)
+      if (processDescriptions.length === 0 || isHiddenPm2Process(processDescriptions[0]))
         return respond<ProcessLogs>(`Process ${processId} not found`, null, {
           success: false,
           status: 404,
