@@ -209,6 +209,18 @@ describe("pm2 describe service", () => {
         expect(response.message).toBe("Process 99 not found");
     });
 
+    test("returns 404 for the hidden pm2-logrotate module", async () => {
+        resetState();
+        state.described = [{ pm_id: 9, name: "pm2-logrotate", pm2_env: { status: "online" } as ProcessDescription["pm2_env"] }];
+
+        const response = await processController.describeProcess(9);
+
+        expect(response.success).toBe(false);
+        expect(response.status).toBe(404);
+        expect(response.code).toBe("PROCESS_NOT_FOUND");
+        expect(response.message).toBe("Process 9 not found");
+    });
+
     test("describes the agent's own process", async () => {
         resetState();
         state.described = [{
