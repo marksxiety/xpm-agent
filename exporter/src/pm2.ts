@@ -1,4 +1,4 @@
-import { buildSamples, render, type Pm2ProcessInput } from "./metrics";
+import { buildSamples, isHiddenPm2Process, render, type Pm2ProcessInput } from "./metrics";
 
 // Library-level fallback for callers that omit timeoutMs. The environment
 // variable is required, so a PM2-managed run never relies on this.
@@ -44,6 +44,6 @@ export async function collect({
   now?: number;
   timeoutMs?: number;
 }): Promise<string> {
-  const list = await pm2List(pm2, timeoutMs);
+  const list = (await pm2List(pm2, timeoutMs)).filter((process) => !isHiddenPm2Process(process));
   return render(buildSamples(list, now));
 }
