@@ -64,7 +64,7 @@ Open <http://localhost:9209/metrics> in a browser if you changed `EXPORTER_HOST`
 
 If you already ran `bunx pm2-startup install` for the agent, `pm2 save` also persists `xpm-exporter` for reboot.
 
-> The repository-root `ecosystem.config.js` also starts this app by composing this file (`...require("./exporter/ecosystem.config.js").apps`), so a root `npm run start` starts `xpm-exporter` too. Running it standalone as above remains supported — PM2 matches apps by name and namespace, so the two entry points never create duplicates.
+> The repository-root `ecosystem.config.js` also starts this app by composing this file (`...require("./exporter/ecosystem.config.js").apps`), so a root `npm run start` starts `xpm-exporter` too. From the repository root, `npm run install` installs this package's dependencies, `npm run build` compiles it, and `npm run start` builds and starts it — the `cd exporter` steps above are only needed for the standalone flow. PM2 matches apps by name and namespace, so the two entry points never create duplicates.
 
 ## 4. Update the configuration
 
