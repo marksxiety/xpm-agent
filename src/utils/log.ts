@@ -59,7 +59,7 @@ async function statFileBytes(filePath: string): Promise<number> {
 /**
  * Sums the bytes of one log stream: the current file plus every rotated sibling.
  *
- * pm2-logrotate renames `foo-out.log` to `foo-out__<date>.log` (`.log.gz` when
+ * Log rotation renames `foo-out.log` to `foo-out__<date>.log` (`.log.gz` when
  * compression is enabled) and truncates the original, so rotated sibling names
  * share the `<stem>__` prefix while the current file keeps the bare `<stem>.log`
  * name. Missing files contribute zero.
@@ -88,7 +88,7 @@ export async function logStreamBytes(logPath: string | undefined): Promise<numbe
 /**
  * True when `fileName` is an archived sibling of the active `<stem>.log` file.
  *
- * Covers pm2-logrotate's `<stem>__<date>.log` / `.log.gz` naming as well as the
+ * Covers the `<stem>__<date>.log` / `.log.gz` naming as well as the
  * common `<stem>.log.<n>` / `<stem>.log.gz` / `<stem>.log.<date>` archives. The
  * active `<stem>.log` itself is never considered rotated.
  */
@@ -172,7 +172,7 @@ export async function deleteRotatedLogFiles(logPath: string | undefined): Promis
 
 /**
  * Totals every `.log`/`.log.gz` file in the PM2 logs directory (all namespaces,
- * current and rotated) — the same footprint pm2-logrotate reports as
+ * current and rotated) — the same footprint PM2 log rotation reports as
  * "Global logs size" / "Files count". A missing logs directory is zero, not an error.
  */
 export async function logDirMetrics(): Promise<LogDirMetrics> {
