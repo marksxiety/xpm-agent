@@ -2,155 +2,181 @@
 
 Install, configure, and run **xpm-agent** under PM2.
 
-> **Platform support: Windows only.** Setup, PM2 integration, and boot-startup are supported on Windows only — Linux/macOS are not supported yet.
+> **Platform support: Windows only.** Run every command in PowerShell.
 
-## 1. Install dependencies
+## 1. Install Node.js (npm included)
 
-```bash
-bun install
+The bundled Prometheus exporter runs on Node and requires **Node 20.12 or newer**.
+
+```powershell
+winget install --id OpenJS.NodeJS.LTS -e
 ```
 
-> `npm install` also works, but this project is Bun-first — `bun.lock` is the authoritative lockfile, so `bun install` is recommended.
+Close and reopen PowerShell, then verify:
 
-Then install PM2 globally so the `pm2` CLI is available for manual commands and boot registration:
-
-```bash
-bun install -g pm2
+```powershell
+node -v
+npm -v
 ```
 
-> PM2 stays a project dependency too — `npm run start` invokes the local binary. The global install only puts `pm2` and `bunx pm2` on your `PATH`.
+> If `winget` is unavailable, install the LTS MSI from <https://nodejs.org> and reopen PowerShell.
 
-> **Bundled exporter:** `exporter/` is its own Node package (TypeScript compiled to `dist/`) and is started together with the agent by the root `ecosystem.config.js`. Before the first `npm run start`, `cd exporter && npm install && npm run build` and copy its env file — see step 8.
+## 2. Install Bun 1.3.14
 
-## 2. Copy the environment files
-
-Copy the example into two files — one for the base config, one for production (single command, Command Prompt):
-
-```cmd
-copy .env.example .env & copy .env.example .env.production
+```powershell
+powershell -c "iex \"& {$(irm https://bun.sh/install.ps1)} -Version 1.3.14\""
 ```
 
-## 3. Enable log rotation (one-time)
+Close and reopen PowerShell, then verify:
 
-PM2 never rotates logs on its own, so a long-running fleet fills `~/.pm2/logs` until the disk does. Install PM2's official rotation module once per host:
+```powershell
+bun -v
+```
 
-```bash
-bun run setup:logrotate
+You should see `1.3.14`.
+
+## 3. Install PM2 globally
+
+```powershell
+bun install -g pm2@7.1.1
+pm2 -v
+```
+
+`7.1.1` matches the PM2 badge in [README.md](../README.md) and the pinned dependency in `package.json`. The local project dependency is used by `npm run start`; the global install puts `pm2` and `bunx pm2` on your `PATH` for manual commands and boot registration.
+
+## 4. Install agent and exporter dependencies
+
+```powershell
+npm run install
+```
+
+This runs `bun install` for the agent and `npm install` inside `exporter/`.
+
+### Log rotation (one-time, optional)
+
+PM2 never rotates logs on its own, so a long-running fleet fills `~/.pm2/logs`. The optional official `pm2-logrotate` module keeps it bounded. Install it once per host:
+
+```powershell
+npm run setup:logrotate
 ```
 
 This is a shortcut for:
 
-```bash
-pm2 install pm2-logrotate@2.7.0 && pm2 set pm2-logrotate:max_size 10M && pm2 set pm2-logrotate:retain 30 && pm2 set pm2-logrotate:compress true && pm2 save
+```powershell
+pm2 install pm2-logrotate@2.7.0
+pm2 set pm2-logrotate:max_size 10M
+pm2 set pm2-logrotate:retain 30
+pm2 set pm2-logrotate:compress true
+pm2 save
 ```
 
-- `pm2 install` (not `npm install`) registers `pm2-logrotate` as a **PM2 module**, not an app dependency — it is not in `package.json` and is version-pinned to `2.7.0`.
-- `max_size 10M` — rotate a file once it grows past 10 MB.
-- `retain 30` — keep the last 30 rotated files per stream.
-- `compress true` — gzip rotated files (`.log.gz`).
-- `pm2 save` persists the module so it survives a reboot alongside the agent.
+- `pm2 install` registers a **PM2 module**, not an app in `ecosystem.config.js` and not part of the `XPM` namespace.
+- It rotates **every** PM2 app in every namespace (plus `pm2.log`/`agent.log`); it cannot be limited to `XPM`.
+- `max_size 10M` rotates once a stream passes 10 MB, `retain 30` keeps the last 30 archives per stream, and `compress true` writes `.log.gz` files.
+- `pm2 save` persists the module across reboots.
+- The agent hides `pm2-logrotate` from `GET /pm2/list`; `/pm2/describe`, `/pm2/logs`, `/pm2/flush`, and lifecycle routes return `404` for it, and `/pm2/start` rejects the name.
 
-Rotated files are named `namespace-app-out__YYYY-MM-DD_HH-mm-ss.log` (or `.log.gz`) and are reported by the API: `GET /pm2/logs/:id` returns a `size` object per stream, and `GET /pm2/system` (and `GET /pm2/list?overview=true`) returns the total size and file count of every log file. Inspect the live config with `pm2 conf pm2-logrotate`.
+Inspect the live config with `pm2 conf pm2-logrotate`. Rotated files are named `<stem>__YYYY-MM-DD_HH-mm-ss.log[.gz]`, which is the naming the agent already reports and deletes.
 
-> `pm2-logrotate` is optional. Without it the agent still reports current-file sizes; the `logs` overview will simply stay near one file per stream.
+## 5. Configure the environment
 
-## 4. Configure the server
+`npm run start` creates these files automatically when they are missing, so you can start first and edit afterward. To edit before the first start, run:
 
-Open `.env` and `.env.production` and set:
+```powershell
+npm run setup:env
+```
+
+Creates, only when missing:
+
+- `.env` in the repository root
+- `exporter/.env`
+
+Existing files are never overwritten.
+
+### Root `.env`
 
 | Variable | Description | Example |
 |---|---|---|
 | `SERVER_PORT` | **Required.** Port the API listens on. Startup fails with a clear command-line error when it is missing, not a whole number, outside 1–65535, or already in use by another process. | `4000` |
-| `CORS_ORIGIN` | **Required for browser-facing deployments.** Comma-separated allowed browser origins (e.g. `http://localhost:3000,http://localhost:5173`). Omit or leave empty to **deny all browser origins** with 403 (`CORS_ORIGIN_NOT_ALLOWED`) — non-browser clients (curl, Postman, other services) are unaffected. | `http://localhost:3000,http://localhost:5173` |
-| `AUTH_TOKEN` | Optional bearer token. When set, every `/pm2/*` request must include `Authorization: Bearer <AUTH_TOKEN>` or it is rejected with 401 (`UNAUTHORIZED`). Leave empty to disable auth (fine for a strictly local/internal tool). | `a-secret-string` |
-| `APP_ROOTS` | Optional comma-separated allowlist of absolute app roots. When set, `cwd` on `/start` must live under one of them, otherwise the request is rejected with 422. | `C:\apps,/srv/apps` |
-| `INTERPRETER_ROOTS` | Optional comma-separated allowlist of absolute directories. When set, the `interpreter` executable on `/start` must live under one of them, otherwise the request is rejected with 422. Hardens against a renamed binary elsewhere on disk. | `C:\Program Files\nodejs,/usr/bin` |
-| `INTERPRETER_FLAGS` | Optional JSON allowlist of interpreter flags, keyed by the interpreter executable's base name (without `.exe`). `/start` rejects any `interpreter_args` for an interpreter not listed here. Each rule is `{"kind":"exact","flag":"-u"}`, `{"kind":"pattern","pattern":"^--max-old-space-size=\\d+$"}`, or `{"kind":"path","flag":"--env-file"}` (value must resolve inside `cwd`). Malformed JSON/regex fails startup. | `{"node":[{"kind":"path","flag":"--env-file"}],"python":[{"kind":"exact","flag":"-u"}]}` |
+| `CORS_ORIGIN` | **Required for browser-facing deployments.** Comma-separated allowed browser origins. Omit or leave empty to deny all browser origins with 403 (`CORS_ORIGIN_NOT_ALLOWED`) — non-browser clients are unaffected. | `http://localhost:3000,http://localhost:5173` |
+| `AUTH_TOKEN` | Optional bearer token. When set, every `/pm2/*` request must include `Authorization: Bearer <AUTH_TOKEN>` or it is rejected with 401 (`UNAUTHORIZED`). Leave empty only for a strictly local tool. | `a-secret-string` |
+| `APP_ROOTS` | Optional comma-separated allowlist of absolute app roots. When set, `cwd` on `/start` must live under one of them. | `C:\apps,/srv/apps` |
+| `INTERPRETER_ROOTS` | Optional comma-separated allowlist of absolute directories. When set, the `interpreter` on `/start` must live under one of them. | `C:\Program Files\nodejs,/usr/bin` |
+| `INTERPRETER_FLAGS` | Optional JSON allowlist of interpreter flags, keyed by the interpreter executable's base name (without `.exe`). `/start` rejects any `interpreter_args` for an interpreter not listed here. Rules: `{"kind":"exact","flag":"-u"}`, `{"kind":"pattern","pattern":"^--max-old-space-size=\\d+$"}`, or `{"kind":"path","flag":"--env-file"}` (value must resolve inside `cwd`). Malformed JSON/regex fails startup. | `{"node":[{"kind":"path","flag":"--env-file"}],"python":[{"kind":"exact","flag":"-u"}]}` |
 
-**Which file wins?** `.env` is the base config, always loaded. When the service runs in production (`npm run start` → `--env production` → `NODE_ENV=production`), Bun also loads `.env.production` and its values **override** `.env`. So put generic defaults in `.env` and production-specific values (real `AUTH_TOKEN`, server port, CORS origins) in `.env.production`. Both files are gitignored.
+**`.env.production` is optional.** `npm run setup:env` does not create it. If you create it, the agent loads it on top of `.env` when running in production (`NODE_ENV=production`), so production-only values override the base file. Keep `SERVER_PORT` in `.env` so the startup port preflight can see it.
 
 > **Authentication (optional):** set `AUTH_TOKEN` whenever the agent runs on a network that isn't strictly localhost. CORS only blocks browsers — curl, scripts, and other servers bypass it entirely. The token is the only access control, so pair it with OS-level isolation when the port is reachable beyond localhost.
 
-## 5. Run the service (production)
+### `exporter/.env`
 
-```bash
-npm run start
-```
+| Variable | Example | Purpose |
+|---|---|---|
+| `EXPORTER_PORT` | `9209` | Port to listen on. The exporter checks the Windows listener table before binding; a busy port exits with code `2` and names the owning PID/process. |
+| `EXPORTER_HOST` | `0.0.0.0` | Address to bind to. Use `127.0.0.1` when only local clients need access. |
+| `EXPORTER_TIMEOUT_MS` | `5000` | How long a scrape waits for PM2 before returning `503`. |
 
-This is a shortcut for the underlying command:
+All three are required (no defaults). The exporter reads the file once at startup, so run `pm2 restart xpm-exporter` after editing it.
 
-```bash
-bun --env-file=.env --env-file=.env.production src/check-port.ts && bun run build && pm2 startOrReload ecosystem.config.js --env production && pm2 save
-```
-
-- `bun --env-file=... src/check-port.ts` — preflight that resolves `SERVER_PORT` from the same env files the app uses and fails fast with a clear command-line error when the port is missing, invalid, or already in use. It inspects the OS TCP listener table (`netstat -ano`), so listeners on any interface or address family are detected and reported with their PID and process name. It skips the free-port check when `xpm-agent` is already online under PM2 (the reload path).
-- `bun run build` — bundles `src/index.ts` into `dist/index.js` (Bun target, minified). Production runs the compiled bundle, not the TypeScript source.
-- `pm2 startOrReload ecosystem.config.js --env production` — starts (or reloads) the API under PM2 with the `bun` interpreter from `ecosystem.config.js`. `--env production` applies the `env_production` block, setting `NODE_ENV=production`, which also makes Bun load `.env.production` on top of `.env` (see step 4). Fork mode, autorestart with `min_uptime: "10s"`, 100ms exponential backoff (PM2 caps it at 15s), effectively unlimited restarts (`max_restarts: 999999`), and `max_memory_restart: "250M"`. The same command also starts (or reloads) the bundled `xpm-exporter`, composed from `exporter/ecosystem.config.js`; `--env production` applies only to the agent, while the exporter reads its own `exporter/.env` at startup (step 8).
-- `pm2 save` — persists the current process list so it is restored on reboot.
-
-At startup the API checks the OS listener table for `SERVER_PORT` before binding — on Windows this is the only reliable guard, because Bun can still bind over a listener that does not set `SO_EXCLUSIVEADDRUSE`, even with port sharing disabled. Startup and configuration failures exit with code 2, which `stop_exit_codes` in `ecosystem.config.js` tells PM2 not to retry; check the message in the terminal or in `pm2 logs xpm-agent`.
-
-**Deploying an update:** just re-run `npm run start` — it rebuilds `dist/` and reloads the process in one step.
-
-Verify it is running:
-
-```bash
-pm2 list
-```
-
-You should see `xpm-agent` with status `online` (and `xpm-exporter`, once its dependencies and `.env` are set up). Then hit the health check:
-
-```bash
-curl http://localhost:4000/pm2/health
-```
-
-Interactive docs: <http://localhost:4000/swagger>
-
-## 6. Development
-
-Production runs the compiled `dist/` bundle. During development, run the TypeScript source directly with hot reload instead:
-
-```bash
-bun run dev        # hot reload, no build, no PM2
-bun test           # unit tests + the start-isolation canary (spawns an isolated PM2 daemon)
-bun run typecheck  # TypeScript type check
-bun run build      # produce dist/index.js, as CI and `npm run start` do
-```
-
-Run `bun test`, `bun run typecheck`, and `bun run build` before deploying.
-
-## 7. Auto-start on boot (optional)
-
-PM2 is restored automatically on reboot thanks to `pm2-windows-startup` (already a project dependency). Register it once:
-
-```bash
-bunx pm2-startup install
-```
-
-The installer writes an `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` entry that runs `pm2 resurrect` at user logon (with the logon user's environment), so keep the service account logged in or use a service manager for headless hosts.
-
-After running, `pm2 save` (from step 5) ensures the process list is restored at boot.
-
-## 8. Prometheus exporter (bundled)
+## 6. Prometheus exporter (bundled)
 
 `exporter/` contains `xpm-exporter`, a standalone Prometheus exporter for PM2 process metrics. It runs as its own PM2 app under Node, with its own `package.json` and `.env`, and shares no code with the agent; host CPU/RAM is not included.
 
-The root `ecosystem.config.js` composes `exporter/ecosystem.config.js`, so `npm run start` starts and reloads `xpm-exporter` together with the agent. Before the first start (and after dependency or source changes), install and build it from its directory:
+The repository-root `ecosystem.config.js` composes `exporter/ecosystem.config.js`, so `npm run start` builds and starts `xpm-exporter` together with the agent. `npm run install` installs its dependencies and `npm run build` compiles it; you do not need to run anything from `exporter/` manually.
 
-```cmd
-cd exporter
-npm install
+`exporter/.env` is required (see step 5). To run the exporter independently, start it from its directory with `pm2 start ecosystem.config.js` — PM2 matches apps by name and namespace, so this never duplicates the root-managed app. See [exporter/docs/SETUP.md](../exporter/docs/SETUP.md) for the standalone guide.
+
+## 7. Build and start
+
+```powershell
 npm run build
-copy .env.example .env
+npm run start
 ```
 
-The exporter runs the compiled `exporter/dist/`, so re-run `npm run build` after exporter source changes — the root `npm run start` does not rebuild it.
+`npm run build` builds the agent (`dist/index.js`) and the exporter (`exporter/dist/`).
 
-`exporter/.env` is required: `EXPORTER_PORT`, `EXPORTER_HOST`, and `EXPORTER_TIMEOUT_MS` have no defaults, and the exporter exits with code `2` when one is missing or `EXPORTER_PORT` is already in use (the startup check names the owning PID and process). `stop_exit_codes: [2]` keeps PM2 from retrying these failures. The file is read once at startup, so run `pm2 restart xpm-exporter` after editing it.
+`npm run start` is the single happy path. It always:
 
-To run the exporter independently instead, start it from its directory with `pm2 start ecosystem.config.js` — PM2 matches apps by name and namespace, so this never duplicates the root-managed app.
+1. registers boot startup with `bunx pm2-startup install`;
+2. creates `.env` and `exporter/.env` from their examples if missing;
+3. runs the `SERVER_PORT` preflight;
+4. builds both packages;
+5. starts/reloads `xpm-agent` and `xpm-exporter` in the `XPM` namespace;
+6. runs `pm2 save`.
 
-It serves metrics at <http://localhost:9209/metrics> with the example configuration. See [exporter/docs/SETUP.md](../exporter/docs/SETUP.md) for the full install, environment, and PM2 guide, and [exporter/README.md](../exporter/README.md) for the metrics and response contract.
+The boot-startup entry is written to `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` and runs `pm2 resurrect` at user logon, so keep the service account logged in or use a service manager for headless hosts.
+
+Verify:
+
+```powershell
+pm2 list
+curl http://localhost:4000/pm2/health
+curl http://localhost:9209/metrics
+```
+
+You should see both apps under `XPM`:
+
+| App | Interpreter | Purpose |
+|---|---|---|
+| `xpm-agent` | Bun | The HTTP API |
+| `xpm-exporter` | Node | Prometheus metrics at `/metrics` |
+
+`pm2-logrotate` is not in this table: it is a host-level PM2 module installed once in step 4, not an XPM app started by `npm run start`.
+
+Interactive docs: <http://localhost:4000/swagger>
+
+## 8. Development
+
+Production runs the compiled `dist/` bundle. During development, run the TypeScript source directly with hot reload instead:
+
+```powershell
+bun run dev        # hot reload, no build, no PM2
+bun test           # unit tests + the start-isolation canary (spawns an isolated PM2 daemon)
+bun run typecheck  # TypeScript type check
+bun run build      # build agent + exporter, as CI and npm run start do
+```
+
+Run `bun test`, `bun run typecheck`, and `bun run build` before deploying.
 
 ## 9. Security notes
 
@@ -158,7 +184,7 @@ It serves metrics at <http://localhost:9209/metrics> with the example configurat
 - The agent pins `pm2` to an exact version (`package.json`) and ships a lockfile; PM2 internals (`filter_env`, `prepareAppConf`, `executeApp`, fork/cluster env handling) are security-relevant, so re-run `bun test` before bumping.
 - `%USERPROFILE%\.pm2\dump.pm2` stores each app's `env` in plaintext. Restrict it to the service account, e.g.:
 
-  ```cmd
+  ```powershell
   icacls "%USERPROFILE%\.pm2" /inheritance:r /grant:r "%USERNAME%:(OI)(CI)F"
   ```
 
