@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { isAgentHoldingPort, parsePm2Jlist } from "../../pm2/cli";
+import { isAgentHoldingPort, isHiddenPm2Process, parsePm2Jlist } from "../../pm2/cli";
 
 describe("parsePm2Jlist", () => {
   test("parses agent process entries from a jlist payload", () => {
@@ -46,5 +46,24 @@ describe("isAgentHoldingPort", () => {
 
   test("returns false for an empty list", () => {
     expect(isAgentHoldingPort([])).toBe(false);
+  });
+
+  test("ignores the hidden pm2-logrotate module", () => {
+    expect(
+      isAgentHoldingPort([{ name: "pm2-logrotate", pm2_env: { namespace: "default", status: "online" } }]),
+    ).toBe(false);
+  });
+});
+
+describe("isHiddenPm2Process", () => {
+  test("hides the pm2-logrotate module case-insensitively", () => {
+    expect(isHiddenPm2Process({ name: "pm2-logrotate" })).toBe(true);
+    expect(isHiddenPm2Process({ name: "PM2-LogRotate" })).toBe(true);
+  });
+
+  test("does not hide regular processes or missing names", () => {
+    expect(isHiddenPm2Process({ name: "xpm-agent" })).toBe(false);
+    expect(isHiddenPm2Process({ name: "other-app" })).toBe(false);
+    expect(isHiddenPm2Process({})).toBe(false);
   });
 });
