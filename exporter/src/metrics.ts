@@ -72,6 +72,12 @@ export type Pm2ProcessInput = {
   pm2_env?: ProcessEnvironment;
 };
 
+export const HIDDEN_PM2_PROCESS_NAMES = new Set(["pm2-logrotate"]);
+
+export function isHiddenPm2Process(process: Pm2ProcessInput): boolean {
+  return HIDDEN_PM2_PROCESS_NAMES.has(String(process.name ?? "").toLowerCase());
+}
+
 export type MetricSample = {
   name: string;
   help: string;
