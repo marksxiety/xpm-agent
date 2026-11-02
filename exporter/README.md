@@ -10,6 +10,7 @@ Setup (install, environment, and running under PM2) is in **[docs/SETUP.md](./do
 
 - Connects to the local PM2 daemon on every scrape.
 - Rebuilds all series from the current process list, so processes that disappeared leave no stale series behind.
+- Excludes the optional `pm2-logrotate` module, matching the agent API.
 - Serves one Prometheus text response with one series per process per metric.
 
 ## Response
