@@ -69,7 +69,7 @@ export const DeleteLogsQuery = t.Object({
  */
 export const StartPayload = t.Object({
   name: t.String({
-    description: "Process name shown in `pm2 list`. Used in log file names and lifecycle commands. Required.",
+    description: "Process name shown in `pm2 list`. Used in log file names and lifecycle commands. Required. `pm2-logrotate` is reserved for the PM2 log-rotation module and is rejected.",
     pattern: "^[A-Za-z0-9._-]{1,64}$",
     examples: ["client", "server", "worker"],
   }),
