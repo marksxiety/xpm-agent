@@ -105,6 +105,16 @@ describe("pm2 clear logs service", () => {
     expect(response.code).toBe("PROCESS_NOT_FOUND");
   });
 
+  test("returns 404 for the hidden pm2-logrotate module", async () => {
+    state.described = [{ pm_id: 9, name: "pm2-logrotate", pm2_env: { namespace: "default" } } as unknown as ProcessDescription];
+
+    const response = await processController.clearLogs(9, "all", "active");
+
+    expect(response.success).toBe(false);
+    expect(response.status).toBe(404);
+    expect(response.code).toBe("PROCESS_NOT_FOUND");
+  });
+
   test("returns 409 for the agent's own process", async () => {
     state.described = [{ pm_id: 0, name: "xpm-agent", pm2_env: { namespace: "XPM" } } as unknown as ProcessDescription];
 
