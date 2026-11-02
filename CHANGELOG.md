@@ -5,6 +5,30 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- `npm run setup:env` creates the root `.env` and `exporter/.env` from their
+  examples without overwriting existing files.
+- `npm run start` is now the single happy path: it registers boot startup,
+  creates `.env`/`exporter/.env` when missing, builds both packages, and starts
+  `xpm-agent` and `xpm-exporter`. Boot startup is no longer an optional step.
+- The optional `pm2-logrotate` module is hidden from the API and the exporter:
+  it is excluded from process lists, and `describe`/`logs`/`flush`/lifecycle
+  routes return `404 PROCESS_NOT_FOUND` for it. `POST /pm2/start` reserves the
+  name so it cannot be re-registered.
+
+### Changed
+
+- `npm run install` installs the agent and exporter dependencies.
+- `npm run build` builds both the agent and the exporter by default
+  (`build:agent` / `build:exporter` remain for individual builds).
+- `docs/SETUP.md` rewritten around PowerShell install steps (Node, Bun 1.3.14,
+  PM2 7.1.1, environment setup). It documents the one-time
+  `npm run setup:logrotate` install; the module is host-wide (all namespaces)
+  and is not started by `npm run start`.
+
 ## [2.3.1] - 2026-10-24
 
 ### Changed
