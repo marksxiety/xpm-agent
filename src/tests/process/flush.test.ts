@@ -1,16 +1,24 @@
 import { describe, expect, mock, test } from "bun:test";
+import type { ProcessDescription } from "pm2";
 import type { ApiResponse } from "../../types";
 
 const state = {
+    described: [] as ProcessDescription[],
+    describeError: null as Error | null,
     flushError: null as Error | null,
     connectError: null as Error | null,
+    flushCalls: 0,
 };
 
 mock.module("pm2", () => ({
     default: {
         connect(cb: (err?: Error | null) => void) { cb(state.connectError); },
         disconnect() { },
+        describe(_id: number, cb: (err?: Error | null, procs?: ProcessDescription[]) => void) {
+            cb(state.describeError, state.described);
+        },
         flush(_id: number, cb: (err?: Error | null) => void) {
+            state.flushCalls += 1;
             cb(state.flushError);
         },
     },
@@ -21,8 +29,11 @@ const { pm2Connection } = await import("../../pm2/client");
 const { createApp } = await import("../../index");
 
 function resetState() {
+    state.described = [];
+    state.describeError = null;
     state.flushError = null;
     state.connectError = null;
+    state.flushCalls = 0;
     pm2Connection.reset();
 }
 
@@ -50,6 +61,18 @@ describe("pm2 flush service", () => {
 
         expect(response.success).toBe(true);
         expect(response.message).toBe("Logs for process 0 flushed successfully");
+    });
+
+    test("returns 404 and does not flush the hidden pm2-logrotate module", async () => {
+        resetState();
+        state.described = [{ pm_id: 9, name: "pm2-logrotate", pm2_env: {} }] as ProcessDescription[];
+
+        const response = await processController.flushLogs(9);
+
+        expect(response.success).toBe(false);
+        expect(response.status).toBe(404);
+        expect(response.code).toBe("PROCESS_NOT_FOUND");
+        expect(state.flushCalls).toBe(0);
     });
 
     test("returns 400 when the id is not numeric", async () => {
