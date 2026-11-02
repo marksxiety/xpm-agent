@@ -418,6 +418,17 @@ describe("start inspection", () => {
     expect(issues(payload)).toEqual(["name"]);
   });
 
+  test("rejects the pm2-logrotate module name in any namespace", () => {
+    const payload: Payload = {
+      name: "pm2-logrotate",
+      script: "server.js",
+      cwd: CWD,
+      interpreter: NODE,
+      namespace: "default",
+    };
+    expect(issues(payload)).toEqual(["name"]);
+  });
+
   test("rejects an increment_var that is not a valid env key", () => {
     const payload: Payload = {
       name: "api",
