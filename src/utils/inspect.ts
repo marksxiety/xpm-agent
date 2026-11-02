@@ -3,7 +3,7 @@ import type { Static } from "elysia";
 import { StartPayload } from "../schemas/process";
 import { parseDurationMs } from "./duration";
 import { ENV_KEY_PATTERN, isReservedEnvKey } from "./env-keys";
-import { AGENT_NAME, AGENT_NAMESPACE } from "../pm2/cli";
+import { AGENT_NAME, AGENT_NAMESPACE, HIDDEN_PM2_PROCESS_NAMES } from "../pm2/cli";
 import type { StartIssue, FlagRule, InspectCommand } from "../types/inspect";
 
 type StartPayloadType = Static<typeof StartPayload>;
@@ -230,6 +230,13 @@ export function inspectStart(options: StartPayloadType, context: InspectContext 
     issues.push({
       field: "name",
       message: `'${options.name}' in namespace '${AGENT_NAMESPACE}' is reserved for the agent`,
+    });
+  }
+
+  if (HIDDEN_PM2_PROCESS_NAMES.has(options.name?.toLowerCase() ?? "")) {
+    issues.push({
+      field: "name",
+      message: `'${options.name}' is reserved for a PM2 module`,
     });
   }
 
