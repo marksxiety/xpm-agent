@@ -33,6 +33,8 @@ Every response — success or error — uses the same shape:
 > - The `/start` configuration-guide `422` returns the list of violations in `info` (an array of `{ field, message }`), not `null` — see [POST /start](#post-start).
 > - Unknown routes (e.g. `GET /pm2/nope`) fall through to Elysia's default 404 and return a plain-text `NOT_FOUND` body instead of the envelope.
 
+> **Hidden processes:** The optional `pm2-logrotate` PM2 module is hidden from the API. It is omitted from `GET /pm2/list` (including `?overview=true`), and every route that targets it by `pm_id` (`/describe`, `/logs`, `/flush`, lifecycle, delete, clear) returns `404 PROCESS_NOT_FOUND`. `POST /pm2/start` rejects the name `pm2-logrotate` with `422`.
+
 ---
 
 ## Routes
@@ -59,7 +61,7 @@ Public liveness banner for the agent itself (not the PM2 processes). Requires no
 
 ### GET /list
 
-Returns all PM2-managed processes with live CPU, memory, restart counts, and status. Use this first to discover the `pm_id` values required by other routes.
+Returns all PM2-managed processes with live CPU, memory, restart counts, and status. Use this first to discover the `pm_id` values required by other routes. The optional `pm2-logrotate` module is excluded (see the hidden-processes note above).
 
 **Query params:**
 
@@ -183,7 +185,7 @@ Host-level metrics only (CPU utilization, logical core count, and memory usage).
 }
 ```
 
-> **Host metric notes:** `cpu.cores` is the number of logical CPU cores reported by the host OS. `cpu.usagePercent` is measured between samples. The first sample after server start has no prior baseline, so systeminformation measures it over a short (~500 ms) window — that request may take slightly longer, and the server primes the baseline at startup. `memory.usedBytes` includes buffers/cache. `logs` totals **every** `.log`/`.log.gz` file in the PM2 logs directory (all namespaces, current and rotated) — the same footprint pm2-logrotate reports as "Global logs size" / "Files count", intended for dashboard alerting. It is `{ totalBytes: 0, fileCount: 0 }` when the logs directory does not exist.
+> **Host metric notes:** `cpu.cores` is the number of logical CPU cores reported by the host OS. `cpu.usagePercent` is measured between samples. The first sample after server start has no prior baseline, so systeminformation measures it over a short (~500 ms) window — that request may take slightly longer, and the server primes the baseline at startup. `memory.usedBytes` includes buffers/cache. `logs` totals **every** `.log`/`.log.gz` file in the PM2 logs directory (all namespaces, current and rotated) — the same footprint PM2 log rotation reports as "Global logs size" / "Files count", intended for dashboard alerting. It is `{ totalBytes: 0, fileCount: 0 }` when the logs directory does not exist.
 
 ---
 
@@ -798,9 +800,7 @@ Returns the trailing lines of a process's stdout (`out`) and stderr (`error`) lo
 }
 ```
 
-The `out` and `error` arrays contain the last N lines of each respective log file. If a log file does not exist (or a stream the process does not write), that array is empty. `size` holds the **raw byte footprint** of each returned stream — the current file plus every rotated sibling (`<stem>__*.log` / `.log.gz`) produced by pm2-logrotate (`0` when nothing exists). `size` follows `type`, so `?type=output` returns only `size.out` and an empty file reports `0`. Returns `404` if the process `pm_id` is not found.
-
-> Full byte sizes require log rotation to keep rotated siblings bounded; see `bun run setup:logrotate` in [SETUP.md](./SETUP.md).
+The `out` and `error` arrays contain the last N lines of each respective log file. If a log file does not exist (or a stream the process does not write), that array is empty. `size` holds the **raw byte footprint** of each returned stream — the current file plus every rotated sibling (`<stem>__*.log` / `.log.gz`) produced by log rotation (`0` when nothing exists). `size` follows `type`, so `?type=output` returns only `size.out` and an empty file reports `0`. Returns `404` if the process `pm_id` is not found.
 
 **Error `404`** (unknown pm_id):
 
