@@ -7,7 +7,7 @@ const routeMeta = {
     detail: {
       summary: "List all PM2 processes",
       description:
-        "Returns all PM2-managed processes with live CPU, memory, restart counts, and status. Use this first to discover the `pm_id` values required by other routes.\n\nPass `?logs=N` (1–500) to also attach the trailing N lines of each process's `out` and `error` log files as a `logs` field on every item, along with a `logs.size` object holding the raw byte footprint of each stream (current file plus every rotated sibling). Omit it for a lightweight list without logs — there is no default line count.\n\nPass `?overview=true` to return an object with two keys: `overview` (host-level metrics: CPU utilization percentage, memory usage, and the PM2 log-directory footprint under `logs`) and `processes` (the same process summaries). The `logs` param, if provided, still applies to each process summary.",
+        "Returns all PM2-managed processes with live CPU, memory, restart counts, and status. The optional `pm2-logrotate` module is excluded. Use this first to discover the `pm_id` values required by other routes.\n\nPass `?logs=N` (1–500) to also attach the trailing N lines of each process's `out` and `error` log files as a `logs` field on every item, along with a `logs.size` object holding the raw byte footprint of each stream (current file plus every rotated sibling). Omit it for a lightweight list without logs — there is no default line count.\n\nPass `?overview=true` to return an object with two keys: `overview` (host-level metrics: CPU utilization percentage, memory usage, and the PM2 log-directory footprint under `logs`) and `processes` (the same process summaries). The `logs` param, if provided, still applies to each process summary.",
       tags: ["Processes"],
       operationId: "listProcesses",
       responses: {
@@ -99,7 +99,7 @@ const routeMeta = {
     detail: {
       summary: "Get details of one process",
       description:
-        "Fetches detailed info for a single process by its `pm_id`. Returns a single object (not an array) with three keys: `summary` (the same shape used across all routes), `describe` (snake_case process-table fields mirroring `pm2 describe`; non-conditional keys are `null` when PM2 reports no value, and the registration settings — `entire_log_path`, `cron_restart`, `max_memory_restart`, `max_restarts`, `min_uptime`, `restart_delay`, `kill_timeout`, `ignore_watch`, `watch_delay`, `windowsHide` — are included only when configured, so an absent key means PM2 applied its built-in default), and `metrics` (raw `pm2_env.axm_monitor` code metrics; `{}` for non-Node/Bun interpreters). Returns 404 if the id does not exist.",
+        "Fetches detailed info for a single process by its `pm_id`. Returns a single object (not an array) with three keys: `summary` (the same shape used across all routes), `describe` (snake_case process-table fields mirroring `pm2 describe`; non-conditional keys are `null` when PM2 reports no value, and the registration settings — `entire_log_path`, `cron_restart`, `max_memory_restart`, `max_restarts`, `min_uptime`, `restart_delay`, `kill_timeout`, `ignore_watch`, `watch_delay`, `windowsHide` — are included only when configured, so an absent key means PM2 applied its built-in default), and `metrics` (raw `pm2_env.axm_monitor` code metrics; `{}` for non-Node/Bun interpreters). Returns 404 if the id does not exist or belongs to the hidden `pm2-logrotate` module.",
       tags: ["Processes"],
       operationId: "describeProcess",
       responses: {
@@ -185,7 +185,7 @@ const routeMeta = {
     detail: {
       summary: "Stop a process",
       description:
-        "Gracefully stops a running process. The process stays **registered** in PM2 (status 'stopped') and can be started again via restart. To remove it entirely, use DELETE /delete/:id.",
+        "Gracefully stops a running process. The process stays **registered** in PM2 (status 'stopped') and can be started again via restart. To remove it entirely, use DELETE /delete/:id. Returns 404 if the id does not exist or belongs to the hidden `pm2-logrotate` module.",
       tags: ["Processes"],
       operationId: "stopProcess",
     },
@@ -195,7 +195,7 @@ const routeMeta = {
     detail: {
       summary: "Restart a process",
       description:
-        "Kills and re-launches a process. Also works on stopped processes (acts as start). Use after code or environment changes.",
+        "Kills and re-launches a process. Also works on stopped processes (acts as start). Use after code or environment changes. Returns 404 if the id does not exist or belongs to the hidden `pm2-logrotate` module.",
       tags: ["Processes"],
       operationId: "restartProcess",
     },
@@ -205,7 +205,7 @@ const routeMeta = {
     detail: {
       summary: "Zero-downtime reload",
       description:
-        "Reloads a process without downtime by restarting instances one at a time. Only meaningful for **cluster mode** processes with multiple instances; falls back to a normal restart in fork mode.",
+        "Reloads a process without downtime by restarting instances one at a time. Only meaningful for **cluster mode** processes with multiple instances; falls back to a normal restart in fork mode. Returns 404 if the id does not exist or belongs to the hidden `pm2-logrotate` module.",
       tags: ["Processes"],
       operationId: "reloadProcess",
     },
@@ -216,7 +216,7 @@ const routeMeta = {
     detail: {
       summary: "Delete a process permanently",
       description:
-        "Stops the process **and removes it from PM2's registry entirely**. The `pm_id` is freed and may be recycled by PM2 for future processes. Unlike stop, this cannot be undone via restart.\n\nBy default the process's log files are left on disk (PM2 never removes them). Pass `?delete_logs=true` to also delete the `-out.log`/`-error.log` files from `~/.pm2/logs/`.",
+        "Stops the process **and removes it from PM2's registry entirely**. The `pm_id` is freed and may be recycled by PM2 for future processes. Unlike stop, this cannot be undone via restart.\n\nBy default the process's log files are left on disk (PM2 never removes them). Pass `?delete_logs=true` to also delete the `-out.log`/`-error.log` files from `~/.pm2/logs/`. Returns 404 if the id does not exist or belongs to the hidden `pm2-logrotate` module.",
       tags: ["Processes"],
       operationId: "deleteProcess",
     },
@@ -226,7 +226,7 @@ const routeMeta = {
     detail: {
       summary: "Flush (empty) log files",
       description:
-        "Clears (empties) the log files for one process. Does not affect running state.",
+        "Clears (empties) the log files for one process. Does not affect running state. Returns 404 if the id does not exist or belongs to the hidden `pm2-logrotate` module.",
       tags: ["Processes"],
       operationId: "flushLogs",
     },
@@ -237,7 +237,7 @@ const routeMeta = {
     detail: {
       summary: "Get process logs",
       description:
-        "Returns the trailing lines of a process's stdout (`out`) and stderr (`error`) log files, plus a `size` object with the raw byte footprint of each returned stream (current log file plus every rotated sibling produced by pm2-logrotate). `id` is the process's `pm_id`. `tail` caps the number of lines per stream (default 50, max 500). `type` selects the stream: `both` (default), `output`, or `error` — `size` follows the selection, so `output` returns only `size.out`. A log file that does not exist (or a stream the process does not write) returns an empty array and a size of `0`.",
+        "Returns the trailing lines of a process's stdout (`out`) and stderr (`error`) log files, plus a `size` object with the raw byte footprint of each returned stream (current log file plus every rotated sibling produced by log rotation). `id` is the process's `pm_id`. `tail` caps the number of lines per stream (default 50, max 500). `type` selects the stream: `both` (default), `output`, or `error` — `size` follows the selection, so `output` returns only `size.out`. A log file that does not exist (or a stream the process does not write) returns an empty array and a size of `0`. Returns 404 if the id does not exist or belongs to the hidden `pm2-logrotate` module.",
       tags: ["Processes"],
       operationId: "getProcessLogs",
     },
@@ -248,7 +248,7 @@ const routeMeta = {
     detail: {
       summary: "Clear a process's logs",
       description:
-        "Truncates active log files in place and/or deletes historical rotated archives for one process. `id` is the process's `pm_id` (the agent's own process is refused with 409). `stream` selects `all` (default), `out`, or `err`; `scope` selects `active` (default — truncate the open file(s) to 0 bytes without unlinking), `rotated` (delete archive files matching the process/stream log stem), or `all` (both). Active files are never unlinked, so a running process keeps writing seamlessly. Missing files or directories are ignored (not an error). Invalid `stream`/`scope` values return 400 `INVALID_LOG_QUERY`; a filesystem failure returns 500 `LOG_IO_FAILED`.",
+        "Truncates active log files in place and/or deletes historical rotated archives for one process. `id` is the process's `pm_id` (the agent's own process is refused with 409). `stream` selects `all` (default), `out`, or `err`; `scope` selects `active` (default — truncate the open file(s) to 0 bytes without unlinking), `rotated` (delete archive files matching the process/stream log stem), or `all` (both). Active files are never unlinked, so a running process keeps writing seamlessly. Missing files or directories are ignored (not an error). Invalid `stream`/`scope` values return 400 `INVALID_LOG_QUERY`; a filesystem failure returns 500 `LOG_IO_FAILED`. Returns 404 if the id does not exist or belongs to the hidden `pm2-logrotate` module.",
       tags: ["Processes"],
       operationId: "clearProcessLogs",
       responses: {
