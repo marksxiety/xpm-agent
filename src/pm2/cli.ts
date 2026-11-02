@@ -1,5 +1,6 @@
 export const AGENT_NAME = new Set(["xpm-agent", "xpm-client", "xpm-server", "xpm-exporter"]); // process name for agent, client (frontend), and server (backend) processes
 export const AGENT_NAMESPACE = "XPM";
+export const HIDDEN_PM2_PROCESS_NAMES = new Set(["pm2-logrotate"]); // PM2 modules the API hides
 const INACTIVE_STATUSES = new Set(["stopped", "errored"]);
 const DEFAULT_STDIO = { stdin: "ignore", stdout: "pipe", stderr: "ignore" } as const;
 
@@ -29,6 +30,10 @@ export function parsePm2Jlist(output: string): Pm2AgentProcess[] | undefined {
   if (!Array.isArray(parsed)) return undefined;
 
   return parsed.filter((entry): entry is Pm2AgentProcess => typeof entry === "object" && entry !== null);
+}
+
+export function isHiddenPm2Process(process?: { name?: string | undefined }): boolean {
+  return HIDDEN_PM2_PROCESS_NAMES.has((process?.name ?? "").toLowerCase());
 }
 
 export function isAgentHoldingPort(processes: Pm2AgentProcess[]): boolean {
