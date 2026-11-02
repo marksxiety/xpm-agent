@@ -193,6 +193,29 @@ describe("p2m list command", () => {
         expect(response.code).toBe("SCRIPT_NOT_FOUND");
         expect(response.message).toBe("Script not found — check the 'script' path in your request");
     })
+
+    test("excludes the hidden pm2-logrotate module", async () => {
+        state.listError = null;
+        state.processes = [
+            {
+                pid: 12345,
+                pm_id: 0,
+                name: "client",
+                pm2_env: { status: "online", namespace: "default" } as ProcessDescription["pm2_env"],
+            },
+            {
+                pid: 12346,
+                pm_id: 1,
+                name: "pm2-logrotate",
+                pm2_env: { status: "online", namespace: "default", axm_options: { isModule: true } } as ProcessDescription["pm2_env"],
+            },
+        ];
+
+        const response = await processController.listProcesses();
+
+        expect(response.success).toBe(true);
+        expect((response.info as ProcessSummary[]).map((process) => process.name)).toEqual(["client"]);
+    });
 });
 
 describe("pm2 list with logs", () => {
