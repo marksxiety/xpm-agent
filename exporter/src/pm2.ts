@@ -1,8 +1,15 @@
-import { buildSamples, isHiddenPm2Process, render, type Pm2ProcessInput } from "./metrics";
+import { buildHostSamples, buildSamples, isHiddenPm2Process, render, type Pm2ProcessInput } from "./metrics";
+import { getHostMetrics, systemInformationSource, type HostMetricsSource } from "./host";
 
 // Library-level fallback for callers that omit timeoutMs. The environment
 // variable is required, so a PM2-managed run never relies on this.
 export const DEFAULT_TIMEOUT_MS = 5000;
+
+type Logger = { error(message: string): void };
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
 
 export type Pm2ListAdapter = {
   list(
@@ -37,13 +44,32 @@ export function pm2List(
 
 export async function collect({
   pm2,
+  host = systemInformationSource,
   now = Date.now(),
   timeoutMs = DEFAULT_TIMEOUT_MS,
+  log = console,
 }: {
   pm2: Pm2ListAdapter;
+  host?: HostMetricsSource;
   now?: number;
   timeoutMs?: number;
+  log?: Logger;
 }): Promise<string> {
-  const list = (await pm2List(pm2, timeoutMs)).filter((process) => !isHiddenPm2Process(process));
-  return render(buildSamples(list, now));
+  const [listResult, hostResult] = await Promise.allSettled([
+    pm2List(pm2, timeoutMs),
+    getHostMetrics(host),
+  ]);
+
+  if (listResult.status === "rejected") throw listResult.reason;
+
+  const list = listResult.value.filter((process) => !isHiddenPm2Process(process));
+  const samples = buildSamples(list, now);
+
+  if (hostResult.status === "fulfilled") {
+    samples.push(...buildHostSamples(hostResult.value));
+  } else {
+    log.error(`[xpm-exporter] host metrics unavailable: ${errorMessage(hostResult.reason)}`);
+  }
+
+  return render(samples);
 }
