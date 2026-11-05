@@ -1,10 +1,12 @@
 import http from "node:http";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { CONTENT_TYPE } from "./metrics";
+import { systemInformationSource, type HostMetricsSource } from "./host";
 import { collect, DEFAULT_TIMEOUT_MS, type Pm2ListAdapter } from "./pm2";
 
 export type RequestHandlerOptions = {
   pm2: Pm2ListAdapter;
+  host?: HostMetricsSource;
   log?: { error(message: string): void };
   now?: () => number;
   timeoutMs?: number;
@@ -12,6 +14,7 @@ export type RequestHandlerOptions = {
 
 export function createRequestHandler({
   pm2,
+  host = systemInformationSource,
   log = console,
   now = Date.now,
   timeoutMs = DEFAULT_TIMEOUT_MS,
@@ -29,7 +32,7 @@ export function createRequestHandler({
 
     if (req.method === "GET" && path === "/metrics") {
       Promise.resolve()
-        .then(() => collect({ pm2, now: now(), timeoutMs }))
+        .then(() => collect({ pm2, host, now: now(), timeoutMs, log }))
         .then((body) => {
           res.writeHead(200, { "Content-Type": CONTENT_TYPE });
           res.end(body);

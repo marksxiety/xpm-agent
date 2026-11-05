@@ -1,7 +1,32 @@
+import type { HostMetrics } from "./host";
+
 export const PREFIX = "pm2";
 export const LABEL_NAMES = ["name", "namespace"] as const;
 export const DEFAULT_NAMESPACE = "default";
 export const CONTENT_TYPE = "text/plain; version=0.0.4; charset=utf-8";
+
+export const HOST_METRICS = [
+  {
+    name: "host_cpu_usage_percent",
+    help: "Host CPU utilization in percent (0 when unavailable)",
+    type: "gauge",
+  },
+  {
+    name: "host_cpu_cores",
+    help: "Host logical CPU core count (0 when unavailable)",
+    type: "gauge",
+  },
+  {
+    name: "host_memory_usage_percent",
+    help: "Host memory utilization in percent (0 when unavailable)",
+    type: "gauge",
+  },
+  {
+    name: "host_memory_total_bytes",
+    help: "Host memory total in bytes (0 when unavailable)",
+    type: "gauge",
+  },
+] as const;
 
 // [suffix, help, type]. All prefixed with `pm2_` to match the original.
 // Exactly one series per process per entry, labelled name/namespace, plus
@@ -207,6 +232,33 @@ export function buildSamples(
     }
   }
   return samples;
+}
+
+function hostMetricValue(
+  name: (typeof HOST_METRICS)[number]["name"],
+  host: HostMetrics,
+): number {
+  switch (name) {
+    case "host_cpu_usage_percent":
+      return host.cpuUsagePercent;
+    case "host_cpu_cores":
+      return host.cpuCores;
+    case "host_memory_usage_percent":
+      return host.memoryUsagePercent;
+    case "host_memory_total_bytes":
+      return host.memoryTotalBytes;
+  }
+}
+
+// Pure: host usage -> one unlabelled gauge sample per metric.
+export function buildHostSamples(host: HostMetrics): MetricSample[] {
+  return HOST_METRICS.map((metric) => ({
+    name: metric.name,
+    help: metric.help,
+    type: metric.type,
+    labels: {},
+    value: hostMetricValue(metric.name, host),
+  }));
 }
 
 // Pure: samples -> Prometheus text exposition. A fresh sample set is built on

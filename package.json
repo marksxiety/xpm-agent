@@ -1,6 +1,6 @@
 {
   "name": "xpm-agent",
-  "version": "2.4.0",
+  "version": "2.4.1",
   "scripts": {
     "test": "bun test src/tests/",
     "dev": "bun run --watch src/index.ts",

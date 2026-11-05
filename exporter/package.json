@@ -1,8 +1,8 @@
 {
   "name": "xpm-exporter",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "private": true,
-  "description": "Standalone Prometheus exporter for PM2 process metrics. Isolated from the xpm-agent API.",
+  "description": "Standalone Prometheus exporter for PM2 process and host CPU/memory metrics. Isolated from the xpm-agent API.",
   "license": "ISC",
   "main": "dist/index.js",
   "scripts": {
@@ -12,7 +12,8 @@
     "test": "bun test"
   },
   "dependencies": {
-    "pm2": "7.1.1"
+    "pm2": "7.1.1",
+    "systeminformation": "^5.33.19"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

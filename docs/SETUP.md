@@ -120,7 +120,7 @@ All three are required (no defaults). The exporter reads the file once at startu
 
 ## 6. Prometheus exporter (bundled)
 
-`exporter/` contains `xpm-exporter`, a standalone Prometheus exporter for PM2 process metrics. It runs as its own PM2 app under Node, with its own `package.json` and `.env`, and shares no code with the agent; host CPU/RAM is not included.
+`exporter/` contains `xpm-exporter`, a standalone Prometheus exporter for PM2 process and whole-host CPU/memory metrics. It runs as its own PM2 app under Node, with its own `package.json` and `.env`, and shares no code with the agent.
 
 The repository-root `ecosystem.config.js` composes `exporter/ecosystem.config.js`, so `npm run start` builds and starts `xpm-exporter` together with the agent. `npm run install` installs its dependencies and `npm run build` compiles it; you do not need to run anything from `exporter/` manually.
 
