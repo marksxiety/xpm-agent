@@ -2,7 +2,7 @@
 
 A small Prometheus exporter for PM2 process metrics. It runs next to `xpm-agent` on each server, as its own PM2 app (`xpm-exporter`) under Node, with its own `package.json`. Sources are TypeScript in `src/`, compiled to `dist/` with `npm run build`. It shares no code with the agent.
 
-It only serves `GET /metrics`, makes no outbound calls, and exposes no process env, args or cwd. Host CPU/RAM is not included (use `windows_exporter`). Derived from [`pm2-metrics`](https://github.com/saikatharryc/pm2-prometheus-exporter).
+It only serves `GET /metrics`, makes no outbound calls, and exposes no process env, args or cwd. It also exposes whole-host CPU and memory utilization alongside the PM2 process metrics. Derived from [`pm2-metrics`](https://github.com/saikatharryc/pm2-prometheus-exporter).
 
 Setup (install, environment, and running under PM2) is in **[docs/SETUP.md](./docs/SETUP.md)**.
 
@@ -11,7 +11,8 @@ Setup (install, environment, and running under PM2) is in **[docs/SETUP.md](./do
 - Connects to the local PM2 daemon on every scrape.
 - Rebuilds all series from the current process list, so processes that disappeared leave no stale series behind.
 - Excludes the optional `pm2-logrotate` module, matching the agent API.
-- Serves one Prometheus text response with one series per process per metric.
+- Adds whole-host CPU and memory utilization gauges on every scrape.
+- Serves one Prometheus text response with one series per process per PM2 metric, plus the host gauges.
 
 ## Response
 
@@ -24,7 +25,7 @@ Setup (install, environment, and running under PM2) is in **[docs/SETUP.md](./do
 
 ## Metrics
 
-Every series has two labels: `name` (PM2 process name) and `namespace` (PM2 namespace, `default` if none). If two live processes share both, a `unique_id` label is added to those colliding series only.
+PM2 series have two labels: `name` (PM2 process name) and `namespace` (PM2 namespace, `default` if none). If two live processes share both, a `unique_id` label is added to those colliding series only. Host gauges have no exporter labels; the Prometheus scrape must add the server label (for example `app`) to match the PM2 series.
 
 | Metric | Type | Meaning |
 |---|---|---|
@@ -35,6 +36,10 @@ Every series has two labels: `name` (PM2 process name) and `namespace` (PM2 name
 | `pm2_restarts_total` | counter | Total restarts |
 | `pm2_unstable_restarts_total` | counter | Restarts that happened too soon after a start |
 | `pm2_status` | gauge | Detailed status code (table below) |
+| `host_cpu_usage_percent` | gauge | Whole-host CPU utilization, 0–100 |
+| `host_cpu_cores` | gauge | Host logical CPU core count |
+| `host_memory_usage_percent` | gauge | Whole-host memory utilization, 0–100 |
+| `host_memory_total_bytes` | gauge | Host memory total, bytes |
 
 ### Status codes
 
@@ -100,4 +105,16 @@ pm2_unstable_restarts_total{name="xpm-agent",namespace="XPM"} 0
 # HELP pm2_uptime Seconds since the process started, when online; 0 otherwise
 # TYPE pm2_uptime gauge
 pm2_uptime{name="xpm-agent",namespace="XPM"} 3600
+# HELP host_cpu_usage_percent Host CPU utilization in percent (0 when unavailable)
+# TYPE host_cpu_usage_percent gauge
+host_cpu_usage_percent 34.2
+# HELP host_cpu_cores Host logical CPU core count (0 when unavailable)
+# TYPE host_cpu_cores gauge
+host_cpu_cores 8
+# HELP host_memory_usage_percent Host memory utilization in percent (0 when unavailable)
+# TYPE host_memory_usage_percent gauge
+host_memory_usage_percent 61.0
+# HELP host_memory_total_bytes Host memory total in bytes (0 when unavailable)
+# TYPE host_memory_total_bytes gauge
+host_memory_total_bytes 17179869184
 ```
