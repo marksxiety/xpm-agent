@@ -5,14 +5,14 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [2.4.1] - 2026-11-05
 
-### Added
+### Changed
 
-- `xpm-exporter` 1.2.0 adds whole-host `host_cpu_usage_percent`,
+- Bundled `xpm-exporter` now includes `host_cpu_usage_percent`,
   `host_cpu_cores`, `host_memory_usage_percent`, and
-  `host_memory_total_bytes` gauges to `GET /metrics`. The PM2 series are
-  unchanged; the new gauges feed the server CPU/memory trend.
+  `host_memory_total_bytes` in the `GET /metrics` response for the
+  Server Metrics trend. Existing `pm2_*` metrics are unchanged.
 
 ## [2.4.0] - 2026-11-02
 
