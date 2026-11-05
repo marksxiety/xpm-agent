@@ -1,5 +1,6 @@
 import { test, expect } from "bun:test";
 import {
+  buildHostSamples,
   buildSamples,
   render,
   renderLabelSet,
@@ -167,3 +168,65 @@ test("render drops series no longer present between scrapes", () => {
 test("renderLabelSet is empty for no labels", () => {
   expect(renderLabelSet({})).toBe("");
 });
+
+test("buildHostSamples emits the host gauges without labels", () => {
+  const samples = buildHostSamples({
+    cpuUsagePercent: 12.5,
+    cpuCores: 8,
+    memoryUsagePercent: 37.5,
+    memoryTotalBytes: 16_000,
+  });
+
+  expect(samples).toEqual([
+    {
+      name: "host_cpu_usage_percent",
+      help: "Host CPU utilization in percent (0 when unavailable)",
+      type: "gauge",
+      labels: {},
+      value: 12.5,
+    },
+    {
+      name: "host_cpu_cores",
+      help: "Host logical CPU core count (0 when unavailable)",
+      type: "gauge",
+      labels: {},
+      value: 8,
+    },
+    {
+      name: "host_memory_usage_percent",
+      help: "Host memory utilization in percent (0 when unavailable)",
+      type: "gauge",
+      labels: {},
+      value: 37.5,
+    },
+    {
+      name: "host_memory_total_bytes",
+      help: "Host memory total in bytes (0 when unavailable)",
+      type: "gauge",
+      labels: {},
+      value: 16_000,
+    },
+  ]);
+});
+
+test("render includes host HELP/TYPE and values", () => {
+  const body = render(
+    buildHostSamples({
+      cpuUsagePercent: 12.5,
+      cpuCores: 8,
+      memoryUsagePercent: 37.5,
+      memoryTotalBytes: 16_000,
+    }),
+  );
+
+  expect(body).toContain("# TYPE host_cpu_usage_percent gauge");
+  expect(body).toContain("# TYPE host_cpu_cores gauge");
+  expect(body).toContain("# TYPE host_memory_usage_percent gauge");
+  expect(body).toContain("# TYPE host_memory_total_bytes gauge");
+  expect(body).toContain("host_cpu_usage_percent 12.5");
+  expect(body).toContain("host_cpu_cores 8");
+  expect(body).toContain("host_memory_usage_percent 37.5");
+  expect(body).toContain("host_memory_total_bytes 16000");
+  expect(body).not.toContain("NaN");
+});
+
