@@ -5,6 +5,32 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.0] - 2026-11-16
+
+### Added
+
+- Host overview responses (`GET /pm2/system` and `GET /pm2/list?overview=true`)
+  now include `cpu.windowMs`, the CPU measurement window in milliseconds, and
+  `sampledAt`, the Unix timestamp (ms) of the shared host sample.
+- Added a shared fixed-interval host sampler so both overview routes return the
+  same cached CPU/memory snapshot.
+
+### Changed
+
+- Host CPU is now measured over a fixed 5-second window instead of the implicit
+  interval since the previous `systeminformation.currentLoad()` call. The first
+  reading after agent startup is discarded, so responses no longer report the
+  average since the agent process started.
+- `GET /pm2/system` and `GET /pm2/list?overview=true` now share the same host
+  sample. PM2 process CPU/memory readings are unchanged and still use PM2's own
+  sampling window.
+
+### Fixed
+
+- Host memory values now ignore non-finite readings and clamp negative byte
+  counts to zero.
+- `toPercent` now rejects non-finite inputs before computing a percentage.
+
 ## [2.4.1] - 2026-11-05
 
 ### Changed
