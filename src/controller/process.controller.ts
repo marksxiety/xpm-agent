@@ -8,7 +8,7 @@ import { describeProcessDetails, summarizeProcess, toProcessDescriptions } from 
 import { resolveLogFiles, resolveRotatedLogFiles, tailLines, logStreamBytes, logMetricsSource, truncateLogFile, deleteRotatedLogFiles, type LogMetricsSource } from "../utils/log";
 import { sanitizeProcessConfigAsync, type SanitizeInput } from "../utils/sanitize";
 import { StartIssue } from "../types/inspect";
-import { getHostMetrics, systemInformationSource, type HostMetricsSource } from "../utils/system";
+import { getHostMetrics, hostMetricsSampler, type HostMetricsProvider } from "../utils/system";
 import { pm2Connection, type Pm2Connection } from "../pm2/client";
 import { AGENT_NAME, AGENT_NAMESPACE, isHiddenPm2Process } from "../pm2/cli";
 import { config } from "../config";
@@ -20,7 +20,7 @@ export class ProcessController {
   private startChain: Promise<void> = Promise.resolve();
 
   constructor(
-    private metricsSource: HostMetricsSource = systemInformationSource,
+    private hostMetrics: HostMetricsProvider = hostMetricsSampler,
     private connection: Pm2Connection = pm2Connection,
     private logSource: LogMetricsSource = logMetricsSource,
   ) { }
@@ -95,7 +95,7 @@ export class ProcessController {
       }
       if (includeOverview) {
         info = {
-          overview: await getHostMetrics(this.metricsSource, this.logSource),
+          overview: await getHostMetrics(this.hostMetrics, this.logSource),
           processes: info as ProcessSummary[],
         };
       }
