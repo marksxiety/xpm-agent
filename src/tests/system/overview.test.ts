@@ -22,10 +22,15 @@ const { ProcessController } = await import("../../controller/process.controller"
 const { SystemController } = await import("../../controller/system.controller");
 const { createApp } = await import("../../index");
 
-const stubSource = {
-    currentLoad: async () => ({ currentLoad: 12.5 }),
-    mem: async () => ({ total: 1000, used: 600, free: 400 }),
-    cores: () => 8,
+const stubSnapshot = {
+    cpu: { usagePercent: 12.5, cores: 8 },
+    memory: { totalBytes: 1000, freeBytes: 400, usedBytes: 600, percentUsed: 60 },
+    sampledAt: 1_700_000_000_000,
+    cpuWindowMs: 5_000,
+};
+
+const stubProvider = {
+    snapshot: async () => stubSnapshot,
 };
 
 const stubLogSource = {
@@ -41,7 +46,7 @@ function resetState() {
 describe("system host overview controller", () => {
     test("returns host cpu usage and memory metrics only", async () => {
         resetState();
-        const controller = new SystemController(stubSource, stubLogSource);
+        const controller = new SystemController(stubProvider, stubLogSource);
 
         const response = await controller.getHostOverview();
 
@@ -49,6 +54,8 @@ describe("system host overview controller", () => {
         expect(response.message).toBe("System overview retrieved successfully");
         expect(response.info?.host.cpu.usagePercent).toBe(12.5);
         expect(response.info?.host.cpu.cores).toBe(8);
+        expect(response.info?.host.cpu.windowMs).toBe(5_000);
+        expect(response.info?.host.sampledAt).toBe(1_700_000_000_000);
         expect(response.info?.host.memory.totalBytes).toBe(1000);
         expect(response.info?.host.memory.freeBytes).toBe(400);
         expect(response.info?.host.memory.usedBytes).toBe(600);
@@ -62,7 +69,7 @@ describe("process list with overview", () => {
     test("returns host metrics and process summaries", async () => {
         resetState();
         state.listed = [{ pm_id: 3, name: "my-app", pm2_env: {} }];
-        const controller = new ProcessController(stubSource, undefined, stubLogSource);
+        const controller = new ProcessController(stubProvider, undefined, stubLogSource);
 
         const response = await controller.listProcesses(undefined, true);
 
@@ -81,7 +88,7 @@ describe("process list with overview", () => {
     test("propagates the process list failure", async () => {
         resetState();
         state.listError = new Error("Process or namespace not found");
-        const controller = new ProcessController(stubSource, undefined, stubLogSource);
+        const controller = new ProcessController(stubProvider, undefined, stubLogSource);
 
         const response = await controller.listProcesses(undefined, true);
 
