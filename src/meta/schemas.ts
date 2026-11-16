@@ -20,8 +20,12 @@ export const HostMetrics: OpenAPIV3.SchemaObject = {
       type: "object",
       required: ["usagePercent", "cores"],
       properties: {
-        usagePercent: { type: "number", description: "CPU utilization percentage (0-100, 2 decimal places)" },
+        usagePercent: { type: "number", description: "CPU utilization percentage over the agent's fixed sampling window (0-100, 2 decimal places)" },
         cores: { type: "number", description: "Logical CPU core count on the host" },
+        windowMs: {
+          type: "number",
+          description: "Length of the CPU measurement window in milliseconds",
+        },
       },
     },
     memory: {
@@ -35,6 +39,10 @@ export const HostMetrics: OpenAPIV3.SchemaObject = {
       },
     },
     logs: LogDirMetrics,
+    sampledAt: {
+      type: "number",
+      description: "Unix timestamp (ms) of the host sample shared by CPU and memory",
+    },
   },
 };
 
