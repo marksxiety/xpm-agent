@@ -1,18 +1,18 @@
 import type { AgentStatusResponse, ApiResponse, SystemOverview } from "../types";
 import { respond } from "../utils/response";
 import { getCurrentTimeStamp } from "../utils/datetime";
-import { getHostMetrics, systemInformationSource, type HostMetricsSource } from "../utils/system";
+import { getHostMetrics, hostMetricsSampler, type HostMetricsProvider } from "../utils/system";
 import { logMetricsSource, type LogMetricsSource } from "../utils/log";
 
 export class SystemController {
   constructor(
-    private metricsSource: HostMetricsSource = systemInformationSource,
+    private hostMetrics: HostMetricsProvider = hostMetricsSampler,
     private logSource: LogMetricsSource = logMetricsSource,
   ) {}
 
   getHostOverview = async (): Promise<ApiResponse<{ host: SystemOverview }>> =>
     respond("System overview retrieved successfully", {
-      host: await getHostMetrics(this.metricsSource, this.logSource),
+      host: await getHostMetrics(this.hostMetrics, this.logSource),
     });
 
   // Public liveness banner — returned verbatim (no `status` field), so it
