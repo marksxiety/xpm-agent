@@ -40,7 +40,7 @@ const systemRouteMeta = {
     detail: {
       summary: "System overview",
       description:
-        "Host-level metrics only (CPU utilization percentage, memory usage, and the PM2 log-directory footprint). Does not include the process list — use GET /list?overview=true for a combined host + processes view.",
+        "Host-level metrics only (CPU utilization percentage, memory usage, and the PM2 log-directory footprint). CPU is measured over a fixed sampling window; `cpu.windowMs` and `sampledAt` describe that sample. Does not include the process list — use GET /list?overview=true for a combined host + processes view.",
       tags: ["System"],
       operationId: "getHostOverview",
       responses: {
