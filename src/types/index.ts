@@ -126,6 +126,8 @@ export interface SystemOverview {
     cpu: {
         usagePercent: number;
         cores: number;
+        /** Length of the CPU measurement window in milliseconds. */
+        windowMs?: number;
     },
     memory: {
         totalBytes: number;
@@ -134,6 +136,8 @@ export interface SystemOverview {
         percentUsed: number;
     }
     logs: LogDirMetrics;
+    /** Unix timestamp (ms) of the host sample. */
+    sampledAt?: number;
 }
 
 export interface SystemOverviewWithProcesses {
