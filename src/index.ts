@@ -13,7 +13,7 @@ import { getSystemRouteMeta } from "./meta/system";
 import { config, validateConfig } from "./config";
 import { formatPortError, formatPortInUseError, resolveServerPort, STARTUP_ERROR_EXIT_CODE } from "./utils/port";
 import { findListeningPidsOnHost, findProcessName } from "./utils/port-usage";
-import { systemInformationSource } from "./utils/system";
+import { warmUpHostMetrics } from "./utils/system";
 import PackageJson from "../package.json";
 
 export const pm2Routes = new Elysia({ prefix: "/pm2" })
@@ -103,9 +103,9 @@ if (import.meta.main || isPm2EntryPoint) {
     process.exit(STARTUP_ERROR_EXIT_CODE);
   }
 
-  // Prime the CPU baseline at startup so the first /system call does not pay
-  // systeminformation's ~500 ms baseline window.
-  void systemInformationSource.currentLoad();
+  // Start the fixed-window host sampler so the first /system call already has
+  // a timestamped snapshot instead of paying the warm-up window.
+  warmUpHostMetrics();
   try {
     validateConfig();
   } catch (error) {
